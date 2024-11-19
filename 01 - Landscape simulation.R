@@ -24,11 +24,11 @@ library(cowplot)         # multiple plots
 # 2. Define landscape size
 #_______________________________________________________________________
 
-# here we want a landscape large enough so simulated tracks in our focal area (9 ha)
+# here we want a landscape large enough so simulated tracks in our focal area (10 ha)
 # don't tend to move outside
 
 # how many hectares?
-hectares <- 100
+hectares <- 500
 
 # square meters
 n.sqm <- hectares * 10000
@@ -51,7 +51,7 @@ rows <- as.integer(ceiling(sqrt(n.sqm / resol))) + 2
 # 3a. Simple landscape
 #_______________________________________________________________________
 
-set.seed(79)
+set.seed(84)
 
 simple.cov1 <- nlm_mpd(ncol = columns, 
                        nrow = rows, 
@@ -71,7 +71,7 @@ crs(simple.cov1) <- crs("EPSG:32611")
 # 3b. Complex landscape
 #_______________________________________________________________________
 
-set.seed(54)
+set.seed(82)
 
 complex.cov1 <- nlm_mpd(ncol = columns, 
                         nrow = rows, 
@@ -117,7 +117,7 @@ unit.bound <- st_polygon(list(cbind(c(rast.centroid[1] - m.side.half,
                                       rast.centroid[2] - m.side.half))))
 
 # plot
-plot(simple.cov1)
+plot(complex.cov1)
 plot(unit.bound, add = T)
 
 # assign to sf object
@@ -157,7 +157,7 @@ crs(cov2) <- crs("EPSG:32611")
 # 5a. Simple landscape
 #_______________________________________________________________________
 
-set.seed(124)
+set.seed(65)
 
 simple.cov3.start <- nlm_mpd(ncol = columns, 
                              nrow = rows, 
@@ -178,16 +178,19 @@ plot(unit.bound.sf, add = T)
 
 crs(simple.cov3) <- crs("EPSG:32611")
 
+# reclassify
+simple.cov3 <- simple.cov3 - 1
+
 #_______________________________________________________________________
 # 5b. Complex landscape
 #_______________________________________________________________________
 
-set.seed(221)
+set.seed(66)
 
 complex.cov3.start <- nlm_mpd(ncol = columns, 
                               nrow = rows, 
                               resolution = resol, 
-                              roughness = 0.7,
+                              roughness = 0.9,
                               rand_dev = 1.5)
 
 plot(complex.cov3.start)
@@ -202,6 +205,9 @@ plot(complex.cov3)
 plot(unit.bound.sf, add = T)
 
 crs(complex.cov3) <- crs("EPSG:32611")
+
+# reclassify
+complex.cov3 <- complex.cov3 - 1
 
 #_______________________________________________________________________
 # 5. Scale continuous landscapes ----
@@ -289,10 +295,10 @@ ggplot() +
 plot_grid(simple.plot, complex.plot, nrow = 2)
 
 #_______________________________________________________________________
-# 8. Save to .RData ----
+# 8. Save and write rasters ----
 #_______________________________________________________________________
 
 save.image("Progress/rasters_11_15_2024.RData")
 
-save(simple, file = "Rasters/simple.RData")
-save(complex, file = "Rasters/complex.RData")
+writeRaster(simple, filename = "Rasters/simple.tif", overwrite = T)
+writeRaster(complex, filename = "Rasters/complex.tif", overwrite = T)

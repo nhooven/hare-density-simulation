@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 11 Nov 2024
 # Date completed: 11 Nov 2024
-# Date last modified: 11 Nov 2024
+# Date last modified: 19 Nov 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________________________________
@@ -26,7 +26,7 @@ utm.epsg <- 32611
 data.all <- read.csv("Derived_data/all_data.csv")
 
 # raster directory
-rast.dir <- "D:/Hare project/Spatial data/Rasters/Derived_data/"
+rast.dir <- "E:/Hare project/Spatial data/Rasters/Derived_data/"
 
 # read in rasters
 # vegetation
@@ -37,6 +37,9 @@ ch <- rast(paste0(rast.dir, "eth_ch_utm.tif"))
 slope <- rast(paste0(rast.dir, "dtm_slope_deg.tif"))
 tpi <- rast(paste0(rast.dir, "tpi_10.tif"))
 twi <- rast(paste0(rast.dir, "twi_10.tif"))
+
+# cover type
+edge <- rast(paste0(rast.dir, "dEdge.tif"))
 
 #_______________________________________________________________________________________________
 # 3. Ensure timestamp is in correct format ----
@@ -230,7 +233,8 @@ all.tracks.2 <- all.tracks.1 %>%
   extract_covariates(ch) %>%
   extract_covariates(slope) %>%
   extract_covariates(tpi) %>%
-  extract_covariates(twi) 
+  extract_covariates(twi) %>%
+  extract_covariates(edge)
 
 # rename covariates
 all.tracks.2 <- all.tracks.2 %>%
@@ -239,10 +243,11 @@ all.tracks.2 <- all.tracks.2 %>%
          ch = eth_ch_utm,
          slope = dtm_slope_deg,
          tpi = tpi_10,
-         twi = twi_10)
+         twi = twi_10,
+         edge = layer)
 
 #_______________________________________________________________________________________________
 # 9. Write to csv ----
 #_______________________________________________________________________________________________
 
-save.image("Progress/11_11_2024.RData")
+save.image("Progress/11_19_2024.RData")
