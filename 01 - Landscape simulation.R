@@ -125,6 +125,11 @@ unit.bound.sf <- st_as_sf(st_sfc(unit.bound))
 
 st_crs(unit.bound.sf) <- crs("EPSG:32611")
 
+# write to shapefile
+st_write(unit.bound.sf,
+         dsn = paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"),
+         layer = "unit_bound.shp")
+
 #_______________________________________________________________________
 # 4b. Define an edge variable ----
 #_______________________________________________________________________

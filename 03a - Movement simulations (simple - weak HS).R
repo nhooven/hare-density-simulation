@@ -1,6 +1,6 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 02a - Movement simulations (simple - weak HS)
+# Script: 03a - Movement simulations (simple - weak HS)
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
