@@ -227,7 +227,7 @@ issf.model.2 <- make_issf_model(coefs = c("stem_end" = 0.5,
 # make redistribution kernel
 redist.2 <- redistribution_kernel(x = issf.model.2,
                                   start = start.step,
-                                  map = landscape.covs.2,
+                                  map = landscape.covs,
                                   n.control = 10000,   
                                   max.dist = get_max_dist(issf.model.2),
                                   tolerance.outside = 0.0008)
@@ -242,6 +242,12 @@ test.path.3 <- simulate_path(redist.2,
                              verbose = TRUE)
 
 Sys.time() - start.time
+
+100 / 12.7  # steps per second
+
+336 / 7.87    # 42 seconds per full month simulation
+
+(42 * 50) / 60  # 35 minutes to run the entire
 
 plot(as_ltraj(as_track(test.path.3)))
 
