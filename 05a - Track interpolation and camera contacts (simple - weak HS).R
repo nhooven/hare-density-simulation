@@ -23,8 +23,24 @@ library(ctmm)            # movement modeling
 
 sims.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_simple_weak.csv"))
 
+# viewsheds
+vs <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/cams_9_vs.shp"))
+
+# add camera ID
+vs$cam.id <- 1:nrow(vs)
+
 #_______________________________________________________________________
 # 3. Create telemetry objects and fit CTSP models ----
+#_______________________________________________________________________
+# 3a. Initialize a list and a data.frame ----
+#_______________________________________________________________________
+
+all.ctmms <- vector("list", length(unique(sims.df$indiv)))
+
+all.passes <- data.frame()
+
+#_______________________________________________________________________
+# 3b. Loop through all individuals ----
 #_______________________________________________________________________
 
 for (i in unique(sims.df$indiv)) {
@@ -55,10 +71,10 @@ for (i in unique(sims.df$indiv)) {
                                name = "guess.param", 
                                interactive = FALSE)
   
-  # model selection
-  fitted.mods <- ctmm.select(indiv.telem, 
-                             CTMM = guess.param, 
-                             verbose = TRUE)
+  # model selection (unused for now, assume all are best fit by the OUF process)
+  #fitted.mods <- ctmm.select(indiv.telem, 
+  #                           CTMM = guess.param, 
+  #                           verbose = TRUE)
   
   # baseline model (we'll use the Ornstein-Uhlenbeck Foraging process for simplicity)
   ctmm.model.1 <- ctmm(tau = guess.param$tau,
@@ -71,17 +87,21 @@ for (i in unique(sims.df$indiv)) {
   ctmm.model.2 <- ctmm.fit(data = indiv.telem,
                            CTMM = ctmm.model.1)
   
+  # save ctmm object into a list
+  all.ctmms[[1]] <- ctmm.model.2
+  
   # interpolate track
   ctmm.interp <- simulate(ctmm.model.2,
                           data = indiv.telem,
-                          res = 60,             # here we'll get a predicted location every ~2 minutes
+                          res = 30,             # here we'll get a predicted location every ~4 minutes
                           complete = TRUE)
   
-  # coerce to sf and transform to UTM
-  ctmm.interp.sf <- ctmm.interp %>%
+  # coerce to sf and cast to lines
+  interp.lines <- ctmm.interp %>%
     
     as.sf() %>%
     
+    # transform to UTM
     st_transform(crs = "epsg:32611") %>%
     
     # mutate timestamp
@@ -89,23 +109,52 @@ for (i in unique(sims.df$indiv)) {
                           tz = "America/Los_Angeles")) %>%
     
     # select only columns we need
-    dplyr::select(t)
+    dplyr::select(t) %>%
+    
+    # duplicate each row so lines are connected
+    slice(rep(1:n(), each = 2)) %>%
+    
+    # and now drop the first and last rows
+    slice(-c(1, n()))
   
-
+  # add pairings to group by
+  interp.lines$id <- rep(1:(nrow(interp.lines) / 2), each = 2) 
+  
+  # group and create linestrings
+  interp.lines.1 <- interp.lines %>%
+    
+    group_by(id) %>%
+    
+    summarize(do_union = FALSE) %>%
+    
+    st_cast("LINESTRING")
+  
+  # tallied intersections by camera
+  passes <- st_intersection(vs, interp.lines.1) %>%
+    
+    # drop the geometry
+    st_drop_geometry() %>% 
+    
+    # group by camera
+    group_by(cam.id) %>% 
+    
+    # tally all intersections
+    tally() %>%
+    
+    # add individual id
+    mutate(indiv = i)
+  
+  # bind into df
+  all.passes <- rbind(all.passes, passes)
+  
+  # status message
+  print(paste0("Completed passes ", i, " of ", length(unique(sims.df$indiv))))
   
 }
 
-
-
-# cast to lines
-interp.lines <- ctmm.interp.sf %>% 
-  
-  summarize(do_union = FALSE) %>%           # this is a critical step!
-          
-  st_cast(to = "LINESTRING")
-
-  
-  
+#_______________________________________________________________________
+# 4. Example plots ----
+#_______________________________________________________________________
 
 ggplot() +
   
@@ -116,8 +165,16 @@ ggplot() +
                  y = y_),
              size = 0.5) +
   
-  geom_sf(data = interp.lines,
-            alpha = 0.25) +
+  geom_sf(data = interp.lines.1,
+            alpha = 0.15) +
+  
+  geom_sf(data = vs,
+          color = "gold",
+          fill = NA) +
+  
+  geom_sf_text(data = vs,
+               aes(label = cam.id),
+               color = "gold") +
   
   coord_sf(datum = sf::st_crs(32611))
 
