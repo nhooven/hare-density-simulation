@@ -1,6 +1,6 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 03a - Movement simulations (simple - weak HS)
+# Script: 03a - Movement simulations (simple - low)
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
@@ -51,13 +51,14 @@ ta.dist <- make_unif_distr(min = -pi,
 # 3b. Habitat selection coefficients and identifiers ----
 #_______________________________________________________________________
 
-coef.stem <- 0.5          # weak selection for stem density
-coef.edge <- -0.5         # weak avoidance of edge distance
-coef.mature <- -0.1       # weak base avoidance of mature (start of step)
-coef.mature.sl <- 0.5     # weak interaction with log(sl) (longer movements when starting in mature)
+coef.stem <- 2.0          # selection for stem density
+coef.stem.sl <- -0.5      # shorter sl with greater stem        
+coef.edge <- -0.5         # avoidance of edge distance
+coef.mature <- -0.1       # base avoidance of mature (start of step)
+coef.mature.sl <- 2.0     # interaction with log(sl) (longer movements when starting in mature)
 
 id.landscape <- "simple"
-id.selection <- "weak"
+id.variability <- "low"
 
 #_______________________________________________________________________
 # 3c. Home ranging parameters ----
