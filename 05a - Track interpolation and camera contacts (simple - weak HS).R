@@ -71,12 +71,7 @@ for (i in unique(sims.df$indiv)) {
                                name = "guess.param", 
                                interactive = FALSE)
   
-  # model selection (unused for now, assume all are best fit by the OUF process)
-  fitted.mods <- ctmm.select(indiv.telem, 
-                             CTMM = guess.param, 
-                             verbose = TRUE)
-  
-  # baseline model (we'll use the Ornstein-Uhlenbeck Foraging process for simplicity)
+  # baseline model (we'll use the Ornstein-Uhlenbeck process)
   ctmm.model.1 <- ctmm(tau = guess.param$tau[1],
                        omega = FALSE,
                        range = TRUE,
@@ -88,14 +83,8 @@ for (i in unique(sims.df$indiv)) {
   ctmm.model.2 <- ctmm.fit(data = indiv.telem,
                            CTMM = ctmm.model.1)
   
-  summary(ctmm.model.2)
-  
-  ctmm::speed(ctmm.model.2, data = indiv.telem, robust = T)
-  
-  # issues here - simulated data do not have correlated velocities!
-  
   # save ctmm object into a list
-  all.ctmms[[1]] <- ctmm.model.2
+  all.ctmms[[i]] <- ctmm.model.2
   
   # interpolate track
   ctmm.interp <- simulate(ctmm.model.2,
