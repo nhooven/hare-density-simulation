@@ -4,8 +4,8 @@
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 21 Nov 2024
-# Date completed: 
-# Date last modified: 
+# Date completed: 26 Nov 2024
+# Date last modified: 26 Nov 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -72,20 +72,27 @@ for (i in unique(sims.df$indiv)) {
                                interactive = FALSE)
   
   # model selection (unused for now, assume all are best fit by the OUF process)
-  #fitted.mods <- ctmm.select(indiv.telem, 
-  #                           CTMM = guess.param, 
-  #                           verbose = TRUE)
+  fitted.mods <- ctmm.select(indiv.telem, 
+                             CTMM = guess.param, 
+                             verbose = TRUE)
   
   # baseline model (we'll use the Ornstein-Uhlenbeck Foraging process for simplicity)
-  ctmm.model.1 <- ctmm(tau = guess.param$tau,
-                       omega = guess.param$omega,
+  ctmm.model.1 <- ctmm(tau = guess.param$tau[1],
+                       omega = FALSE,
                        range = TRUE,
                        error = FALSE,
+                       isotropic = TRUE,
                        data = indiv.telem)
   
   # fit model
   ctmm.model.2 <- ctmm.fit(data = indiv.telem,
                            CTMM = ctmm.model.1)
+  
+  summary(ctmm.model.2)
+  
+  ctmm::speed(ctmm.model.2, data = indiv.telem, robust = T)
+  
+  # issues here - simulated data do not have correlated velocities!
   
   # save ctmm object into a list
   all.ctmms[[1]] <- ctmm.model.2
@@ -178,3 +185,12 @@ ggplot() +
   
   coord_sf(datum = sf::st_crs(32611))
 
+#_______________________________________________________________________
+# 5. Write data to files ----
+#_______________________________________________________________________
+
+# passes
+write.csv(all.passes, paste0(getwd(), "/Derived_data/Passes/passes_simple_weak.csv"))
+
+# ctmms
+save(all.ctmms, file = paste0(getwd(), "/Derived_data/CTMMs/ctmms_simple_weak.RData"))
