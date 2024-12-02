@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 21 Nov 2024
+# Date last modified: 02 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -13,6 +13,7 @@
 #_______________________________________________________________________
 
 library(tidyverse)       # tidy data cleaning and manipulation
+library(sf)              # read in shapefiles
 library(terra)           # rasters
 library(amt)             # simulate tracks
 library(lubridate)       # work with time
@@ -52,10 +53,10 @@ ta.dist <- make_unif_distr(min = -pi,
 #_______________________________________________________________________
 
 coef.stem <- 2.0          # selection for stem density
-coef.stem.sl <- -0.5      # shorter sl with greater stem        
+coef.stem.sl <- -0.3      # higher selection with shorter sl       
 coef.edge <- -0.5         # avoidance of edge distance
-coef.mature <- -0.1       # base avoidance of mature (start of step)
-coef.mature.sl <- 2.0     # interaction with log(sl) (longer movements when starting in mature)
+coef.mature <- -1.5       # base avoidance of mature (start of step)
+coef.mature.sl <- 0.5     # interaction with log(sl) (longer movements when starting in mature)
 
 id.landscape <- "simple"
 id.variability <- "low"
@@ -144,17 +145,6 @@ hr_params <- function(e.var = e.var,          # expected variance of the bivaria
   
 }
 
-# calculate home ranging parameters
-# variance
-var.focal <- rnorm(n = 1, mean = e.var, sd = e.var.sd)
-
-# x2 + y2 coefficient
-b.x2y2 <- -1 / var.focal
-
-# solve for x and y coefficients
-b.x <- hrc[1] * 2 * -b.x2y2 
-b.y <- hrc[2] * 2 * -b.x2y2
-
 #_______________________________________________________________________
 # 5. Run simulations iteratively ----
 
@@ -198,10 +188,12 @@ for (i in 1:n.reps) {
                          hrc = hrc)
   
   # make iSSF model
-  issf.model <- make_issf_model(coefs = c("stem_end" = coef.stem,               
+  # here the terms are important to get right so redistribution_kernel() works okay
+  issf.model <- make_issf_model(coefs = c("stem_end" = coef.stem,  
+                                          "stem_end:log(sl_)" = coef.stem.sl,
                                           "edge_end" = coef.edge,
                                           "mature_start" = coef.mature,
-                                          "mature_start:log(sl_)" = coef.mature.sl,
+                                          "log(sl_):mature_start" = coef.mature.sl,
                                           x2_ = hr.params[1],
                                           y2_ = hr.params[2], 
                                           "I(x2_^2 + y2_^2)" = hr.params[3]),              
@@ -227,7 +219,7 @@ for (i in 1:n.reps) {
     
     mutate(indiv = i,
            landscape = id.landscape,
-           selection = id.selection)
+           variability = id.variability)
   
   # bind to df
   sims.df <- bind_rows(sims.df, sim.path.1)
