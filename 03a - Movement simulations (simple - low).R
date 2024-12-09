@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 02 Dec 2024
+# Date last modified: 09 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -148,12 +148,11 @@ hr_params <- function(e.var = e.var,          # expected variance of the bivaria
 #_______________________________________________________________________
 # 5. Run simulations iteratively ----
 
-# 21 Nov 2024 (congrats Lucy!)
-# let's start with a small, reasonable number here, see if they all work
-# then start building the ctmm stuff in a separate script
+# 09 Dec 2024
+# let's run 20 for each scenario for demonstration purposes
 
 # n of replicates
-n.reps <- 5
+n.reps <- 20
 
 # calculate approximate time in hours (assuming 336 locations)
 (42 * n.reps) / (60 * 60)
@@ -167,6 +166,8 @@ sims.df <- data.frame()
 #_______________________________________________________________________
 # 5b. Run simulations ----
 #_______________________________________________________________________
+
+start.time <- Sys.time()
 
 for (i in 1:n.reps) {
   
@@ -225,7 +226,12 @@ for (i in 1:n.reps) {
   sims.df <- bind_rows(sims.df, sim.path.1)
   
   # status message
-  print(paste0("Completed path ", i, " of ", n.reps))
+  elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                            start.time, 
+                                            units = "mins")), 
+                        digits = 1)
+  
+  print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
   
 }
 
@@ -264,4 +270,4 @@ ggplot() +
 # 7. Write to .csv ----
 #_______________________________________________________________________
 
-write.csv(sims.df, paste0(getwd(), "/Derived_data/Simulated data/sims_simple_weak.csv"))
+write.csv(sims.df, paste0(getwd(), "/Derived_data/Simulated data/sims_simple_low.csv"))

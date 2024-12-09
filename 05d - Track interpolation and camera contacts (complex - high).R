@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 05a - Track interpolation and camera contacts (simple - weak HS)
+# Script: 05d - Track interpolation and camera contacts (complex - high)
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 21 Nov 2024
 # Date completed: 26 Nov 2024
-# Date last modified: 26 Nov 2024
+# Date last modified: 09 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -21,7 +21,7 @@ library(ctmm)            # movement modeling
 # 2. Read in data ----
 #_______________________________________________________________________
 
-sims.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_simple_weak.csv"))
+sims.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_complex_high.csv"))
 
 # viewsheds
 vs <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/cams_9_vs.shp"))
@@ -42,6 +42,8 @@ all.passes <- data.frame()
 #_______________________________________________________________________
 # 3b. Loop through all individuals ----
 #_______________________________________________________________________
+
+start.time <- Sys.time()
 
 for (i in unique(sims.df$indiv)) {
   
@@ -144,7 +146,18 @@ for (i in unique(sims.df$indiv)) {
   all.passes <- rbind(all.passes, passes)
   
   # status message
-  print(paste0("Completed passes ", i, " of ", length(unique(sims.df$indiv))))
+  elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                            start.time, 
+                                            units = "mins")),
+                        digits = 1)
+  
+  print(paste0("Completed passes ", 
+               i, 
+               " of ", 
+               length(unique(sims.df$indiv)), 
+               " - ", 
+               elapsed.time, 
+               " mins"))
   
 }
 
@@ -162,7 +175,7 @@ ggplot() +
              size = 0.5) +
   
   geom_sf(data = interp.lines.1,
-            alpha = 0.15) +
+          alpha = 0.15) +
   
   geom_sf(data = vs,
           color = "gold",
@@ -179,7 +192,7 @@ ggplot() +
 #_______________________________________________________________________
 
 # passes
-write.csv(all.passes, paste0(getwd(), "/Derived_data/Passes/passes_simple_weak.csv"))
+write.csv(all.passes, paste0(getwd(), "/Derived_data/Passes/passes_complex_high.csv"))
 
-# ctmms
-save(all.ctmms, file = paste0(getwd(), "/Derived_data/CTMMs/ctmms_simple_weak.RData"))
+# ctmms (do we need to do this if we're not running speed estimates?)
+save(all.ctmms, file = paste0(getwd(), "/Derived_data/CTMMs/ctmms_complex_high.RData"))

@@ -4,8 +4,8 @@
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
-# Date completed: 
-# Date last modified: 
+# Date completed: 09 Dec 2024
+# Date last modified: 09 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,31 +15,105 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 
 #_______________________________________________________________________
-# 2. Read in passes data ----
+# 2. Read in data and subset lookup table ----
 #_______________________________________________________________________
 
-passes.simple.weak <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_simple_weak.csv"))
+# passes
+passes.simple.low <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_simple_low.csv"))
+passes.complex.low <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_complex_low.csv"))
+passes.simple.high <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_simple_high.csv"))
+passes.complex.high <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_complex_high.csv"))
+
+# lookup table
+lookup.passes <- read.csv(paste0(getwd(), "/Derived_data/Lookup/lookup_passes.csv"))
+
+# subset
+lookup.simple.low <- lookup.passes %>% filter(landscape == "simple" & variability == "low")
+lookup.complex.low <- lookup.passes %>% filter(landscape == "complex" & variability == "low")
+lookup.simple.high <- lookup.passes %>% filter(landscape == "simple" & variability == "high")
+lookup.complex.high <- lookup.passes %>% filter(landscape == "complex" & variability == "high")
 
 #_______________________________________________________________________
-# 3. Sample individuals for each density WITHOUT replacement ----
-
-possible.indivs <- max(passes.simple.weak$indiv)
-
-total.indivs <- max(passes.simple.weak$indiv)
-#total.indivs <- 2 + 5 + 10 + 20 + 50
-
+# 3. Extract individual data at each density ----
 #_______________________________________________________________________
-# 3a. Simple / weak ----
+# 3a. Define function ----
 #_______________________________________________________________________
 
-# sample total.indivs from all simulated tracks 
-sampled.indivs <- sample(1:possible.indivs,
-                         size = total.indivs)
+extract_passes <- function(landscape,     # "simple" or "complex"
+                           variability,   # "low" or "high"
+                           densities) {   # vector of densities, assume indivs/ha
+  
+  # assign correct passes and lookup tables
+  if (landscape == "simple" & variability == "low") {
+    
+    focal.passes <- passes.simple.low
+    focal.lookup <- lookup.simple.low
+    
+  } else {
+    
+    if (landscape == "complex" & variability == "low") {
+      
+      focal.passes <- passes.complex.low
+      focal.lookup <- lookup.complex.low
+      
+    } else {
+      
+      if (landscape == "simple" & variability == "high") {
+        
+        focal.passes <- passes.simple.high
+        focal.lookup <- lookup.simple.high
+        
+      } else {
+        
+        focal.passes <- passes.complex.high
+        focal.lookup <- lookup.complex.high
+        
+      }
+      
+    }
+    
+  }
+  
+  # loop through densities
+  # convert densities to n.indiv 
+  indivs <- densities * 10
+  
+  # df to hold all
+  all.passes <- data.frame()
+  
+  for (i in indivs) {
+    
+    # extract as a vector
+    focal.indivs <- focal.lookup %>% filter(n == i) %>% dplyr::select(indiv) %>% pull()
+    
+    # extract passes and add identifiers
+    focal.passes.1 <- focal.passes %>% filter(indiv %in% focal.indivs) %>%
+      
+                                       mutate(landscape = landscape,
+                                              variability = variability,
+                                              n.indiv = i) %>%
+      
+                                       # drop X
+                                       dplyr::select(-X)
+    
+    # bind in
+    all.passes <- rbind(all.passes, focal.passes.1)
+    
+  }
+  
+  # return
+  return(all.passes)
+  
+}     
 
-passes.simple.weak.02 <- passes.simple.weak %>% filter(indiv %in% sampled.indivs[1:2])
-#passes.simple.weak.05 <- passes.simple.weak %>% filter(indiv %in% sampled.indivs[3:8])
+#_______________________________________________________________________
+# 3b. Run through ----
+#_______________________________________________________________________
 
-# and so forth
+passes.extracted.simple.low <- extract_passes("simple", "low", c(0.2, 0.5, 1.0))
+passes.extracted.complex.low <- extract_passes("complex", "low", c(0.2, 0.5, 1.0))
+passes.extracted.simple.high <- extract_passes("simple", "high", c(0.2, 0.5, 1.0))
+passes.extracted.complex.high <- extract_passes("complex", "high", c(0.2, 0.5, 1.0))
 
 #_______________________________________________________________________
 # 4. Aggregate together and add in cameras without passes ----
@@ -49,29 +123,49 @@ passes.simple.weak.02 <- passes.simple.weak %>% filter(indiv %in% sampled.indivs
 
 group_passes <- function (x) {
   
-  # group by cam and sum all passes
-  x.1 <- x %>% group_by(cam.id) %>%
-    
-    summarize(total.passes = sum(n))
+  # loop through all n.indiv
+  # blank df
+  all.passes.grouped <- data.frame()
   
-  # determine if any cams have no passes
-  no.passes <- which(!c(1:9) %in% x.1$cam.id)
-  
-  # add a zero entry for each one
-  for (i in no.passes) {
+  for (i in unique(x$n.indiv)) {
     
-    new.row <- data.frame(cam.id = i,
-                          total.passes = 0)
+    # subset
+    x.1 <- x %>% filter(n.indiv == i)
     
-    x.1 <- rbind(x.1, new.row)
+    # group by cam and sum all passes
+    x.2 <- x.1 %>% group_by(cam.id) %>%
+      
+      summarize(total.passes = sum(n))
+    
+    # determine if any cams have no passes
+    no.passes <- which(!c(1:9) %in% x.2$cam.id)
+    
+    # add a zero entry for each one
+    for (j in no.passes) {
+      
+      new.row <- data.frame(cam.id = j,
+                            total.passes = 0)
+      
+      x.2 <- rbind(x.2, new.row)
+      
+    }
+    
+    # sort by cam.id and add in identifiers
+    x.3 <- x.2 %>% 
+      
+      arrange(cam.id) %>%
+      
+      mutate(n.indiv = x.1$n.indiv[1],
+             landscape = x.1$landscape[1],
+             variability = x.1$variability[1])
+    
+    # bind
+    all.passes.grouped <- rbind(all.passes.grouped, x.3)
     
   }
   
-  # sort by cam.id
-  x.2 <- x.1 %>% arrange(cam.id)
-  
   # return
-  return(x.2)
+  return(all.passes.grouped)
   
 }
 
@@ -79,7 +173,10 @@ group_passes <- function (x) {
 # 4b. Use function ----
 #_______________________________________________________________________
 
-passes.simple.weak.gp <- group_passes(passes.simple.weak)
+passes.simple.low.gp <- group_passes(passes.extracted.simple.low)
+passes.complex.low.gp <- group_passes(passes.extracted.complex.low)
+passes.simple.high.gp <- group_passes(passes.extracted.simple.high)
+passes.complex.high.gp <- group_passes(passes.extracted.complex.high)
 
 #_______________________________________________________________________
 # 5. Draw passes based on detection probability ----
@@ -90,10 +187,72 @@ passes.simple.weak.gp <- group_passes(passes.simple.weak)
 det.p <- 0.30
 
 #_______________________________________________________________________
+# 5a. Define function ----
+#_______________________________________________________________________
 
-# work by row and bind in
-passes.simple.weak.gp$total.passes.p <- as.vector(by(passes.simple.weak.gp, 
-                                                     passes.simple.weak.gp$cam.id, 
-                                                     function (x) rbinom(1, 
-                                                                         size = x$total.passes, 
-                                                                         prob = 0.30)))
+sample_detections <- function (x) {
+  
+  # loop through n.indiv
+  all.detec <- data.frame()
+  
+  for (i in unique(x$n.indiv)) {
+    
+    x.1 <- x %>% filter(n.indiv == i)
+    
+    # work by row and bind in
+    total.detections <- as.vector(by(x.1, 
+                                     x.1$cam.id, 
+                                     function (y) rbinom(1, 
+                                                         size = y$total.passes, 
+                                                         prob = det.p)))
+    
+    x.1$total.detections <- total.detections
+    
+    # bind
+    all.detec <- rbind(all.detec, x.1)
+    
+  }
+  
+  # return
+  return(all.detec)
+  
+}
+
+#_______________________________________________________________________
+# 5b. Use function ----
+#_______________________________________________________________________
+
+detec.simple.low <- sample_detections(passes.simple.low.gp)
+detec.complex.low <- sample_detections(passes.complex.low.gp)
+detec.simple.high <- sample_detections(passes.simple.high.gp)
+detec.complex.high <- sample_detections(passes.complex.high.gp)
+
+#_______________________________________________________________________
+# 5c. Bind together ----
+#_______________________________________________________________________
+
+detec.all <- rbind(detec.simple.low,
+                   detec.complex.low,
+                   detec.simple.high,
+                   detec.complex.high)
+
+#_______________________________________________________________________
+# 6. Plot (sanity check) ----
+#_______________________________________________________________________
+
+ggplot(detec.all) +
+  
+  theme_bw() +
+  
+  facet_grid(landscape ~ variability) +
+  
+  geom_point(aes(x = as.factor(n.indiv),
+                 y = total.detections)) +
+  
+  theme(panel.grid = element_blank())
+
+#_______________________________________________________________________
+# 7. Write to .csv ----
+#_______________________________________________________________________
+  
+write.csv(detec.all, paste0(getwd(), "/Derived_data/Detections/detec_all.csv"))
