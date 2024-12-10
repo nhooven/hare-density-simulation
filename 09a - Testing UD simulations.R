@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 09 - Simulate utilization distributions
+# Script: 09a - Testing UD simulations
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
-# Date began: 09 Dec 2024
+# Date began: 10 Dec 2024
 # Date completed: 
-# Date last modified: 
+# Date last modified: 10 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -33,11 +33,11 @@ unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp")
 # 3a. Movement parameter distributions ----
 #_______________________________________________________________________
 
+# we'll just compare the simple-low and complex-low scenarios here
+
 # step lengths (gamma)
 load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_SL.RData"))
 load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_CL.RData"))
-load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_SH.RData"))
-load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_CH.RData"))
 
 # turning angle
 load(file = paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
@@ -58,7 +58,7 @@ model.params <- model.params %>% filter(type == "iSSF")
 # extract bounding box
 unit.bbox <- st_bbox(unit.bound)
 
-# we'll take a random draw from this distribution to initialize each path
+# we'll take a random draw from this area to initialize each path
 
 #_______________________________________________________________________
 # 3d. Redistribution kernel parameters ----
@@ -99,14 +99,14 @@ make_hrc <- function() {
 #_______________________________________________________________________
 # 5. Run simulations iteratively ----
 
-# 09 Dec 2024
-# let's run 20 tracks to see what that gives us
-
 # n of replicates
-n.reps <- 100
+n.reps <- 50
 
 # n of time steps
-n.steps <- 50
+n.steps <- 336
+
+# 10 Dec 2024 
+# 100 steps does not seem to lead to stability... hmm
 
 #_______________________________________________________________________
 # 5a. Define function ----
@@ -119,7 +119,7 @@ sim_issf_ud <- function (ls,
   focal.params <- model.params %>%
     
     filter(landscape == ls &
-           variability == var) %>%
+             variability == var) %>%
     
     dplyr::select(names, betas)
   
@@ -176,12 +176,12 @@ sim_issf_ud <- function (ls,
     # define start step
     start.step <- make_start(x = c(hrc[1],
                                    hrc[2]),
-                                   ta_ = 0,
-                                   time = ymd_hm("2024-09-01 18:00", 
-                                                 tz = "America/Los_Angeles"),
-                                   dt = hours(2),
-                                   crs = crs("EPSG:32611"))
-                             
+                             ta_ = 0,
+                             time = ymd_hm("2024-09-01 18:00", 
+                                           tz = "America/Los_Angeles"),
+                             dt = hours(2),
+                             crs = crs("EPSG:32611"))
+    
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
     issf.model <- make_issf_model(coefs = c("stem_end" = focal.params$betas[focal.params$names == "stem"],  
@@ -210,10 +210,9 @@ sim_issf_ud <- function (ls,
     # extract final location for fitting uncorrelated UD
     sim.final <- sim.path %>%
       
-      slice(nrow(sim.path)) %>%
-      
-      # add in individual identifier
-      mutate(indiv = i)
+      # add in individual identifiers (for step so we can extract them later)
+      mutate(step = rownames(sim.path),
+             indiv = i)
     
     # bind to df
     sims.df <- bind_rows(sims.df, sim.final)
@@ -225,9 +224,9 @@ sim_issf_ud <- function (ls,
                           digits = 1)
     
     print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
+    
+  }
   
-}
-
   # return
   return(sims.df)
   
@@ -239,60 +238,44 @@ sim_issf_ud <- function (ls,
 
 sims.SL <- sim_issf_ud("simple", "low")
 sims.CL <- sim_issf_ud("complex", "low")
-sims.SH <- sim_issf_ud("simple", "high")
-sims.CH <- sim_issf_ud("complex", "high")
 
 #_______________________________________________________________________
-# 6. Plot points ----
+# 6. Plot 2D density maps at certain cut points ----
 #_______________________________________________________________________
-# 6a. Convert to sf ----
-#_______________________________________________________________________
-
-sims.SL.sf <- st_as_sf(sims.SL,
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
-
-sims.CL.sf <- st_as_sf(sims.CL,
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
-
-sims.SH.sf <- st_as_sf(sims.SH,
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
-
-sims.CH.sf <- st_as_sf(sims.CH,
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
-
-#_______________________________________________________________________
-# 6b. Plots ----
+# 6a. Simple ----
 #_______________________________________________________________________
 
-# SL
-ggplot() +
+# subset df
+sims.SL.subset <- sims.SL %>% 
+  
+  filter(step %in% c(50, 100, 150, 200, 250, 300, 337)) %>%
+  
+  mutate(step = factor(step,
+                       levels = c(50, 100, 150, 200, 250, 300, 337)))
+
+# facetted density plot
+ggplot(sims.SL.subset,
+       aes(x = x_,
+           y = y_)) +
+  
+  facet_wrap(~ step, nrow = 1) +
   
   theme_bw() +
   
-  # unit boundary as a black square
-  geom_sf(data = unit.bound,
-          fill = NA) +
+  stat_density2d_filled(aes(fill = after_stat(level))) +
   
-  # paths
-  geom_sf(data = sims.SL.sf,
-            alpha = 0.5) +
+  scale_fill_viridis_d(option = "magma") +
   
-  # remove legend
-  theme(legend.position = "none") +
+  geom_point(shape = 21,
+             color = "white") +
   
-  # coordinate system to make nice axis labels
-  coord_sf(datum = st_crs(32611))
+  theme(panel.grid = element_blank(),
+        legend.position = "none",
+        axis.text = element_blank(),
+        axis.title = element_blank())
 
-#_______________________________________________________________________
-# 7. Write to .csv ----
-#_______________________________________________________________________
+# 10 Dec 2024
+# This is showing me that the spatial pattern stabilizes somewhat quickly (over a hundred steps)
+# but the shape of the UD is pretty sensitive to individual points.
+# Thus, it is probably more important to simulate more tracks than run them for longer. 
 
-write.csv(sims.SL, paste0(getwd(), "/Derived_data/Simulated data/sims_simple_low.csv"))
