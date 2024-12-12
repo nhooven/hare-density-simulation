@@ -4,8 +4,8 @@
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
-# Date completed: 
-# Date last modified: 
+# Date completed: 12 Dec 2024
+# Date last modified: 12 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -17,6 +17,9 @@ library(sf)              # read in shapefiles
 library(terra)           # rasters
 library(amt)             # simulate tracks
 library(lubridate)       # work with time
+library(sp)              # spatial points
+library(raster)          
+library(adehabitatHR)    # fit kernels
 
 #_______________________________________________________________________
 # 2. Read in rasters and unit boundary ----
@@ -58,7 +61,7 @@ model.params <- model.params %>% filter(type == "iSSF")
 # extract bounding box
 unit.bbox <- st_bbox(unit.bound)
 
-# we'll take a random draw from this distribution to initialize each path
+# we'll take the centroid from this box to initialize each path
 
 #_______________________________________________________________________
 # 3d. Redistribution kernel parameters ----
@@ -68,45 +71,16 @@ unit.bbox <- st_bbox(unit.bound)
 rk.control <- 10000
 
 # tolerance outside the landscape (hopefully we won't have to deal with this much)
-rk.tolerance <- 0.01    # 1%
+rk.tolerance <- 0.05    # 5%
 
 #_______________________________________________________________________
-# 4. Define functions needed for simulation ----
-#_______________________________________________________________________
-# 4a. Start step ----
-#_______________________________________________________________________
-
-# we'll borrow the home range centroid function from original simulations
-
-make_hrc <- function() {
-  
-  hrc.x <- runif(n = 1,
-                 min = unit.bbox[1],
-                 max = unit.bbox[3])
-  
-  hrc.y <- runif(n = 1,
-                 min = unit.bbox[2],
-                 max = unit.bbox[4])
-  
-  # concatenate
-  hrc <- c(hrc.x, hrc.y)
-  
-  # return
-  return(hrc)
-  
-}
-
-#_______________________________________________________________________
-# 5. Run simulations iteratively ----
-
-# 09 Dec 2024
-# let's run 20 tracks to see what that gives us
+# 4. Run simulations iteratively ----
 
 # n of replicates
-n.reps <- 100
+n.reps <- 300
 
 # n of time steps
-n.steps <- 50
+n.steps <- 336
 
 #_______________________________________________________________________
 # 5a. Define function ----
@@ -170,12 +144,9 @@ sim_issf_ud <- function (ls,
   
   for (i in 1:n.reps) {
     
-    # define hrc
-    hrc <- make_hrc()
-    
-    # define start step
-    start.step <- make_start(x = c(hrc[1],
-                                   hrc[2]),
+    # define start step (centroid of unit to keep initial conditions constant)
+    start.step <- make_start(x = c(unit.bbox[1] + (unit.bbox[3] - unit.bbox[1]) / 2,
+                                   unit.bbox[2] + (unit.bbox[4] - unit.bbox[2]) / 2),
                                    ta_ = 0,
                                    time = ymd_hm("2024-09-01 18:00", 
                                                  tz = "America/Los_Angeles"),
@@ -248,22 +219,22 @@ sims.CH <- sim_issf_ud("complex", "high")
 # 6a. Convert to sf ----
 #_______________________________________________________________________
 
-sims.SL.sf <- st_as_sf(sims.SL,
+sims.SL.sf <- st_as_sf(sims.SL %>% drop_na(x_),
                        coords = c("x_", 
                                   "y_"),
                        crs = "epsg:32611") 
 
-sims.CL.sf <- st_as_sf(sims.CL,
+sims.CL.sf <- st_as_sf(sims.CL %>% drop_na(x_),
                        coords = c("x_", 
                                   "y_"),
                        crs = "epsg:32611") 
 
-sims.SH.sf <- st_as_sf(sims.SH,
+sims.SH.sf <- st_as_sf(sims.SH %>% drop_na(x_),
                        coords = c("x_", 
                                   "y_"),
                        crs = "epsg:32611") 
 
-sims.CH.sf <- st_as_sf(sims.CH,
+sims.CH.sf <- st_as_sf(sims.CH %>% drop_na(x_),
                        coords = c("x_", 
                                   "y_"),
                        crs = "epsg:32611") 
@@ -291,8 +262,212 @@ ggplot() +
   # coordinate system to make nice axis labels
   coord_sf(datum = st_crs(32611))
 
+# CL
+ggplot() +
+  
+  theme_bw() +
+  
+  # unit boundary as a black square
+  geom_sf(data = unit.bound,
+          fill = NA) +
+  
+  # paths
+  geom_sf(data = sims.CL.sf,
+          alpha = 0.5) +
+  
+  # remove legend
+  theme(legend.position = "none") +
+  
+  # coordinate system to make nice axis labels
+  coord_sf(datum = st_crs(32611))
+
+# SH
+ggplot() +
+  
+  theme_bw() +
+  
+  # unit boundary as a black square
+  geom_sf(data = unit.bound,
+          fill = NA) +
+  
+  # paths
+  geom_sf(data = sims.SH.sf,
+          alpha = 0.5) +
+  
+  # remove legend
+  theme(legend.position = "none") +
+  
+  # coordinate system to make nice axis labels
+  coord_sf(datum = st_crs(32611))
+
+# CH
+ggplot() +
+  
+  theme_bw() +
+  
+  # unit boundary as a black square
+  geom_sf(data = unit.bound,
+          fill = NA) +
+  
+  # paths
+  geom_sf(data = sims.CH.sf,
+          alpha = 0.5) +
+  
+  # remove legend
+  theme(legend.position = "none") +
+  
+  # coordinate system to make nice axis labels
+  coord_sf(datum = st_crs(32611))
+
 #_______________________________________________________________________
-# 7. Write to .csv ----
+# 7. Density maps ----
+#_______________________________________________________________________
+# 7a. Add identifier ----
 #_______________________________________________________________________
 
-write.csv(sims.SL, paste0(getwd(), "/Derived_data/Simulated data/sims_simple_low.csv"))
+sims.SL$scenario <- "SL"
+sims.CL$scenario <- "CL"
+sims.SH$scenario <- "SH"
+sims.CH$scenario <- "CH"
+
+sims.all <- rbind(sims.SL, sims.CL, sims.SH, sims.CH)
+
+# order factor levels
+sims.all$scenario <- factor(sims.all$scenario, levels = c("SL", "CL", "SH", "CH"))
+
+#_______________________________________________________________________
+# 7b. Plot ----
+#_______________________________________________________________________
+
+ggplot(sims.all,
+       aes(x = x_,
+           y = y_)) +
+  
+  facet_wrap(~ scenario) +
+  
+  theme_bw() +
+  
+  stat_density2d_filled(aes(fill = after_stat(level))) +
+  
+  scale_fill_viridis_d(option = "magma") +
+  
+  theme(panel.grid = element_blank(),
+        legend.position = "none",
+        axis.text = element_blank(),
+        axis.title = element_blank())
+
+# SH is weird and has many NAs because of the positive edge coefficient - 
+# let's look at re-doing that model later
+
+#_______________________________________________________________________
+# 8. Fit kernel UDs ----
+#_______________________________________________________________________
+# 8a. Initialize a SpatialPixels object equivalent to the main raster ----
+#_______________________________________________________________________
+
+landscape.sp <- as(as(landscape.covs.simple$stem, "Raster"), "SpatialPixels")
+
+#_______________________________________________________________________
+# 8b. Define function ----
+#_______________________________________________________________________
+
+sim_kernel <- function (template,     # SpatialPixels object
+                        sims.sf) {
+  
+  # convert sf to SpatialPoints objects
+  sims.sp <- as(sims.sf, "Spatial") 
+  
+  # fit kernel with LSCV h parameter
+  kernel <- kernelUD(xy = sims.sp, h = "LSCV", grid = template)
+  
+  # convert to SpatRaster
+  kernel.rast <- rast(kernel)
+  
+  # return
+  return(kernel.rast)
+  
+}
+
+#_______________________________________________________________________
+# 8c. Use function ----
+#_______________________________________________________________________
+
+kernel.SL <- sim_kernel(landscape.sp, sims.SL.sf)
+kernel.CL <- sim_kernel(landscape.sp, sims.CL.sf)
+kernel.SH <- sim_kernel(landscape.sp, sims.SH.sf)
+kernel.CH <- sim_kernel(landscape.sp, sims.CH.sf)
+
+#_______________________________________________________________________
+# 8d. Plot ----
+#_______________________________________________________________________
+
+# SL
+ggplot() +
+  
+  theme_bw() +
+  
+  tidyterra::geom_spatraster(data = kernel.SL,
+                            aes(fill = ud)) +
+  
+  coord_sf(datum = sf::st_crs(32611)) +
+  
+  scale_fill_viridis_c(option = "magma")
+
+# CL
+ggplot() +
+  
+  theme_bw() +
+  
+  tidyterra::geom_spatraster(data = kernel.CL,
+                             aes(fill = ud)) +
+  
+  coord_sf(datum = sf::st_crs(32611)) +
+  
+  scale_fill_viridis_c(option = "magma")
+
+# SH
+ggplot() +
+  
+  theme_bw() +
+  
+  tidyterra::geom_spatraster(data = kernel.SH,
+                             aes(fill = ud)) +
+  
+  coord_sf(datum = sf::st_crs(32611)) +
+  
+  scale_fill_viridis_c(option = "magma")
+
+# CL
+ggplot() +
+  
+  theme_bw() +
+  
+  tidyterra::geom_spatraster(data = kernel.CL,
+                             aes(fill = ud)) +
+  
+  coord_sf(datum = sf::st_crs(32611)) +
+  
+  scale_fill_viridis_c(option = "magma")
+
+#_______________________________________________________________________
+# 8e. Stack ----
+#_______________________________________________________________________
+
+kernel.all <- c(kernel.SL, kernel.CL, kernel.SH, kernel.CH)
+
+names(kernel.all) <- c("SL", "CL", "SH", "CH")
+
+#_______________________________________________________________________
+# 9. Write to .csvs ----
+#_______________________________________________________________________
+
+write.csv(sims.SL, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_SL.csv"))
+write.csv(sims.CL, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_CL.csv"))
+write.csv(sims.SH, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_SH.csv"))
+write.csv(sims.CH, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_CH.csv"))
+
+#_______________________________________________________________________
+# 10. Write rasters ----
+#_______________________________________________________________________
+
+writeRaster(kernel.all, filename = paste0(getwd(), "/Rasters/kernel.all.sim.tif"))
