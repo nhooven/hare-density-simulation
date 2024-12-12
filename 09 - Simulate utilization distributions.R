@@ -470,4 +470,4 @@ write.csv(sims.CH, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_CH.csv"
 # 10. Write rasters ----
 #_______________________________________________________________________
 
-writeRaster(kernel.all, filename = paste0(getwd(), "/Rasters/kernel.all.sim.tif"))
+writeRaster(kernel.all, filename = paste0(getwd(), "/Rasters/kernel_all_sim.tif"))
