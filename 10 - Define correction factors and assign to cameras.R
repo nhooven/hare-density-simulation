@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 12 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 12 Dec 2024
+# Date last modified: 13 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -42,18 +42,45 @@ plot(ssf.rast)
 plot(issf.rast)
 
 #_______________________________________________________________________
-# 4. Scale between 0 and 1 ----
+# 4. Crop to unit boundary ----
 #_______________________________________________________________________
 
-ssf.rast.scale <- c((ssf.rast$SL - min(values(ssf.rast$SL))) / (max(values(ssf.rast$SL)) - min(values(ssf.rast$SL))),
-                    (ssf.rast$CL - min(values(ssf.rast$CL))) / (max(values(ssf.rast$CL)) - min(values(ssf.rast$CL))),
-                    (ssf.rast$SH - min(values(ssf.rast$SH))) / (max(values(ssf.rast$SH)) - min(values(ssf.rast$SH))),
-                    (ssf.rast$CH - min(values(ssf.rast$CH))) / (max(values(ssf.rast$CH)) - min(values(ssf.rast$CH))))
+ssf.rast.crop <- crop(ssf.rast, unit.bound)
+issf.rast.crop <- crop(issf.rast, unit.bound)
 
-issf.rast.scale <- c(issf.rast$SL / max(values(issf.rast$SL)),
-                     issf.rast$CL / max(values(issf.rast$CL)),
-                     issf.rast$SH / max(values(issf.rast$SH)),
-                     issf.rast$CH / max(values(issf.rast$CH)))
+#_______________________________________________________________________
+# 5. Scale correctly ----
+#_______________________________________________________________________
+# 5a. SSF raster - relative selection strength
+
+# RSS is interpreted as how many times more likely an animal is to be
+# found at a location with the characteristics of the numerator compared
+# to the denominator:
+
+# RSS = w(x)2 / w(x)1
+
+# we'll use the average w(x) across the camera grid as the baseline,
+# and normalize everything to that - thus the average will be 1
+
+# and then the correction factor will be 1 / RSS
+
+#_______________________________________________________________________
+
+ssf.rast.scale <- c(ssf.rast.crop$SL / mean(values(ssf.rast.crop$SL)),
+                    ssf.rast.crop$CL / mean(values(ssf.rast.crop$CL)),
+                    ssf.rast.crop$SH / mean(values(ssf.rast.crop$SH)),
+                    ssf.rast.crop$CH / mean(values(ssf.rast.crop$CH)))
+
+
+
+issf.rast.scale <- c(issf.rast.crop$SL / mean(values(issf.rast.crop$SL)),
+                     issf.rast.crop$CL / mean(values(issf.rast.crop$CL)),
+                     issf.rast.crop$SH / mean(values(issf.rast.crop$SH)),
+                     issf.rast.crop$CH / mean(values(issf.rast.crop$CH)))
+
+#_______________________________________________________________________
+# 5b. iSSF utilization distribution ----
+#_______________________________________________________________________
 
 # plot again
 plot(ssf.rast.scale)
@@ -99,10 +126,6 @@ ggplot() +
           color = "white",
           linewidth = 1.1) +
   
-  coord_sf(datum = st_crs(32611),
-           xlim = c(960 - 100, 1276 + 100),
-           ylim = c(960 - 100, 1276 + 100)) +
-  
   theme(axis.text = element_blank(),
         legend.position = "none") + 
   
@@ -126,10 +149,6 @@ ggplot() +
           fill = "white",
           color = "white",
           linewidth = 1.1) +
-  
-  coord_sf(datum = st_crs(32611),
-           xlim = c(960 - 100, 1276 + 100),
-           ylim = c(960 - 100, 1276 + 100)) +
   
   theme(axis.text = element_blank(),
         legend.position = "none") + 
