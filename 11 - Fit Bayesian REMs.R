@@ -126,7 +126,7 @@ data.stan <- list(
   
   # response variables
   # count of indepedent detections
-  count = detec.1$total.detections
+  count = detec.1$total.passes
   
 )
 
