@@ -25,6 +25,15 @@ cams <- read.csv(paste0(getwd(), "/Derived_data/Detections/cams.csv"))
 
 day.range <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/day_range.csv"))
 
+# add zeroes for SL.2
+detec <- rbind(detec,
+               data.frame(X = NA,
+                          cam.id = 1:9, 
+                          total.passes = 0,
+                          n.indiv = 2,
+                          landscape = "simple",
+                          variability = "low"))
+
 #_______________________________________________________________________
 # 3. Format data correctly ----
 #_______________________________________________________________________
@@ -248,29 +257,50 @@ rem.all <- rbind(rem.naive, rem.ssf, rem.issf)
 # 6. Plot results ----
 #_______________________________________________________________________
 
+# reorder factors
+rem.all <- rem.all %>%
+  
+  mutate(scenario = factor(scenario,
+                           levels = c("naive", "ssf", "issf")),
+         landscape = factor(landscape,
+                            levels = c("simple", "complex")),
+         variability = factor(variability,
+                              levels = c("low", "high")))
+
 ggplot(data = rem.all) +
   
   theme_bw() +
   
-  facet_grid(landscape ~ scenario) +
+  facet_grid(scenario ~ landscape*variability) +
+  
+  coord_cartesian(xlim = c(0, 2),
+                  ylim = c(0, 2)) +
   
   geom_abline(slope = 1, 
               intercept = 0,
               linetype = "dashed") +
   
-#  geom_errorbarh(aes(y = n.indiv / 10,
- #                    xmin = low.95,
-  #                   xmax = upp.95),
-   #              height = 0) +
+  geom_errorbarh(aes(y = n.indiv / 10,
+                     xmin = low.95,
+                     xmax = upp.95),
+                 height = 0) +
   
   geom_point(aes(x = D.mean,
                  y = n.indiv / 10,
-                 color = n.indiv / 10,
-                 shape = as.factor(variability)))
+                 fill = as.factor(n.indiv)),
+             shape = 21,
+             size = 1.5) +
+  
+  scale_fill_viridis_d(option = "magma") +
+  
+  theme(panel.grid = element_blank(),
+        legend.position = "none") +
+  
+  xlab("Estimated density (individuals/ha)") +
+  ylab("True density (individuals/ha)")
 
-# for some reason, these predictions are on incorrect scales. 
-# Back to the drawing board without detection prob
 
-# looks like we have a lot of work to do...
 
-# we're probably getting too many contacts with the ctmm thing...
+# NEXT STEP
+# Add bias/coverage metrics to really compare these
+
