@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 12 Dec 2024
 # Date completed: 
-# Date last modified: 12 Dec 2024
+# Date last modified: 13 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -110,15 +110,19 @@ data.stan <- list(
   # data - for REM
   lens = (57.3 * pi) / 180,
   days = 28,
-  day_range = detec.1$day.range * 1000,  
+  day_range = detec.1$day.range,  
   
   # detection probability for EDD
   det_prob = 0.30,
   max_dist = 3.5,
   
-  # scaled predicted values for use as correction factors
-  ssf_pred = detec.1$ssf.data,
-  issf_pred = detec.1$issf.data,
+  # scaled predicted values for use as correction factors (matrix that matches detections)
+  ssf_pred = matrix(detec.1$ssf.data,
+                    nrow = 9,
+                    ncol = 12),
+  issf_pred = matrix(detec.1$issf.data,
+                     nrow = 9,
+                     ncol = 12),
   
   # response variables
   # count of indepedent detections
@@ -126,17 +130,43 @@ data.stan <- list(
   
 )
 
+#______________________________________________________________________________
+# 4. Tune prior on density ----
 
-#_______________________________________________________________________________________________
-# 4. Model fitting ----
-#_______________________________________________________________________________________________
+# this should be a gamma distribution that's somewhat flat
 
-# 12 Dec 2024
-# The D prior is very important since there isn't much data here!
+# keep in mind that our densities range from 0.2 to 1.0 in this first example!
+
+#______________________________________________________________________________
+
+test.dist <- data.frame(x = seq(0, 5, length.out = 1000),
+                        y = dgamma(x = seq(0, 5, length.out = 1000),
+                                   shape = 1.25,
+                                   rate = 1.5))
+
+ggplot(test.dist,
+       aes(x = x,
+           y = y)) +
+  
+  theme_bw() +
+  
+  geom_line(color = "darkblue",
+            linewidth = 1.05) +
+  
+  theme(panel.grid = element_blank())
+
+# let's try this pretty flat version
+# ~ gamma(1.25, 1.50)
+
+#_____________________________________________________________________________
+# 5. Model fitting ----
+#_____________________________________________________________________________
+# 5a. Model without correction factors ----
+#_____________________________________________________________________________
 
 m1 <- rstan::stan(
   
-  file = "model.stan",
+  file = "model_1.stan",
   data = data.stan,
   chains = 4,
   warmup = 1000,
@@ -150,3 +180,56 @@ print(m1, pars = c("D_site",
 rstan::traceplot(m1, pars = c("D_site"))
 
 print(m1, pars = c("D_station"))
+
+#_____________________________________________________________________________
+# 5b. Model with post-hoc correction factors ----
+#_____________________________________________________________________________
+
+m2 <- rstan::stan(
+  
+  file = "model_2.stan",
+  data = data.stan,
+  chains = 4,
+  warmup = 1000,
+  iter = 2000
+  
+)
+
+print(m2, pars = c("D_site",
+                   "D_site_ssf",
+                   "D_site_issf"))
+
+print(m2, pars = c("CV_site",
+                   "CV_site_ssf",
+                   "CV_site_issf"))
+
+rstan::traceplot(m2, pars = c("D_site_ssf"))
+
+#_____________________________________________________________________________
+# 5c. Model with integrated correction factors ----
+#_____________________________________________________________________________
+
+m3 <- rstan::stan(
+  
+  file = "model_3.stan",
+  data = data.stan,
+  chains = 1,
+  warmup = 5000,
+  iter = 10000
+  
+)
+
+print(m3, pars = c("D_site",
+                   "D_site_ssf",
+                   "D_site_issf"))
+
+print(m3, pars = c("CV_site",
+                   "CV_site_ssf",
+                   "CV_site_issf"))
+
+rstan::traceplot(m3, pars = c("D_site_issf"))
+
+# multiplying the log(lambda counts) term by the CF seems to lead to a lot of
+# divergent transitions
+
+# for now, we'll shelve the Bayesian REMs (they are data-hungry!)

@@ -18,8 +18,8 @@ data {
   real max_dist ;
   
   // correction factors
-  real ssf_pred[N_session_station] ; 
-  real issf_pred[N_session_station] ; 
+  matrix[9, N_session] ssf_pred ; 
+  matrix[9, N_session] issf_pred ; 
   
   // response variables
   int count[N_session_station] ;
@@ -28,7 +28,7 @@ data {
   
   parameters {
 
-  // density (one cell per camera, 9 x 21 matrix)
+  // density (one cell per camera, 9 x 12 matrix)
   matrix<lower=0>[9, N_session] D_station ;
   
   }
@@ -50,8 +50,8 @@ data {
   
   // priors
     
-    // density (prior scale should be hares/ha) - mean is shape / rate
-    to_row_vector(D_station) ~ gamma(5, 1) ;
+    // density (prior scale should be hares/ha)
+    to_row_vector(D_station) ~ gamma(2, 0.20) ;
     
   // likelihoods
   for (i in 1:N_session_station) {
@@ -59,7 +59,7 @@ data {
     // Poisson - counts
     target += poisson_lpmf(count[i] | log((to_row_vector(D_station)[i] * 100) * // should be in hares/km2
                                           days *
-                                          (day_range[i] / 1000) *
+                                          (day_range[i]) *
                                           (2.0 + lens) *
                                           (r_star[i] * 1000) /
                                           3.14159265)) ;
@@ -79,6 +79,37 @@ data {
     D_site[i] = mean(D_station[ , i]) ;
     
     CV_site[i] = sd(D_station[ , i]) / D_site[i] ;
+    
+  }
+  
+  // calculate corrected density values
+  matrix<lower=0>[9, N_session] D_station_ssf ;
+  matrix<lower=0>[9, N_session] D_station_issf ;
+  
+  for (i in 1:9) {
+    
+    for (j in 1:N_session) {
+      
+    D_station_ssf[i, j] = D_station[i, j] * (1 / ssf_pred[i, j]) ;
+    D_station_issf[i, j] = D_station[i, j] * (1 / issf_pred[i, j]) ;
+      
+    }
+    
+  }
+  
+  // mean values and CVs
+  real D_site_ssf[N_session] ;
+  real D_site_issf[N_session] ;
+  real CV_site_ssf[N_session] ;
+  real CV_site_issf[N_session] ;
+  
+  for (i in 1:N_session) {
+    
+    D_site_ssf[i] = mean(D_station_ssf[ , i]) ;
+    D_site_issf[i] = mean(D_station_issf[ , i]) ;
+    
+    CV_site_ssf[i] = sd(D_station_ssf[ , i]) / D_site_ssf[i] ;
+    CV_site_issf[i] = sd(D_station_issf[ , i]) / D_site_issf[i] ;
     
   }
   

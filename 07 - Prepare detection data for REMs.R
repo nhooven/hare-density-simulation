@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 09 Dec 2024
+# Date last modified: 13 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -179,62 +179,13 @@ passes.simple.high.gp <- group_passes(passes.extracted.simple.high)
 passes.complex.high.gp <- group_passes(passes.extracted.complex.high)
 
 #_______________________________________________________________________
-# 5. Draw passes based on detection probability ----
-
-# define possible detection probabilities
-# to keep this simple we'll assume a constant p for each camera
-
-det.p <- 0.30
-
-#_______________________________________________________________________
-# 5a. Define function ----
+# 5. Bind together ----
 #_______________________________________________________________________
 
-sample_detections <- function (x) {
-  
-  # loop through n.indiv
-  all.detec <- data.frame()
-  
-  for (i in unique(x$n.indiv)) {
-    
-    x.1 <- x %>% filter(n.indiv == i)
-    
-    # work by row and bind in
-    total.detections <- as.vector(by(x.1, 
-                                     x.1$cam.id, 
-                                     function (y) rbinom(1, 
-                                                         size = y$total.passes, 
-                                                         prob = det.p)))
-    
-    x.1$total.detections <- total.detections
-    
-    # bind
-    all.detec <- rbind(all.detec, x.1)
-    
-  }
-  
-  # return
-  return(all.detec)
-  
-}
-
-#_______________________________________________________________________
-# 5b. Use function ----
-#_______________________________________________________________________
-
-detec.simple.low <- sample_detections(passes.simple.low.gp)
-detec.complex.low <- sample_detections(passes.complex.low.gp)
-detec.simple.high <- sample_detections(passes.simple.high.gp)
-detec.complex.high <- sample_detections(passes.complex.high.gp)
-
-#_______________________________________________________________________
-# 5c. Bind together ----
-#_______________________________________________________________________
-
-detec.all <- rbind(detec.simple.low,
-                   detec.complex.low,
-                   detec.simple.high,
-                   detec.complex.high)
+detec.all <- rbind(passes.simple.low.gp,
+                   passes.complex.low.gp,
+                   passes.simple.high.gp,
+                   passes.complex.high.gp)
 
 #_______________________________________________________________________
 # 6. Plot (sanity check) ----
@@ -247,7 +198,7 @@ ggplot(detec.all) +
   facet_grid(landscape ~ variability) +
   
   geom_point(aes(x = as.factor(n.indiv),
-                 y = total.detections)) +
+                 y = total.passes)) +
   
   theme(panel.grid = element_blank())
 
