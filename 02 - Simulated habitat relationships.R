@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 02 Dec 2024
-# Date last modified: 02 Dec 2024
+# Date last modified: 18 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -20,19 +20,13 @@ library(amt)             # distributions
 # 2. Read in rasters ----
 #_______________________________________________________________________
 
-simple <- rast("E:/Hare project/Data analysis/Density - Movement simulation/Rasters/simple.tif")
-complex <- rast("E:/Hare project/Data analysis/Density - Movement simulation/Rasters/complex.tif")
+S1 <- rast(paste0(getwd(), "/Rasters/S1.tif"))
+S2 <- rast(paste0(getwd(), "/Rasters/S2.tif"))
+S3 <- rast(paste0(getwd(), "/Rasters/S3.tif"))
 
-# covariate ranges (pick the min and max of both landscapes)
-stem.range <- c(min(c(range(as.vector(simple$stem)),
-                      range(as.vector(complex$stem)))),
-                max(c(range(as.vector(simple$stem)),
-                      range(as.vector(complex$stem)))))
-
-edge.range <- c(min(c(range(as.vector(simple$edge)),
-                      range(as.vector(complex$edge)))),
-                max(c(range(as.vector(simple$edge)),
-                      range(as.vector(complex$edge)))))
+C1 <- rast(paste0(getwd(), "/Rasters/C1.tif"))
+C2 <- rast(paste0(getwd(), "/Rasters/C2.tif"))
+C3 <- rast(paste0(getwd(), "/Rasters/C3.tif"))
 
 #_______________________________________________________________________
 # 3. Movement parameter distributions ----
@@ -60,41 +54,116 @@ lsl.hig <- log(qgamma(p = 0.975, shape = sl.dist$params$shape, scale = sl.dist$p
 # 4. Base iSSF coefficients ----
 #_______________________________________________________________________
 
-coef.stem <- 2.0          # selection for stem density
+# importantly, these are *standardized* coefficients
+
+coef.stem <- 1.0          # selection for stem density
 coef.stem.sl <- -0.3      # higher selection with shorter sl       
 coef.edge <- -0.5         # avoidance of edge distance
 coef.mature <- -1.5       # base avoidance of mature (start of step)
 coef.mature.sl <- 0.5     # interaction with log(sl) (longer movements when starting in mature)
 
 #_______________________________________________________________________
-# 5. Individual variation ----
-#_______________________________________________________________________
-# 5a. Densities for plotting ----
+# 5. Random slope standard deviations  ----
 #_______________________________________________________________________
 
-# sequence of probabilities
-probs <- seq(0.001, 0.999, length.out = 100)
+# here we'll draw iSSF slopes (habitat selection only) from normal distributions
+sd.low <- 0.10
+sd.high <- 0.75
+
+#_______________________________________________________________________
+# 5. Parameter expectation and variation ----
+#_______________________________________________________________________
+# 5a. Quantiles for plotting ----
+#_______________________________________________________________________
 
 # selection for stem
-iv.stem <- data.frame(x = seq(-2, 6, length.out = 100),
-                      d = dnorm(x = seq(-2, 6, length.out = 100), mean = coef.stem, sd = 1.5),
-                      q = qnorm(p = probs, mean = coef.stem, sd = 1.5))
-
+iv.stem <- data.frame(coef = "stem",
+                      estimate = coef.stem,
+                      q.low.l = qnorm(p = 0.025, mean = coef.stem, sd = sd.low),
+                      q.low.u = qnorm(p = 0.975, mean = coef.stem, sd = sd.low),
+                      q.high.l = qnorm(p = 0.025, mean = coef.stem, sd = sd.high),
+                      q.high.u = qnorm(p = 0.975, mean = coef.stem, sd = sd.high))
 
 # stem step length interaction
-iv.stem.sl <- data.frame(x = seq(-4.5, 3.5, length.out = 100),
-                         d = dnorm(x = seq(-4.5, 3.5, length.out = 100), mean = coef.stem.sl, sd = 1.5),
-                         q = qnorm(p = probs, mean = coef.stem.sl, sd = 1.5))
+iv.stem.sl <- data.frame(coef = "stem:log(sl)",
+                         estimate = coef.stem.sl,
+                         q.low.l = NA,
+                         q.low.u = NA,
+                         q.high.l = NA,
+                         q.high.u = NA)
 
 # avoidance of edge
-iv.edge <- data.frame(x = seq(-4.5, 3.5, length.out = 100),
-                      d = dnorm(x = seq(-4.5, 3.5, length.out = 100), mean = coef.edge, sd = 1.5),
-                      q = qnorm(p = probs, mean = coef.edge, sd = 1.5))
+iv.edge <- data.frame(coef = "edge",
+                      estimate = coef.edge,
+                      q.low.l = qnorm(p = 0.025, mean = coef.edge, sd = sd.low),
+                      q.low.u = qnorm(p = 0.975, mean = coef.edge, sd = sd.low),
+                      q.high.l = qnorm(p = 0.025, mean = coef.edge, sd = sd.high),
+                      q.high.u = qnorm(p = 0.975, mean = coef.edge, sd = sd.high))
 
-# avoidance of mature at shorter step lengths
-iv.mature.sl <- data.frame(x = seq(-2, 6, length.out = 100),
-                           d = dnorm(x = seq(-2, 6, length.out = 100), mean = coef.mature.sl, sd = 1.5),
-                           q = qnorm(p = probs, mean = coef.mature.sl, sd = 1.5))
+# base avoidance of mature
+iv.mature <- data.frame(coef = "mature",
+                        estimate = coef.mature,
+                        q.low.l = qnorm(p = 0.025, mean = coef.mature, sd = sd.low),
+                        q.low.u = qnorm(p = 0.975, mean = coef.mature, sd = sd.low),
+                        q.high.l = qnorm(p = 0.025, mean = coef.mature, sd = sd.high),
+                        q.high.u = qnorm(p = 0.975, mean = coef.mature, sd = sd.high))
+
+# greater steps starting in mature
+iv.mature.sl <- data.frame(coef = "mature:log(sl)",
+                           estimate = coef.mature.sl,
+                           q.low.l = NA,
+                           q.low.u = NA,
+                           q.high.l = NA,
+                           q.high.u = NA)
+
+# bind together
+iv.all <- rbind(iv.stem, iv.stem.sl, iv.edge, iv.mature, iv.mature.sl)
+
+# reorder factor levels
+iv.all$coef <- factor(iv.all$coef,
+                      levels = rev(c("stem", "stem:log(sl)", "edge", "mature", "mature:log(sl)")))
+
+#_______________________________________________________________________
+# 5b. Plot ----
+#_______________________________________________________________________
+
+ggplot(data = iv.all,
+       aes(x = estimate,
+           y = coef,
+           group = coef)) +
+  
+  theme_bw() +
+  
+  geom_vline(xintercept = 0,
+             linetype = "dashed") +
+  
+  # high variability
+  geom_errorbarh(aes(xmin = q.high.l,
+                     xmax = q.high.u),
+                 height = 0,
+                 linewidth = 2.5,
+                 color = "darkblue",
+                 alpha = 0.25) +
+  
+  # low variability
+  geom_errorbarh(aes(xmin = q.low.l,
+                     xmax = q.low.u),
+                 height = 0,
+                 linewidth = 2.5,
+                 color = "darkblue",
+                 alpha = 0.75) +
+  
+  geom_point(size = 2,
+             shape = 21,
+             fill = "white",
+             color = "black") +
+  
+  # labels
+  ylab("") +
+  xlab("Standardized coefficient") +
+  
+  # theme
+  theme(panel.grid = element_blank())
 
 #_______________________________________________________________________
 # 6. Density plots ----
@@ -111,7 +180,7 @@ ggplot(iv.stem,
   geom_vline(xintercept = 0,
              linetype = "dashed") +
   
-  geom_vline(xintercept = 2) +
+  geom_vline(xintercept = coef.stem) +
   
   geom_line(color = "darkblue",
             linewidth = 1.5) +
