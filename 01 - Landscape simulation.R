@@ -51,7 +51,6 @@ rows <- as.integer(ceiling(sqrt(n.sqm / resol)))
 # 3a. Simple landscape ----
 #_______________________________________________________________________
 
-<<<<<<< HEAD
 # S1
 set.seed(74)
 S1.cov1 <- nlm_planargradient(ncol = columns,
@@ -70,31 +69,6 @@ S3.cov1 <- nlm_planargradient(ncol = columns,
                               nrow = rows,
                               resolution = resol)
 
-=======
-plot(nlm_planargradient(ncol = columns + 1,
-                     nrow = rows + 1,
-                     resolution = resol))
-
-
-# S1
-set.seed(74)
-S1.cov1 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
-
-# S2
-set.seed(539)
-S2.cov1 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
-
-# S3
-set.seed(1010)
-S3.cov1 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
-
->>>>>>> b50f57e2a50aab45d19bc5a230a08f5ff0056e65
 # bind together
 S.cov1 <- c(rast(S1.cov1), rast(S2.cov1), rast(S3.cov1))
 names(S.cov1) <- c("S1", "S2", "S3")
