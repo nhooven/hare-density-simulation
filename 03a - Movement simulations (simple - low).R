@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 09 Dec 2024
+# Date last modified: 19 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -22,12 +22,16 @@ library(lubridate)       # work with time
 # 2. Read in rasters and unit boundary ----
 #_______________________________________________________________________
 
-landscape.covs <- rast("Rasters/simple.tif")
+landscape.covs.1 <- rast("Rasters/S1.tif")
+landscape.covs.2 <- rast("Rasters/S2.tif")
+landscape.covs.3 <- rast("Rasters/S3.tif")
 
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
 
-plot(landscape.covs$stem)
-plot(st_geometry(unit.bound), add = T)
+# scale raster
+landscape.covs.s <- c(scale(landscape.covs.3$stem),
+                      scale(landscape.covs.3$edge),
+                      landscape.covs.3$mature)
 
 #_______________________________________________________________________
 # 3. Define simulation parameters ----
@@ -52,7 +56,8 @@ ta.dist <- make_unif_distr(min = -pi,
 # 3b. Habitat selection coefficients and identifiers ----
 #_______________________________________________________________________
 
-coef.stem <- 2.0          # selection for stem density
+# mean coefficients
+coef.stem <- 1.0          # selection for stem density
 coef.stem.sl <- -0.3      # higher selection with shorter sl       
 coef.edge <- -0.5         # avoidance of edge distance
 coef.mature <- -1.5       # base avoidance of mature (start of step)
@@ -60,6 +65,7 @@ coef.mature.sl <- 0.5     # interaction with log(sl) (longer movements when star
 
 id.landscape <- "simple"
 id.variability <- "low"
+id.rep <- 3
 
 #_______________________________________________________________________
 # 3c. Home ranging parameters ----
@@ -148,20 +154,19 @@ hr_params <- function(e.var = e.var,          # expected variance of the bivaria
 #_______________________________________________________________________
 # 5. Run simulations iteratively ----
 
-# 09 Dec 2024
-# let's run 20 for each scenario for demonstration purposes
-
 # n of replicates
-n.reps <- 20
+n.reps <- 100
 
 # calculate approximate time in hours (assuming 336 locations)
-(42 * n.reps) / (60 * 60)
+(12 * n.reps) / (60 * 60)
 
 #_______________________________________________________________________
-# 5a. Create data.frame to hold all sims ----
+# 5a. Create dfs to hold all sims ----
 #_______________________________________________________________________
 
 sims.df <- data.frame()
+
+all.coef.draws <- data.frame()
 
 #_______________________________________________________________________
 # 5b. Run simulations ----
@@ -189,11 +194,20 @@ for (i in 1:n.reps) {
                          hrc = hrc)
   
   # make iSSF model
+  # draw from appropriate distributions
+  coef.sd <- ifelse(id.variability == "low",
+                    0.10,
+                    0.75)
+  
+  coef.draws <- data.frame(coef.stem.1 = rnorm(1, coef.stem, coef.sd),
+                           coef.edge.1 = rnorm(1, coef.edge, coef.sd),
+                           coef.mature.1 = rnorm(1, coef.mature, coef.sd))
+  
   # here the terms are important to get right so redistribution_kernel() works okay
-  issf.model <- make_issf_model(coefs = c("stem_end" = coef.stem,  
+  issf.model <- make_issf_model(coefs = c("stem_end" = coef.draws$coef.stem.1[1],  
                                           "stem_end:log(sl_)" = coef.stem.sl,
-                                          "edge_end" = coef.edge,
-                                          "mature_start" = coef.mature,
+                                          "edge_end" = coef.draws$coef.edge.1[1],
+                                          "mature_start" = coef.draws$coef.mature.1[1],
                                           "log(sl_):mature_start" = coef.mature.sl,
                                           x2_ = hr.params[1],
                                           y2_ = hr.params[2], 
@@ -204,7 +218,7 @@ for (i in 1:n.reps) {
   # initialize redistribution kernel
   rk <- redistribution_kernel(x = issf.model,
                               start = start.step,
-                              map = landscape.covs,
+                              map = landscape.covs.s,
                               n.control = rk.control,   
                               max.dist = get_max_dist(issf.model),
                               tolerance.outside = rk.tolerance)
@@ -220,10 +234,13 @@ for (i in 1:n.reps) {
     
     mutate(indiv = i,
            landscape = id.landscape,
-           variability = id.variability)
+           variability = id.variability,
+           rep = id.rep)
   
   # bind to df
   sims.df <- bind_rows(sims.df, sim.path.1)
+  
+  all.coef.draws <- rbind(all.coef.draws, coef.draws)
   
   # status message
   elapsed.time <- round(as.numeric(difftime(Sys.time(), 
@@ -258,7 +275,7 @@ ggplot() +
             aes(x = x_,
                 y = y_,
                 color = as.factor(indiv)),
-            alpha = 0.5) +
+            alpha = 0.10) +
   
   # remove legend
   theme(legend.position = "none") +
@@ -267,7 +284,8 @@ ggplot() +
   coord_sf(datum = st_crs(32611))
 
 #_______________________________________________________________________
-# 7. Write to .csv ----
+# 7. Write to .csvs ----
 #_______________________________________________________________________
 
-write.csv(sims.df, paste0(getwd(), "/Derived_data/Simulated data/sims_simple_low.csv"))
+write.csv(sims.df, paste0(getwd(), "/Derived_data/Simulated data/sims_31L.csv"))
+write.csv(all.coef.draws, paste0(getwd(), "/Derived_data/Simulated data/coefs_S3L.csv"))

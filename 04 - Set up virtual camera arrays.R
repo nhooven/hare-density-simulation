@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 04 - Set up virtual camera array
+# Script: 04 - Set up virtual camera arrays
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 22 Nov 2024
 # Date completed: 22 Nov 2024
-# Date last modified: 22 Nov 2024
+# Date last modified: 19 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -100,67 +100,90 @@ make_viewshed <- function(cams) {
 #_______________________________________________________________________
 # 5. Sample camera locations ----
 #_______________________________________________________________________
-# 5a. 9 cameras ----
+# 5a. Define sampling area ----
 #_______________________________________________________________________
 
-# define 9-ha sampling area
-# must be 90,000 sq m
+# define 10-ha sampling area
+# must be 100,000 sq m
 # vertical and horizontal distance from centroid
-dist.adjust <- sqrt(90000) / 2
+dist.adjust <- sqrt(100000) / 2
 
 centroid <- st_coordinates(st_centroid(unit.bound))
 
-# make a square polygon
-area.verts <- as.data.frame(matrix(c(centroid[1] - dist.adjust, centroid[2] - dist.adjust,    # BL
-                                     centroid[1] - dist.adjust, centroid[2] + dist.adjust,    # TL
-                                     centroid[1] + dist.adjust, centroid[2] + dist.adjust,    # TR
-                                     centroid[1] + dist.adjust, centroid[2] - dist.adjust),   # BR
-                                  nrow = 4,
-                                  ncol = 2,
-                                  byrow = TRUE))
+#_______________________________________________________________________
+# 5a. 4 cameras ----
+#_______________________________________________________________________
 
-# convert to sf polygon
-area.polygon <- area.verts %>%
-  
-  st_as_sf(coords = c("V1", 
-                      "V2"), 
-           crs = "epsg:32611") %>%
-  
-  summarise(geometry = st_combine(geometry)) %>%
-  
-  st_cast("POLYGON")
+# equal spacing between each camera and the sampling area edge
+cams.4.grid <- make.grid(nx = 2,
+                         ny = 2,
+                         spacing = sqrt(100000) / 3, 
+                         originxy = c(centroid[1] - dist.adjust + (sqrt(100000) / 3), 
+                                      centroid[2] - dist.adjust + (sqrt(100000) / 3)))
+
+cams.4 <- st_as_sf(cams.4.grid,
+                   coords = c("x", "y"),
+                   crs = "epsg:32611")
+
+plot(st_geometry(unit.bound))
+plot(st_geometry(cams.4), add = T)
+
+#_______________________________________________________________________
+# 5b. 9 cameras ----
+#_______________________________________________________________________
 
 # equal spacing between each camera and the sampling area edge
 cams.9.grid <- make.grid(nx = 3,
                          ny = 3,
-                         spacing = 300 / 4, 
-                         originxy = c(centroid[1] - dist.adjust + 75, 
-                                      centroid[2] - dist.adjust + 75))
+                         spacing = sqrt(100000) / 4, 
+                         originxy = c(centroid[1] - dist.adjust + (sqrt(100000) / 4), 
+                                      centroid[2] - dist.adjust + (sqrt(100000) / 4)))
 
 cams.9 <- st_as_sf(cams.9.grid,
                    coords = c("x", "y"),
                    crs = "epsg:32611")
 
 plot(st_geometry(unit.bound))
-plot(st_geometry(area.polygon), add = T)
 plot(st_geometry(cams.9), add = T)
+
+#_______________________________________________________________________
+# 5c. 16 cameras ----
+#_______________________________________________________________________
+
+# equal spacing between each camera and the sampling area edge
+cams.16.grid <- make.grid(nx = 4,
+                          ny = 4,
+                          spacing = sqrt(100000) / 5, 
+                          originxy = c(centroid[1] - dist.adjust + (sqrt(100000) / 5), 
+                                       centroid[2] - dist.adjust + (sqrt(100000) / 5)))
+
+cams.16 <- st_as_sf(cams.16.grid,
+                    coords = c("x", "y"),
+                    crs = "epsg:32611")
+
+plot(st_geometry(unit.bound))
+plot(st_geometry(cams.16), add = T)
 
 #_______________________________________________________________________
 # 6. Make viewshed polygons ----
 #_______________________________________________________________________
-# 6a. 9 cameras ----
-#_______________________________________________________________________
 
+cams.4.viewsheds <- make_viewshed(cams.4)
 cams.9.viewsheds <- make_viewshed(cams.9)
-
-plot(st_geometry(unit.bound))
-plot(st_geometry(area.polygon), add = T)
-plot(st_geometry(cams.9), add = T)
-plot(st_geometry(cams.9.viewsheds), add = T)
+cams.16.viewsheds <- make_viewshed(cams.16)
 
 #_______________________________________________________________________
 # 7. Write to shapefiles ----
 #_______________________________________________________________________
 
+st_write(cams.4.viewsheds, 
+         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_4_vs.shp"),
+         append = TRUE)
+
 st_write(cams.9.viewsheds, 
-         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_9_vs.shp"))
+         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_9_vs.shp"),
+         append = TRUE)
+
+st_write(cams.16.viewsheds, 
+         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_16_vs.shp"),
+         append = TRUE)
