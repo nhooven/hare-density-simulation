@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 22 Nov 2024
 # Date completed: 22 Nov 2024
-# Date last modified: 19 Dec 2024
+# Date last modified: 20 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -177,13 +177,10 @@ cams.16.viewsheds <- make_viewshed(cams.16)
 #_______________________________________________________________________
 
 st_write(cams.4.viewsheds, 
-         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_4_vs.shp"),
-         append = TRUE)
+         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_4_vs.shp"))
 
 st_write(cams.9.viewsheds, 
-         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_9_vs.shp"),
-         append = TRUE)
+         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_9_vs.shp"))
 
 st_write(cams.16.viewsheds, 
-         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_16_vs.shp"),
-         append = TRUE)
+         dsn = paste0(getwd(), "/Derived_data/Shapefiles/cams_16_vs.shp"))
