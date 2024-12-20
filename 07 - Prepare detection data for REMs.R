@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 13 Dec 2024
+# Date last modified: 20 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -19,19 +19,12 @@ library(tidyverse)       # tidy data cleaning and manipulation
 #_______________________________________________________________________
 
 # passes
-passes.simple.low <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_simple_low.csv"))
-passes.complex.low <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_complex_low.csv"))
-passes.simple.high <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_simple_high.csv"))
-passes.complex.high <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_complex_high.csv"))
+passes.4 <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_4.csv"))
+passes.9 <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_9.csv"))
+passes.16 <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_16.csv"))
 
 # lookup table
-lookup.passes <- read.csv(paste0(getwd(), "/Derived_data/Lookup/lookup_passes.csv"))
-
-# subset
-lookup.simple.low <- lookup.passes %>% filter(landscape == "simple" & variability == "low")
-lookup.complex.low <- lookup.passes %>% filter(landscape == "complex" & variability == "low")
-lookup.simple.high <- lookup.passes %>% filter(landscape == "simple" & variability == "high")
-lookup.complex.high <- lookup.passes %>% filter(landscape == "complex" & variability == "high")
+lookup.passes <- read.csv(paste0(getwd(), "/Derived_data/Lookup/detection_lookup.csv"))
 
 #_______________________________________________________________________
 # 3. Extract individual data at each density ----
@@ -39,81 +32,58 @@ lookup.complex.high <- lookup.passes %>% filter(landscape == "complex" & variabi
 # 3a. Define function ----
 #_______________________________________________________________________
 
-extract_passes <- function(landscape,     # "simple" or "complex"
-                           variability,   # "low" or "high"
-                           densities) {   # vector of densities, assume indivs/ha
+# expand grid
+all.combos <- expand.grid(landscape = c("simple", "complex"),
+                          variability = c("low", "high"),
+                          rep = 1:3,
+                          n = c(2, 5, 10, 15, 25, 40))
+
+extract_passes <- function(df) {
   
-  # assign correct passes and lookup tables
-  if (landscape == "simple" & variability == "low") {
-    
-    focal.passes <- passes.simple.low
-    focal.lookup <- lookup.simple.low
-    
-  } else {
-    
-    if (landscape == "complex" & variability == "low") {
-      
-      focal.passes <- passes.complex.low
-      focal.lookup <- lookup.complex.low
-      
-    } else {
-      
-      if (landscape == "simple" & variability == "high") {
-        
-        focal.passes <- passes.simple.high
-        focal.lookup <- lookup.simple.high
-        
-      } else {
-        
-        focal.passes <- passes.complex.high
-        focal.lookup <- lookup.complex.high
-        
-      }
-      
-    }
-    
-  }
+  # loop through all combos
+  all.focal.passes <- data.frame()
   
-  # loop through densities
-  # convert densities to n.indiv 
-  indivs <- densities * 10
-  
-  # df to hold all
-  all.passes <- data.frame()
-  
-  for (i in indivs) {
+  for (i in 1:nrow(all.combos)) {
     
-    # extract as a vector
-    focal.indivs <- focal.lookup %>% filter(n == i) %>% dplyr::select(indiv) %>% pull()
+    focal.combo <- all.combos[i, ]
     
-    # extract passes and add identifiers
-    focal.passes.1 <- focal.passes %>% filter(indiv %in% focal.indivs) %>%
+    # subset lookup table
+    focal.lookup <- lookup.passes %>%
       
-                                       mutate(landscape = landscape,
-                                              variability = variability,
-                                              n.indiv = i) %>%
+      filter(landscape == focal.combo$landscape &
+             variability == focal.combo$variability &
+             rep == focal.combo$rep &
+             n == focal.combo$n)
+    
+    # subset correct individuals from passes df
+    focal.passes <- df %>%
       
-                                       # drop X
-                                       dplyr::select(-X)
+      filter(landscape == focal.combo$landscape &
+             variability == focal.combo$variability &
+             rep == focal.combo$rep &
+             indiv %in% focal.lookup$indiv) %>%
+      
+      # ensure that I'm not confused by what "n" means
+      mutate(n.indiv = focal.combo$n) %>%
+      rename(passes = n)
     
-    # bind in
-    all.passes <- rbind(all.passes, focal.passes.1)
-    
+    # bind into df
+    all.focal.passes <- rbind(all.focal.passes, focal.passes)
+  
   }
   
   # return
-  return(all.passes)
+  return(all.focal.passes)
   
-}     
+}
 
 #_______________________________________________________________________
 # 3b. Run through ----
 #_______________________________________________________________________
 
-passes.extracted.simple.low <- extract_passes("simple", "low", c(0.2, 0.5, 1.0))
-passes.extracted.complex.low <- extract_passes("complex", "low", c(0.2, 0.5, 1.0))
-passes.extracted.simple.high <- extract_passes("simple", "high", c(0.2, 0.5, 1.0))
-passes.extracted.complex.high <- extract_passes("complex", "high", c(0.2, 0.5, 1.0))
+passes.extracted.4 <- extract_passes(passes.4)
+passes.extracted.9 <- extract_passes(passes.9)
+passes.extracted.16 <- extract_passes(passes.16)
 
 #_______________________________________________________________________
 # 4. Aggregate together and add in cameras without passes ----
@@ -121,24 +91,33 @@ passes.extracted.complex.high <- extract_passes("complex", "high", c(0.2, 0.5, 1
 # 4a. Define function ----
 #_______________________________________________________________________
 
-group_passes <- function (x) {
+group_passes <- function (df,
+                          n.cams) {
   
-  # loop through all n.indiv
-  # blank df
+  # loop through all combos
   all.passes.grouped <- data.frame()
   
-  for (i in unique(x$n.indiv)) {
+  for (i in 1:nrow(all.combos)) {
     
-    # subset
-    x.1 <- x %>% filter(n.indiv == i)
+    focal.combo <- all.combos[i, ]
+    
+    # subset extracted passes
+    focal.passes <- df %>%
+      
+      filter(landscape == focal.combo$landscape &
+             variability == focal.combo$variability &
+             rep == focal.combo$rep &
+             n.indiv == focal.combo$n)
     
     # group by cam and sum all passes
-    x.2 <- x.1 %>% group_by(cam.id) %>%
+    focal.passes.1 <- focal.passes %>% 
       
-      summarize(total.passes = sum(n))
+      group_by(cam.id) %>%
+      
+      summarize(total.passes = sum(passes))
     
     # determine if any cams have no passes
-    no.passes <- which(!c(1:9) %in% x.2$cam.id)
+    no.passes <- which(!c(1:n.cams) %in% focal.passes.1$cam.id)
     
     # add a zero entry for each one
     for (j in no.passes) {
@@ -146,21 +125,23 @@ group_passes <- function (x) {
       new.row <- data.frame(cam.id = j,
                             total.passes = 0)
       
-      x.2 <- rbind(x.2, new.row)
+      focal.passes.1 <- rbind(focal.passes.1, new.row)
       
     }
     
     # sort by cam.id and add in identifiers
-    x.3 <- x.2 %>% 
+    focal.passes.2 <- focal.passes.1 %>% 
       
       arrange(cam.id) %>%
       
-      mutate(n.indiv = x.1$n.indiv[1],
-             landscape = x.1$landscape[1],
-             variability = x.1$variability[1])
+      mutate(n.indiv = focal.passes$n.indiv[1],
+             landscape = focal.passes$landscape[1],
+             variability = focal.passes$variability[1],
+             rep = focal.passes$rep[1],
+             cams = focal.passes$cams[1])
     
     # bind
-    all.passes.grouped <- rbind(all.passes.grouped, x.3)
+    all.passes.grouped <- rbind(all.passes.grouped, focal.passes.2)
     
   }
   
@@ -173,37 +154,37 @@ group_passes <- function (x) {
 # 4b. Use function ----
 #_______________________________________________________________________
 
-passes.simple.low.gp <- group_passes(passes.extracted.simple.low)
-passes.complex.low.gp <- group_passes(passes.extracted.complex.low)
-passes.simple.high.gp <- group_passes(passes.extracted.simple.high)
-passes.complex.high.gp <- group_passes(passes.extracted.complex.high)
+passes.gp.4 <- group_passes(passes.extracted.4, 4)
+passes.gp.9 <- group_passes(passes.extracted.9, 9)
+passes.gp.16 <- group_passes(passes.extracted.16, 16)
 
 #_______________________________________________________________________
 # 5. Bind together ----
 #_______________________________________________________________________
 
-detec.all <- rbind(passes.simple.low.gp,
-                   passes.complex.low.gp,
-                   passes.simple.high.gp,
-                   passes.complex.high.gp)
+passes.gp.all <- rbind(passes.gp.4, passes.gp.9, passes.gp.16)
 
 #_______________________________________________________________________
 # 6. Plot (sanity check) ----
 #_______________________________________________________________________
 
-ggplot(detec.all) +
+ggplot(passes.gp.all) +
   
   theme_bw() +
   
   facet_grid(landscape ~ variability) +
   
   geom_point(aes(x = as.factor(n.indiv),
-                 y = total.passes)) +
+                 y = total.passes,
+                 shape = as.factor(rep),
+                 color = as.factor(rep)),
+             alpha = 0.5) +
   
-  theme(panel.grid = element_blank())
+  theme(panel.grid = element_blank(),
+        legend.position = "none")
 
 #_______________________________________________________________________
 # 7. Write to .csv ----
 #_______________________________________________________________________
   
-write.csv(detec.all, paste0(getwd(), "/Derived_data/Detections/detec_all.csv"))
+write.csv(passes.gp.all, paste0(getwd(), "/Derived_data/Passes/passes_gp_all.csv"))

@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 09 Dec 2024
+# Date last modified: 20 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -28,114 +28,77 @@ passes.complex.high <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_com
 #_______________________________________________________________________
 
 # how are abundances set up?
-abundances <- c(2, 5, 10)
-                
-                #, 20, 50)
+abundances <- c(2, 5, 10, 15, 25, 40)
 
 # how will individuals be allocated to each abundance?
 abundances.allocation <- c(rep(abundances[1], abundances[1]),
                            rep(abundances[2], abundances[2]),
-                           rep(abundances[3], abundances[3]))
-                           
-                           #,
-                           #rep(abundances[4], abundances[4]),
-                           #rep(abundances[5], abundances[5]))
+                           rep(abundances[3], abundances[3]),
+                           rep(abundances[4], abundances[4]),
+                           rep(abundances[5], abundances[5]),
+                           rep(abundances[6], abundances[6]))
 
-# how many individuals are available? (should be something like 100, whatever we simulated)
-possible.indivs <- max(passes.simple.low$indiv)
+# how many individuals are available?
+possible.indivs <- 100
 
 # how many individuals do we need to sample?
-total.indivs <- 2 + 5 + 10
-#total.indivs <- 2 + 5 + 10 + 20 + 50     # should be however many we need
+total.indivs <- sum(abundances)
 
 #_______________________________________________________________________
-# 3a. Sample total.indivs from all simulated tracks  ----
+# 3. Sample individuals for detections and bind into lookup table  ----
 #_______________________________________________________________________
 
-set.seed(867)
+all.combos <- expand.grid(landscape = c("simple", "complex"),
+                          variability = c("low", "high"),
+                          rep = 1:3)
 
-sampled.simple.low <- sample(1:possible.indivs, size = total.indivs)
-sampled.complex.low <- sample(1:possible.indivs, size = total.indivs)
-sampled.simple.high <- sample(1:possible.indivs, size = total.indivs)
-sampled.complex.high <- sample(1:possible.indivs, size = total.indivs)
+# loop through all combos
+detection.lookup <- data.frame()
 
-#_______________________________________________________________________
-# 3b. Bind into a lookup table  ----
-#_______________________________________________________________________
-
-lookup.simple.low <- data.frame("landscape" = "simple",
-                                "variability" = "low",
-                                "indiv" = sampled.simple.low,
-                                "n" = abundances.allocation)
-
-lookup.complex.low <- data.frame("landscape" = "complex",
-                                 "variability" = "low",
-                                 "indiv" = sampled.complex.low,
-                                 "n" = abundances.allocation)
-
-lookup.simple.high <- data.frame("landscape" = "simple",
-                                 "variability" = "high",
-                                 "indiv" = sampled.simple.high,
-                                 "n" = abundances.allocation)
-
-lookup.complex.high <- data.frame("landscape" = "complex",
-                                  "variability" = "high",
-                                  "indiv" = sampled.complex.high,
-                                  "n" = abundances.allocation)
-
-# and bind together
-lookup.all <- rbind(lookup.simple.low,
-                    lookup.complex.low,
-                    lookup.simple.high,
-                    lookup.complex.high)
+for (i in 1:nrow(all.combos)) {
+  
+  focal.combo <- all.combos[i, ]
+  
+  # create df
+  focal.df <- data.frame("landscape" = focal.combo$landscape,
+                         "variability" = focal.combo$variability,
+                         "rep" = focal.combo$rep,
+                         "indiv" = sample(1:possible.indivs, size = total.indivs),
+                         "n" = abundances.allocation)
+  
+  # bind into full df
+  detection.lookup <- rbind(detection.lookup, focal.df)
+  
+}
 
 #_______________________________________________________________________
-# 4. Sample "collared" individuals  ----
+# 4. Sample "collared" individuals for SSF/iSSF modeling  ----
+#_______________________________________________________________________
 
 # let's take a random sample of n individuals
 collared.n <- 10
 
-#_______________________________________________________________________
-# 4a. Sample ----
-#_______________________________________________________________________
+# loop through all combos
+collared.lookup <- data.frame()
 
-set.seed(223)
-
-# draw from each sample
-collared.simple.low <- sample(1:possible.indivs, size = collared.n)
-collared.complex.low <- sample(1:possible.indivs, size = collared.n)
-collared.simple.high <- sample(1:possible.indivs, size = collared.n)
-collared.complex.high <- sample(1:possible.indivs, size = collared.n)
-
-#_______________________________________________________________________
-# 4b. Bind into a lookup table ----
-#_______________________________________________________________________
-
-lookup.collared.simple.low <- data.frame("landscape" = "simple",
-                                         "variability" = "low",
-                                         "indiv" = collared.simple.low)
-
-lookup.collared.complex.low <- data.frame("landscape" = "complex",
-                                         "variability" = "low",
-                                         "indiv" = collared.complex.low)
-
-lookup.collared.simple.high <- data.frame("landscape" = "simple",
-                                          "variability" = "high",
-                                          "indiv" = collared.simple.high)
-
-lookup.collared.complex.high <- data.frame("landscape" = "complex",
-                                           "variability" = "high",
-                                           "indiv" = collared.complex.high)
-
-# and bind together
-lookup.collared.all <- rbind(lookup.collared.simple.low,
-                             lookup.collared.complex.low,
-                             lookup.collared.simple.high,
-                             lookup.collared.complex.high)
+for (i in 1:nrow(all.combos)) {
+  
+  focal.combo <- all.combos[i, ]
+  
+  # create df
+  focal.df <- data.frame("landscape" = focal.combo$landscape,
+                         "variability" = focal.combo$variability,
+                         "rep" = focal.combo$rep,
+                         "indiv" = sample(1:possible.indivs, size = collared.n))
+  
+  # bind into full df
+  collared.lookup <- rbind(collared.lookup, focal.df)
+  
+}
 
 #_______________________________________________________________________
 # 5. Write to .csvs ----
 #_______________________________________________________________________
 
-write.csv(lookup.all, paste0(getwd(), "/Derived_data/Lookup/lookup_passes.csv"))
-write.csv(lookup.collared.all, paste0(getwd(), "/Derived_data/Lookup/lookup_collared.csv"))
+write.csv(detection.lookup, paste0(getwd(), "/Derived_data/Lookup/detection_lookup.csv"))
+write.csv(collared.lookup, paste0(getwd(), "/Derived_data/Lookup/collared_lookup.csv"))
