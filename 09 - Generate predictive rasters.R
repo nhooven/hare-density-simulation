@@ -84,14 +84,80 @@ SSF_pred <- function (landscape.covs,     # raster
                         landscape.covs$mature)
   
   # calculate mean, lower 95, and upper 95 predictions
+  # NOTE: These will not be exponentiated yet
   # mean
-  pred.mean <- exp(landscape.covs.1$stem * focal.params$estimate[focal.params$term == "stem.s"] +
-                   landscape.covs.1$edge * focal.params$estimate[focal.params$term == "edge.s"] +
-                   landscape.covs.1$mature * focal.params$estimate[focal.params$term == "mature"])
+  pred.mean <- landscape.covs.1$stem * focal.params$estimate[focal.params$term == "stem.s"] +
+               landscape.covs.1$edge * focal.params$estimate[focal.params$term == "edge.s"] +
+               landscape.covs.1$mature * focal.params$estimate[focal.params$term == "mature"]
   
-  # lower 95
-  # parameterize distribution
-  qnorm()
+  # lower and upper 95
+  # parameterize distributions
+  stem.low <- qnorm(p = 0.025, 
+                    mean = focal.params$estimate[focal.params$term == "stem.s"], 
+                    sd = focal.params$estimate[focal.params$term == "sd__stem.s"])
   
+  stem.high <- qnorm(p = 0.975, 
+                     mean = focal.params$estimate[focal.params$term == "stem.s"], 
+                     sd = focal.params$estimate[focal.params$term == "sd__stem.s"])
+  
+  edge.low <- qnorm(p = 0.025, 
+                    mean = focal.params$estimate[focal.params$term == "edge.s"], 
+                    sd = focal.params$estimate[focal.params$term == "sd__edge.s"])
+  
+  edge.high <- qnorm(p = 0.975, 
+                     mean = focal.params$estimate[focal.params$term == "edge.s"], 
+                     sd = focal.params$estimate[focal.params$term == "sd__edge.s"])
+  
+  mature.low <- qnorm(p = 0.025, 
+                      mean = focal.params$estimate[focal.params$term == "mature"], 
+                      sd = focal.params$estimate[focal.params$term == "sd__mature"])
+  
+  mature.high <- qnorm(p = 0.975, 
+                       mean = focal.params$estimate[focal.params$term == "mature"], 
+                       sd = focal.params$estimate[focal.params$term == "sd__mature"])
+  
+  # calculate
+  pred.low <- landscape.covs.1$stem * stem.low +
+              landscape.covs.1$edge * edge.low +
+              landscape.covs.1$mature * mature.low
+  
+  pred.high <- landscape.covs.1$stem * stem.high +
+               landscape.covs.1$edge * edge.high +
+               landscape.covs.1$mature * mature.high
+  
+  # crop and exponentiate
+  pred.mean.crop <- exp(crop(pred.mean, unit.bound))
+  pred.low.crop <- exp(crop(pred.low, unit.bound))
+  pred.high.crop <- exp(crop(pred.high, unit.bound))
+  
+  # calculate RSS for correction factor
+  pred.mean.rss <- pred.mean.crop / mean(values(pred.mean.crop))
+  pred.low.rss <- pred.low.crop / mean(values(pred.low.crop))
+  pred.high.rss <- pred.high.crop / mean(values(pred.high.crop))
+  
+  # bind together
+  pred.all <- c(pred.low.rss, pred.mean.rss, pred.high.rss)
+  names(pred.all) <- c("low", "mean", "high")
+  
+  # return predictive raster
+  return(pred.all)
   
 }
+
+#_______________________________________________________________________
+# 3b. Use function ----
+#_______________________________________________________________________
+
+SSF.pred.S1L <- SSF_pred(landscape.covs.S1, "simple", "low", 1)
+SSF.pred.S2L <- SSF_pred(landscape.covs.S2, "simple", "low", 2)
+SSF.pred.S3L <- SSF_pred(landscape.covs.S3, "simple", "low", 3)
+SSF.pred.S1H <- SSF_pred(landscape.covs.S1, "simple", "high", 1)
+SSF.pred.S2H <- SSF_pred(landscape.covs.S2, "simple", "high", 2)
+SSF.pred.S3H <- SSF_pred(landscape.covs.S3, "simple", "high", 3)
+
+SSF.pred.C1L <- SSF_pred(landscape.covs.C1, "complex", "low", 1)
+SSF.pred.C2L <- SSF_pred(landscape.covs.C2, "complex", "low", 2)
+SSF.pred.C3L <- SSF_pred(landscape.covs.C3, "complex", "low", 3)
+SSF.pred.C1H <- SSF_pred(landscape.covs.C1, "complex", "high", 1)
+SSF.pred.C2H <- SSF_pred(landscape.covs.C2, "complex", "high", 2)
+SSF.pred.C3H <- SSF_pred(landscape.covs.C3, "complex", "high", 3)
