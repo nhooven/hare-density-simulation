@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 23 Dec 2024
+# Date last modified: 24 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -500,3 +500,4 @@ ggplot(all.tidy.beta,
 #_______________________________________________________________________
 
 write.csv(all.tidy, paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
+write.csv(mean.sd.all, paste0(getwd(), "/Derived_data/Model parameters/mean_sd_covs.csv"))
