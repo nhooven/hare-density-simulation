@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 24 Dec 2024
+# Date last modified: 27 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -185,7 +185,8 @@ sample_extract <- function (steps.df,
   all.steps <- data.frame()
   
   for (i in unique(steps.df$indiv)) {
-    
+
+    # subset and extract
     steps.df.1 <- steps.df %>% 
       
       filter(indiv == i) %>%
@@ -199,7 +200,7 @@ sample_extract <- function (steps.df,
       extract_covariates(landscape)
     
     # bind together
-    all.steps <- rbind(all.steps, steps.df.1)
+    all.steps <- rbind(all.steps, steps.df.2)
     
   }
   
@@ -273,7 +274,7 @@ mean.sd.all <- rbind(extract_mean_sd(sampled.S1L, "simple", "low", 1),
 #_______________________________________________________________________
 # 7. Fit movement-naive models ----
 #_______________________________________________________________________
-# 7a. Define function ----
+# 7a. Define functions ----
 #_______________________________________________________________________
 
 # full random slopes
