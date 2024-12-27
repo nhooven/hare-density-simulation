@@ -80,6 +80,32 @@ unit.bbox <- st_bbox(unit.bound)
 # we'll take the centroid from this box to initialize each path
 
 #_______________________________________________________________________
+# 3d. Calculate home ranging parameters ----
+#_______________________________________________________________________
+
+hr_params <- function(e.var = e.var,          # expected variance of the bivariate normal
+                      e.var.sd = e.var.sd,    # sd of the draws for the bivariate normal variance
+                      hrc = start.step)       # home range centroid as previously drawn
+  
+{
+  
+  # variance
+  var.focal <- rnorm(n = 1, mean = e.var, sd = e.var.sd)
+  
+  # x2 + y2 coefficient
+  b.x2y2 <- -1 / var.focal
+  
+  # solve for x and y coefficients
+  b.x <- hrc$x_ * 2 * -b.x2y2 
+  b.y <- hrc$y_ * 2 * -b.x2y2
+  
+  hr.params <- c(b.x, b.y, b.x2y2)
+  
+  return(hr.params)
+  
+}
+
+#_______________________________________________________________________
 # 3d. Redistribution kernel parameters ----
 #_______________________________________________________________________
 
@@ -126,6 +152,14 @@ sim_issf_ud <- function (landscape.covs,
                                                  tz = "America/Los_Angeles"),
                                    dt = hours(2),
                                    crs = crs("EPSG:32611"))
+    
+    # calculate home ranging parameters
+    hr.params <- hr_params(e.var = 5000,
+                           e.var.sd = 100,
+                           hrc = start.step)
+    
+    # change names
+    names(hr.params)[1:2] <- ""
                              
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
@@ -134,7 +168,10 @@ sim_issf_ud <- function (landscape.covs,
                                             "edge_end" = focal.params$estimate[focal.params$term == "edge.s"],
                                             "mature_start" = focal.params$estimate[focal.params$term == "mature"],
                                             "log(sl_):mature_start" = focal.params$estimate[focal.params$term == "mature:log(sl_)"],
-                                            "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"]),              
+                                            "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"],
+                                            "x2_" = hr.params[1],
+                                            "y2_" = hr.params[2], 
+                                            "I(x2_^2 + y2_^2)" = hr.params[3]),              
                                   sl = sl.dist,
                                   ta = ta.dist)
     
@@ -151,6 +188,9 @@ sim_issf_ud <- function (landscape.covs,
                               n.steps = n.steps,
                               start = start.step,
                               verbose = TRUE)
+    
+    # 27 Dec 2024
+    # Still haven't decided whether I want to use the TUD or the SSUD...
     
     # extract final location for fitting uncorrelated UD
     sim.final <- sim.path %>%
