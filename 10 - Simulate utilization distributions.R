@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 09 - Simulate utilization distributions
+# Script: 10 - Simulate utilization distributions
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 12 Dec 2024
+# Date last modified: 27 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -22,37 +22,53 @@ library(raster)
 library(adehabitatHR)    # fit kernels
 
 #_______________________________________________________________________
-# 2. Read in rasters and unit boundary ----
+# 2. Read in data ----
 #_______________________________________________________________________
 
-landscape.covs.simple <- rast("Rasters/simple.tif")
-landscape.covs.complex <- rast("Rasters/complex.tif")
+# SSF/iSSF coefficients
+all.params <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
 
+# unit boundary
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
+
+# scaled covariate rasters
+landscape.covs.S1L <- rast("Rasters/Scaled covariates/S1L.tif")
+landscape.covs.S2L <- rast("Rasters/Scaled covariates/S2L.tif")
+landscape.covs.S3L <- rast("Rasters/Scaled covariates/S3L.tif")
+landscape.covs.S1H <- rast("Rasters/Scaled covariates/S1H.tif")
+landscape.covs.S2H <- rast("Rasters/Scaled covariates/S2H.tif")
+landscape.covs.S3H <- rast("Rasters/Scaled covariates/S3H.tif")
+
+landscape.covs.C1L <- rast("Rasters/Scaled covariates/C1L.tif")
+landscape.covs.C2L <- rast("Rasters/Scaled covariates/C2L.tif")
+landscape.covs.C3L <- rast("Rasters/Scaled covariates/C3L.tif")
+landscape.covs.C1H <- rast("Rasters/Scaled covariates/C1H.tif")
+landscape.covs.C2H <- rast("Rasters/Scaled covariates/C2H.tif")
+landscape.covs.C3H <- rast("Rasters/Scaled covariates/C3H.tif")
+
+# sl/ta distributions
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S1L.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S2L.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S3L.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S1H.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S2H.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S3H.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C1L.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C2L.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C3L.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C1H.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C2H.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C3H.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
 
 #_______________________________________________________________________
 # 3. Define simulation parameters ----
 #_______________________________________________________________________
-# 3a. Movement parameter distributions ----
+# 3a. Habitat selection coefficients and identifiers ----
 #_______________________________________________________________________
-
-# step lengths (gamma)
-load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_SL.RData"))
-load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_CL.RData"))
-load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_SH.RData"))
-load(file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_CH.RData"))
-
-# turning angle
-load(file = paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
-
-#_______________________________________________________________________
-# 3b. Habitat selection coefficients and identifiers ----
-#_______________________________________________________________________
-
-model.params <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
 
 # keep only iSSF parameters
-model.params <- model.params %>% filter(type == "iSSF")
+model.params <- all.params %>% filter(type == "iSSF")
 
 #_______________________________________________________________________
 # 3c. Initialization space ----
@@ -75,66 +91,24 @@ rk.tolerance <- 0.05    # 5%
 
 #_______________________________________________________________________
 # 4. Run simulations iteratively ----
-
-# n of replicates
-n.reps <- 300
-
-# n of time steps
-n.steps <- 336
-
 #_______________________________________________________________________
-# 5a. Define function ----
+# 4a. Define function ----
 #_______________________________________________________________________
 
-sim_issf_ud <- function (ls,
-                         var) {
+sim_issf_ud <- function (landscape.covs,
+                         sl.dist, 
+                         n.reps = 300,
+                         n.steps = 336,
+                         id.landscape,
+                         id.variability,
+                         id.rep) {
   
   # extract fit parameters
   focal.params <- model.params %>%
     
-    filter(landscape == ls &
-           variability == var) %>%
-    
-    dplyr::select(names, betas)
-  
-  # extract correct sl distribution
-  if (ls == "simple" & var == "low") {
-    
-    focal.sl.dist <- sl.dist.SL
-    
-  } else {
-    
-    if (ls == "complex" & var == "low") {
-      
-      focal.sl.dist <- sl.dist.CL
-      
-    } else {
-      
-      if (ls == "simple" & var == "high") {
-        
-        focal.sl.dist <- sl.dist.SH
-        
-      } else {
-        
-        focal.sl.dist <- sl.dist.CH
-        
-      }
-      
-      
-    }
-    
-  }
-  
-  # use correct raster stack
-  if (ls == "simple") {
-    
-    landscape.covs <- landscape.covs.simple
-    
-  } else {
-    
-    landscape.covs <- landscape.covs.complex
-    
-  }
+    filter(landscape == id.landscape &
+           variability == id.variability,
+           rep == id.rep)
   
   # create df to hold all sims
   sims.df <- data.frame()
@@ -155,13 +129,13 @@ sim_issf_ud <- function (ls,
                              
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
-    issf.model <- make_issf_model(coefs = c("stem_end" = focal.params$betas[focal.params$names == "stem"],  
-                                            "stem_end:log(sl_)" = focal.params$betas[focal.params$names == "stem_sl"],
-                                            "edge_end" = focal.params$betas[focal.params$names == "edge"],
-                                            "mature_start" = focal.params$betas[focal.params$names == "mature"],
-                                            "log(sl_):mature_start" = focal.params$betas[focal.params$names == "mature_sl"],
-                                            "log(sl_)" = focal.params$betas[focal.params$names == "log_sl"]),              
-                                  sl = focal.sl.dist,
+    issf.model <- make_issf_model(coefs = c("stem_end" = focal.params$estimate[focal.params$term == "stem.s"],  
+                                            "stem_end:log(sl_)" = focal.params$estimate[focal.params$term == "stem.s:log(sl_)"],
+                                            "edge_end" = focal.params$estimate[focal.params$term == "edge.s"],
+                                            "mature_start" = focal.params$estimate[focal.params$term == "mature"],
+                                            "log(sl_):mature_start" = focal.params$estimate[focal.params$term == "mature:log(sl_)"],
+                                            "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"]),              
+                                  sl = sl.dist,
                                   ta = ta.dist)
     
     # initialize redistribution kernel
@@ -205,7 +179,7 @@ sim_issf_ud <- function (ls,
 }
 
 #_______________________________________________________________________
-# 5b. Run simulations ----
+# 4b. Run simulations ----
 #_______________________________________________________________________
 
 sims.SL <- sim_issf_ud("simple", "low")
