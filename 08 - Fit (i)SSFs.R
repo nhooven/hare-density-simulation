@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 27 Dec 2024
+# Date last modified: 31 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -200,7 +200,7 @@ sample_extract <- function (steps.df,
       extract_covariates(landscape)
     
     # bind together
-    all.steps <- rbind(all.steps, steps.df.2)
+    all.steps <- rbind(all.steps, steps.df.1)
     
   }
   
@@ -302,6 +302,21 @@ fit_naive_ssf <- function (sampled.steps) {
   
 }
 
+# no random slopes to fix convergence issues
+fit_naive_ssf_1 <- function(sampled.steps) {
+  
+  SSF.model <- fit_issf(data = sampled.steps,
+                        formula = case_ ~ stem.s +
+                                          edge.s +
+                                          mature +
+                                          log(sl_) +
+                                          strata(step_id_))
+  
+  # return
+  return(SSF.model)
+  
+}
+
 #_______________________________________________________________________
 # 7b. Fit models ----
 #_______________________________________________________________________
@@ -313,7 +328,7 @@ SSF.S1H <- fit_naive_ssf(sampled.S1H)
 SSF.S2H <- fit_naive_ssf(sampled.S2H)
 SSF.S3H <- fit_naive_ssf(sampled.S3H)
 SSF.C1L <- fit_naive_ssf(sampled.C1L)
-SSF.C2L <- fit_naive_ssf(sampled.C2L)
+SSF.C2L <- fit_naive_ssf_1(sampled.C2L)
 SSF.C3L <- fit_naive_ssf(sampled.C3L)
 SSF.C1H <- fit_naive_ssf(sampled.C1H)
 SSF.C2H <- fit_naive_ssf(sampled.C2H)
@@ -497,7 +512,73 @@ ggplot(all.tidy.beta,
   geom_point()
 
 #_______________________________________________________________________
-# 9. Write to .csv ----
+# 9. Extract and store variance-covariance matrices ----
+#_______________________________________________________________________
+
+# define function
+extract_vcov <- function(model,
+                         id.type,
+                         id.landscape,
+                         id.variability,
+                         id.rep) {
+  
+  # ask which class it is
+  if (class(model)[1] == "glmmTMB") {
+    
+    # extract the matrix component and remove the intercept
+    vcov.focal <- vcov(model)[[1]][-1, -1]
+    
+  } else {
+    
+    vcov.focal <- model$model$var
+    
+  }
+  
+  # return
+  return(vcov.focal)
+  
+}
+
+# extract and bind together
+all.vcov <- list(extract_vcov(SSF.S1L, "SSF", "simple", "low", 1),
+                 extract_vcov(SSF.S2L, "SSF", "simple", "low", 2),
+                 extract_vcov(SSF.S3L, "SSF", "simple", "low", 3),
+                 extract_vcov(SSF.S1H, "SSF", "simple", "high", 1),
+                 extract_vcov(SSF.S2H, "SSF", "simple", "high", 2),
+                 extract_vcov(SSF.S3H, "SSF", "simple", "high", 3),
+                 extract_vcov(SSF.C1L, "SSF", "complex", "low", 1),
+                 extract_vcov(SSF.C2L, "SSF", "complex", "low", 2),
+                 extract_vcov(SSF.C3L, "SSF", "complex", "low", 3),
+                 extract_vcov(SSF.C1H, "SSF", "complex", "high", 1),
+                 extract_vcov(SSF.C2H, "SSF", "complex", "high", 2),
+                 extract_vcov(SSF.C3H, "SSF", "complex", "high", 3),
+                 extract_vcov(iSSF.S1L, "iSSF", "simple", "low", 1),
+                 extract_vcov(iSSF.S2L, "iSSF", "simple", "low", 2),
+                 extract_vcov(iSSF.S3L, "iSSF", "simple", "low", 3),
+                 extract_vcov(iSSF.S1H, "iSSF", "simple", "high", 1),
+                 extract_vcov(iSSF.S2H, "iSSF", "simple", "high", 2),
+                 extract_vcov(iSSF.S3H, "iSSF", "simple", "high", 3),
+                 extract_vcov(iSSF.C1L, "iSSF", "complex", "low", 1),
+                 extract_vcov(iSSF.C2L, "iSSF", "complex", "low", 2),
+                 extract_vcov(iSSF.C3L, "iSSF", "complex", "low", 3),
+                 extract_vcov(iSSF.C1H, "iSSF", "complex", "high", 1),
+                 extract_vcov(iSSF.C2H, "iSSF", "complex", "high", 2),
+                 extract_vcov(iSSF.C3H, "iSSF", "complex", "high", 3)) 
+
+# save to file
+save(all.vcov, file = paste0(getwd(), "/Derived_data/Model parameters/vcov.RData"))
+
+# write lookup table to csv
+vcov.lookup <- cbind(expand.grid(rep = 1:3,
+                                 variability = c("low", "high"),
+                                 landscape = c("simple", "complex"),
+                                 type = c("SSF", "iSSF")),
+                     index = 1:24)
+
+write.csv(vcov.lookup, paste0(getwd(), "/Derived_data/Lookup/vcov.csv"))
+
+#_______________________________________________________________________
+# 10. Write to .csv ----
 #_______________________________________________________________________
 
 write.csv(all.tidy, paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
