@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 27 Dec 2024
+# Date last modified: 30 Dec 2024
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -113,21 +113,21 @@ hr_params <- function(e.var = e.var,          # expected variance of the bivaria
 rk.control <- 10000
 
 # tolerance outside the landscape (hopefully we won't have to deal with this much)
-rk.tolerance <- 0.05    # 5%
+rk.tolerance <- 0.10    # 10%
 
 #_______________________________________________________________________
-# 4. Run simulations iteratively ----
+# 4. Run steady-state utilization distribution (SSUD) simulations ----
 #_______________________________________________________________________
 # 4a. Define function ----
 #_______________________________________________________________________
 
-sim_issf_ud <- function (landscape.covs,
-                         sl.dist, 
-                         n.reps = 300,
-                         n.steps = 336,
-                         id.landscape,
-                         id.variability,
-                         id.rep) {
+sim_issf_ssud <- function (landscape.covs,
+                           sl.dist, 
+                           id.landscape,
+                           id.variability,
+                           id.rep,
+                           n.reps = 3,
+                           n.steps = 110000) {
   
   # extract fit parameters
   focal.params <- model.params %>%
@@ -142,6 +142,7 @@ sim_issf_ud <- function (landscape.covs,
   # run simulations
   start.time <- Sys.time()
   
+  # loop through n.reps
   for (i in 1:n.reps) {
     
     # define start step (centroid of unit to keep initial conditions constant)
@@ -189,19 +190,16 @@ sim_issf_ud <- function (landscape.covs,
                               start = start.step,
                               verbose = TRUE)
     
-    # 27 Dec 2024
-    # Still haven't decided whether I want to use the TUD or the SSUD...
-    
-    # extract final location for fitting uncorrelated UD
-    sim.final <- sim.path %>%
+    # add identifiers
+    sim.path <- sim.path %>%
       
-      slice(nrow(sim.path)) %>%
-      
-      # add in individual identifier
-      mutate(indiv = i)
+      mutate(landscape = id.landscape,
+             variability = id.variability,
+             rep = id.rep,
+             sim.rep = i)
     
     # bind to df
-    sims.df <- bind_rows(sims.df, sim.final)
+    sims.df <- rbind(sims.df, sim.path)
     
     # status message
     elapsed.time <- round(as.numeric(difftime(Sys.time(), 
@@ -222,10 +220,80 @@ sim_issf_ud <- function (landscape.covs,
 # 4b. Run simulations ----
 #_______________________________________________________________________
 
-sims.SL <- sim_issf_ud("simple", "low")
-sims.CL <- sim_issf_ud("complex", "low")
-sims.SH <- sim_issf_ud("simple", "high")
-sims.CH <- sim_issf_ud("complex", "high")
+sims.S1L <- sim_issf_ssud(landscape.covs.S1L, sl.dist.S1L, "simple", "low", 1)
+sims.S2L <- sim_issf_ssud(landscape.covs.S2L, sl.dist.S2L, "simple", "low", 2)
+sims.S3L <- sim_issf_ssud(landscape.covs.S3L, sl.dist.S3L, "simple", "low", 3)
+sims.S1H <- sim_issf_ssud(landscape.covs.S1H, sl.dist.S1H, "simple", "high", 1)
+sims.S2H <- sim_issf_ssud(landscape.covs.S2H, sl.dist.S2H, "simple", "high", 2)
+sims.S3H <- sim_issf_ssud(landscape.covs.S3H, sl.dist.S3H, "simple", "high", 3)
+
+sims.C1L <- sim_issf_ssud(landscape.covs.C1L, sl.dist.C1L, "simple", "low", 1)
+sims.C2L <- sim_issf_ssud(landscape.covs.C2L, sl.dist.C2L, "simple", "low", 2)
+sims.C3L <- sim_issf_ssud(landscape.covs.C3L, sl.dist.C3L, "simple", "low", 3)
+sims.C1H <- sim_issf_ssud(landscape.covs.C1H, sl.dist.C1H, "simple", "high", 1)
+sims.C2H <- sim_issf_ssud(landscape.covs.C2H, sl.dist.C2H, "simple", "high", 2)
+sims.C3H <- sim_issf_ssud(landscape.covs.C3H, sl.dist.C3H, "simple", "high", 3)
+
+
+# 30 Dec 2024
+# examine
+ggplot(data = sims.S1L) +
+  
+  theme_bw() +
+  
+  facet_wrap(~ sim.rep) +
+
+  stat_density2d_filled(aes(x = x_,
+                            y = y_,
+                            fill = after_stat(level))) +
+  
+  scale_fill_viridis_d(option = "magma") +
+  
+  theme(panel.grid = element_blank(),
+        legend.position = "none",
+        axis.text = element_blank(),
+        axis.title = element_blank())
+
+# looks cool! I'll have to look at the pixel-by-pixel counts
+
+# let's look at the raster
+library(terra)
+
+blank.rast <- rast(nrows = nrow(landscape.covs.S1H),
+                   ncols = ncol(landscape.covs.S1H),
+                   xmin = xmin(landscape.covs.S1H),
+                   ymin = ymin(landscape.covs.S1H),
+                   xmax = xmax(landscape.covs.S1H),
+                   ymax = ymax(landscape.covs.S1H),
+                   res = 10,
+                   crs = crs(landscape.covs.S1H))
+
+sims.S1L.1 <- sims.S1L %>% filter(sim.rep == 3)
+
+point.rast <- rasterize(matrix(c(sims.S1L.1$x_,
+                                 sims.S1L.1$y_),
+                               ncol = 2),
+                        y = blank.rast,
+                        fun = "count")
+
+point.rast
+
+plot(crop(point.rast, unit.bound))
+
+# this doesn't work - the home range size is too restrictive
+# think about creating a categorical raster mask 
+# with a log(distance) selection coef - just keep the simulated critter
+# away from the edges of the raster
+
+
+
+
+
+
+
+
+
+
 
 #_______________________________________________________________________
 # 6. Plot points ----
