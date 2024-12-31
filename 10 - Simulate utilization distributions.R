@@ -80,32 +80,6 @@ unit.bbox <- st_bbox(unit.bound)
 # we'll take the centroid from this box to initialize each path
 
 #_______________________________________________________________________
-# 3d. Calculate home ranging parameters ----
-#_______________________________________________________________________
-
-hr_params <- function(e.var = e.var,          # expected variance of the bivariate normal
-                      e.var.sd = e.var.sd,    # sd of the draws for the bivariate normal variance
-                      hrc = start.step)       # home range centroid as previously drawn
-  
-{
-  
-  # variance
-  var.focal <- rnorm(n = 1, mean = e.var, sd = e.var.sd)
-  
-  # x2 + y2 coefficient
-  b.x2y2 <- -1 / var.focal
-  
-  # solve for x and y coefficients
-  b.x <- hrc$x_ * 2 * -b.x2y2 
-  b.y <- hrc$y_ * 2 * -b.x2y2
-  
-  hr.params <- c(b.x, b.y, b.x2y2)
-  
-  return(hr.params)
-  
-}
-
-#_______________________________________________________________________
 # 3d. Redistribution kernel parameters ----
 #_______________________________________________________________________
 
@@ -116,18 +90,18 @@ rk.control <- 10000
 rk.tolerance <- 0.10    # 10%
 
 #_______________________________________________________________________
-# 4. Run steady-state utilization distribution (SSUD) simulations ----
+# 4. Run transient utilization distribution (TUD) simulations ----
 #_______________________________________________________________________
 # 4a. Define function ----
 #_______________________________________________________________________
 
-sim_issf_ssud <- function (landscape.covs,
-                           sl.dist, 
-                           id.landscape,
-                           id.variability,
-                           id.rep,
-                           n.reps = 3,
-                           n.steps = 110000) {
+sim_issf_tud <- function (landscape.covs,
+                          sl.dist, 
+                          id.landscape,
+                          id.variability,
+                          id.rep,
+                          n.reps = 5000,
+                          n.steps = 60) {
   
   # extract fit parameters
   focal.params <- model.params %>%
@@ -153,14 +127,6 @@ sim_issf_ssud <- function (landscape.covs,
                                                  tz = "America/Los_Angeles"),
                                    dt = hours(2),
                                    crs = crs("EPSG:32611"))
-    
-    # calculate home ranging parameters
-    hr.params <- hr_params(e.var = 5000,
-                           e.var.sd = 100,
-                           hrc = start.step)
-    
-    # change names
-    names(hr.params)[1:2] <- ""
                              
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
@@ -169,10 +135,7 @@ sim_issf_ssud <- function (landscape.covs,
                                             "edge_end" = focal.params$estimate[focal.params$term == "edge.s"],
                                             "mature_start" = focal.params$estimate[focal.params$term == "mature"],
                                             "log(sl_):mature_start" = focal.params$estimate[focal.params$term == "mature:log(sl_)"],
-                                            "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"],
-                                            "x2_" = hr.params[1],
-                                            "y2_" = hr.params[2], 
-                                            "I(x2_^2 + y2_^2)" = hr.params[3]),              
+                                            "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"]),              
                                   sl = sl.dist,
                                   ta = ta.dist)
     
@@ -191,23 +154,30 @@ sim_issf_ssud <- function (landscape.covs,
                               verbose = TRUE)
     
     # add identifiers
-    sim.path <- sim.path %>%
+    sim.path.1 <- sim.path %>%
       
       mutate(landscape = id.landscape,
              variability = id.variability,
              rep = id.rep,
-             sim.rep = i)
+             sim.rep = i) %>%
+      
+      # keep only the endpoint
+      slice(n())
     
     # bind to df
     sims.df <- rbind(sims.df, sim.path)
     
-    # status message
-    elapsed.time <- round(as.numeric(difftime(Sys.time(), 
-                                              start.time, 
-                                              units = "mins")), 
-                          digits = 1)
-    
-    print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
+    # status message (every 50 replicates)
+    if (i %% 50 == 0) {
+      
+      elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                                start.time, 
+                                                units = "mins")), 
+                            digits = 1)
+      
+      print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
+      
+    }
   
 }
 
@@ -220,80 +190,19 @@ sim_issf_ssud <- function (landscape.covs,
 # 4b. Run simulations ----
 #_______________________________________________________________________
 
-sims.S1L <- sim_issf_ssud(landscape.covs.S1L, sl.dist.S1L, "simple", "low", 1)
-sims.S2L <- sim_issf_ssud(landscape.covs.S2L, sl.dist.S2L, "simple", "low", 2)
-sims.S3L <- sim_issf_ssud(landscape.covs.S3L, sl.dist.S3L, "simple", "low", 3)
-sims.S1H <- sim_issf_ssud(landscape.covs.S1H, sl.dist.S1H, "simple", "high", 1)
-sims.S2H <- sim_issf_ssud(landscape.covs.S2H, sl.dist.S2H, "simple", "high", 2)
-sims.S3H <- sim_issf_ssud(landscape.covs.S3H, sl.dist.S3H, "simple", "high", 3)
+sims.S1L <- sim_issf_tud(landscape.covs.S1L, sl.dist.S1L, "simple", "low", 1)
+sims.S2L <- sim_issf_tud(landscape.covs.S2L, sl.dist.S2L, "simple", "low", 2)
+sims.S3L <- sim_issf_tud(landscape.covs.S3L, sl.dist.S3L, "simple", "low", 3)
+sims.S1H <- sim_issf_tud(landscape.covs.S1H, sl.dist.S1H, "simple", "high", 1)
+sims.S2H <- sim_issf_tud(landscape.covs.S2H, sl.dist.S2H, "simple", "high", 2)
+sims.S3H <- sim_issf_tud(landscape.covs.S3H, sl.dist.S3H, "simple", "high", 3)
 
-sims.C1L <- sim_issf_ssud(landscape.covs.C1L, sl.dist.C1L, "simple", "low", 1)
-sims.C2L <- sim_issf_ssud(landscape.covs.C2L, sl.dist.C2L, "simple", "low", 2)
-sims.C3L <- sim_issf_ssud(landscape.covs.C3L, sl.dist.C3L, "simple", "low", 3)
-sims.C1H <- sim_issf_ssud(landscape.covs.C1H, sl.dist.C1H, "simple", "high", 1)
-sims.C2H <- sim_issf_ssud(landscape.covs.C2H, sl.dist.C2H, "simple", "high", 2)
-sims.C3H <- sim_issf_ssud(landscape.covs.C3H, sl.dist.C3H, "simple", "high", 3)
-
-
-# 30 Dec 2024
-# examine
-ggplot(data = sims.S1L) +
-  
-  theme_bw() +
-  
-  facet_wrap(~ sim.rep) +
-
-  stat_density2d_filled(aes(x = x_,
-                            y = y_,
-                            fill = after_stat(level))) +
-  
-  scale_fill_viridis_d(option = "magma") +
-  
-  theme(panel.grid = element_blank(),
-        legend.position = "none",
-        axis.text = element_blank(),
-        axis.title = element_blank())
-
-# looks cool! I'll have to look at the pixel-by-pixel counts
-
-# let's look at the raster
-library(terra)
-
-blank.rast <- rast(nrows = nrow(landscape.covs.S1H),
-                   ncols = ncol(landscape.covs.S1H),
-                   xmin = xmin(landscape.covs.S1H),
-                   ymin = ymin(landscape.covs.S1H),
-                   xmax = xmax(landscape.covs.S1H),
-                   ymax = ymax(landscape.covs.S1H),
-                   res = 10,
-                   crs = crs(landscape.covs.S1H))
-
-sims.S1L.1 <- sims.S1L %>% filter(sim.rep == 3)
-
-point.rast <- rasterize(matrix(c(sims.S1L.1$x_,
-                                 sims.S1L.1$y_),
-                               ncol = 2),
-                        y = blank.rast,
-                        fun = "count")
-
-point.rast
-
-plot(crop(point.rast, unit.bound))
-
-# this doesn't work - the home range size is too restrictive
-# think about creating a categorical raster mask 
-# with a log(distance) selection coef - just keep the simulated critter
-# away from the edges of the raster
-
-
-
-
-
-
-
-
-
-
+sims.C1L <- sim_issf_tud(landscape.covs.C1L, sl.dist.C1L, "simple", "low", 1)
+sims.C2L <- sim_issf_tud(landscape.covs.C2L, sl.dist.C2L, "simple", "low", 2)
+sims.C3L <- sim_issf_tud(landscape.covs.C3L, sl.dist.C3L, "simple", "low", 3)
+sims.C1H <- sim_issf_tud(landscape.covs.C1H, sl.dist.C1H, "simple", "high", 1)
+sims.C2H <- sim_issf_tud(landscape.covs.C2H, sl.dist.C2H, "simple", "high", 2)
+sims.C3H <- sim_issf_tud(landscape.covs.C3H, sl.dist.C3H, "simple", "high", 3)
 
 #_______________________________________________________________________
 # 6. Plot points ----
