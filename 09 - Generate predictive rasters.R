@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 24 Dec 2024
 # Date completed: 27 Dec 2024
-# Date last modified: 31 Dec 2024
+# Date last modified: 02 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,6 +15,8 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 library(terra)           # rasters
 library(sf)
+library(mvtnorm)         # multivariate normal distribution
+library(matrixStats)     # rowwise SDs
 
 #_______________________________________________________________________
 # 2. Read in data ----
@@ -25,6 +27,12 @@ all.params <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/all_param
 
 # scaling factors (mean and sd)
 all.scale <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/mean_sd_covs.csv"))
+
+# variance-covariance matrices
+load(paste0(getwd(), "/Derived_data/Model parameters/vcov.RData"))
+
+# vcov lookup table
+vcov.lookup <- read.csv(paste0(getwd(), "/Derived_data/Lookup/vcov.csv"))
 
 # unit boundary
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
@@ -53,9 +61,92 @@ load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C3H.RData"))
 load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
 
 #_______________________________________________________________________
-# 3. Movement-naive SSF predictions ----
+# 3. Sample draws from the multivariate normal ----
 #_______________________________________________________________________
 # 3a. Define function ----
+#_______________________________________________________________________
+
+sample_mvn <- function (n.samples,
+                        id.landscape,
+                        id.variability,
+                        id.rep,
+                        id.type) {
+  
+  # subset all.params
+  focal.params <- all.params %>%
+    
+    filter(landscape == id.landscape,
+           variability == id.variability,
+           rep == id.rep,
+           type == id.type)
+  
+  # subset variance-covariance matrix
+  vcov.lookup.1 <- vcov.lookup %>% 
+    
+    filter(landscape == id.landscape,
+           variability == id.variability,
+           rep == id.rep,
+           type == id.type)
+  
+  # subset list
+  vcov.focal <- all.vcov[[vcov.lookup.1$index]]
+  
+  # sample from the multivariate normal
+  if (id.type == "SSF") {
+    
+    mvn.samples <- as.data.frame(rmvnorm(n = n.samples, 
+                                         mean = focal.params$estimate[c(1:4)], 
+                                         sigma = vcov.focal))
+    
+  } else {
+    
+    mvn.samples <- as.data.frame(rmvnorm(n = n.samples, 
+                                         mean = focal.params$estimate[c(1:6)], 
+                                         sigma = vcov.focal))
+    
+  }
+  
+  # return
+  return(mvn.samples)
+  
+}
+
+#_______________________________________________________________________
+# 3b. Use function ----
+#_______________________________________________________________________
+
+# SSF
+mvn.sampled.SSF <- list(sample_mvn(100, "simple", "low", 1, "SSF"),
+                        sample_mvn(100, "simple", "low", 2, "SSF"),
+                        sample_mvn(100, "simple", "low", 3, "SSF"),
+                        sample_mvn(100, "simple", "high", 1, "SSF"),
+                        sample_mvn(100, "simple", "high", 2, "SSF"),
+                        sample_mvn(100, "simple", "high", 3, "SSF"),
+                        sample_mvn(100, "complex", "low", 1, "SSF"),
+                        sample_mvn(100, "complex", "low", 2, "SSF"),
+                        sample_mvn(100, "complex", "low", 3, "SSF"),
+                        sample_mvn(100, "complex", "high", 1, "SSF"),
+                        sample_mvn(100, "complex", "high", 2, "SSF"),
+                        sample_mvn(100, "complex", "high", 3, "SSF"))
+
+# iSSF
+mvn.sampled.iSSF <- list(sample_mvn(100, "simple", "low", 1, "iSSF"),
+                         sample_mvn(100, "simple", "low", 2, "iSSF"),
+                         sample_mvn(100, "simple", "low", 3, "iSSF"),
+                         sample_mvn(100, "simple", "high", 1, "iSSF"),
+                         sample_mvn(100, "simple", "high", 2, "iSSF"),
+                         sample_mvn(100, "simple", "high", 3, "iSSF"),
+                         sample_mvn(100, "complex", "low", 1, "iSSF"),
+                         sample_mvn(100, "complex", "low", 2, "iSSF"),
+                         sample_mvn(100, "complex", "low", 3, "iSSF"),
+                         sample_mvn(100, "complex", "high", 1, "iSSF"),
+                         sample_mvn(100, "complex", "high", 2, "iSSF"),
+                         sample_mvn(100, "complex", "high", 3, "iSSF"))
+
+#_______________________________________________________________________
+# 4. Movement-naive SSF predictions ----
+#_______________________________________________________________________
+# 4a. Define function ----
 #_______________________________________________________________________
 
 SSF_pred <- function (landscape.covs,     # raster
@@ -78,66 +169,68 @@ SSF_pred <- function (landscape.covs,     # raster
            variability == id.variability,
            rep == id.rep)
   
+  # subset variance-covariance matrix
+  vcov.lookup.1 <- vcov.lookup %>% 
+    
+    filter(landscape == id.landscape,
+           variability == id.variability,
+           rep == id.rep,
+           type == "SSF")
+  
+  # subset MVN samples
+  mvn.samples <- mvn.sampled.SSF[[vcov.lookup.1$index]]
+  
   # scale raster correctly
   landscape.covs.1 <- c((landscape.covs$stem - focal.scale$mean.stem) / focal.scale$sd.stem,
                         (landscape.covs$edge - focal.scale$mean.edge) / focal.scale$sd.edge,
                         landscape.covs$mature)
   
-  # calculate mean, lower 95, and upper 95 predictions
+  # calculate mean prediction
   # NOTE: These will not be exponentiated yet
   # mean
   pred.mean <- landscape.covs.1$stem * focal.params$estimate[focal.params$term == "stem.s"] +
                landscape.covs.1$edge * focal.params$estimate[focal.params$term == "edge.s"] +
                landscape.covs.1$mature * focal.params$estimate[focal.params$term == "mature"]
   
-  # lower and upper 95
-  # parameterize distributions
-  stem.low <- qnorm(p = 0.025, 
-                    mean = focal.params$estimate[focal.params$term == "stem.s"], 
-                    sd = focal.params$estimate[focal.params$term == "sd__stem.s"])
-  
-  stem.high <- qnorm(p = 0.975, 
-                     mean = focal.params$estimate[focal.params$term == "stem.s"], 
-                     sd = focal.params$estimate[focal.params$term == "sd__stem.s"])
-  
-  edge.low <- qnorm(p = 0.025, 
-                    mean = focal.params$estimate[focal.params$term == "edge.s"], 
-                    sd = focal.params$estimate[focal.params$term == "sd__edge.s"])
-  
-  edge.high <- qnorm(p = 0.975, 
-                     mean = focal.params$estimate[focal.params$term == "edge.s"], 
-                     sd = focal.params$estimate[focal.params$term == "sd__edge.s"])
-  
-  mature.low <- qnorm(p = 0.025, 
-                      mean = focal.params$estimate[focal.params$term == "mature"], 
-                      sd = focal.params$estimate[focal.params$term == "sd__mature"])
-  
-  mature.high <- qnorm(p = 0.975, 
-                       mean = focal.params$estimate[focal.params$term == "mature"], 
-                       sd = focal.params$estimate[focal.params$term == "sd__mature"])
-  
-  # calculate
-  pred.low <- landscape.covs.1$stem * stem.low +
-              landscape.covs.1$edge * edge.low +
-              landscape.covs.1$mature * mature.low
-  
-  pred.high <- landscape.covs.1$stem * stem.high +
-               landscape.covs.1$edge * edge.high +
-               landscape.covs.1$mature * mature.high
-  
   # crop and exponentiate
   pred.mean.crop <- exp(crop(pred.mean, unit.bound))
-  pred.low.crop <- exp(crop(pred.low, unit.bound))
-  pred.high.crop <- exp(crop(pred.high, unit.bound))
-  
+
   # calculate RSS for correction factor
   pred.mean.rss <- pred.mean.crop / mean(values(pred.mean.crop))
-  pred.low.rss <- pred.low.crop / mean(values(pred.low.crop))
-  pred.high.rss <- pred.high.crop / mean(values(pred.high.crop))
+  
+  # bootstrap for SE raster
+  pred.boot <- matrix(data = NA, nrow = nrow(values(pred.mean.rss)), ncol = 100)
+  
+  for (i in 1:100) {
+    
+    # extract samples
+    mvn.samples.focal <- mvn.samples[i, ]
+    
+    # calculate raster
+    pred.sample <- landscape.covs.1$stem * mvn.samples.focal$V1 +
+                   landscape.covs.1$edge * mvn.samples.focal$V2 +
+                   landscape.covs.1$mature * mvn.samples.focal$V3
+    
+    # crop and exponentiate
+    pred.sample.crop <- exp(crop(pred.sample, unit.bound))
+    
+    # calculate RSS for correction factor
+    pred.sample.rss <- pred.sample.crop / mean(values(pred.sample.crop))
+    
+    # extract values and bind into matrix
+    pred.values <- values(pred.sample.rss)
+    
+    # bind into matrix
+    pred.boot[ , i] <- pred.values
+    
+  }
+  
+  # add rowwise SDs to a new raster
+  se.rast <- rast(pred.mean.rss, vals = rowSds(pred.boot))
   
   # bind together
-  pred.all <- c(pred.low.rss, pred.mean.rss, pred.high.rss)
-  names(pred.all) <- c("low", "mean", "high")
+  pred.all <- c(pred.mean.rss, se.rast)
+  names(pred.all) <- c("mean", "se")
   
   # return predictive raster
   return(pred.all)
@@ -145,7 +238,7 @@ SSF_pred <- function (landscape.covs,     # raster
 }
 
 #_______________________________________________________________________
-# 3b. Use function ----
+# 4b. Use function ----
 #_______________________________________________________________________
 
 SSF.pred.S1L <- SSF_pred(landscape.covs.S1, "simple", "low", 1)
@@ -163,7 +256,7 @@ SSF.pred.C2H <- SSF_pred(landscape.covs.C2, "complex", "high", 2)
 SSF.pred.C3H <- SSF_pred(landscape.covs.C3, "complex", "high", 3)
 
 #_______________________________________________________________________
-# 3c. Write rasters ----
+# 4c. Write rasters ----
 #_______________________________________________________________________
 
 writeRaster(SSF.pred.S1L, paste0(getwd(), "/Rasters/SSF predictions/S1L.tif"), overwrite = TRUE)
@@ -181,7 +274,7 @@ writeRaster(SSF.pred.C2H, paste0(getwd(), "/Rasters/SSF predictions/C2H.tif"), o
 writeRaster(SSF.pred.C3H, paste0(getwd(), "/Rasters/SSF predictions/C3H.tif"), overwrite = TRUE)
 
 #_______________________________________________________________________
-# 4. Day range "adjustment" rasters ----
+# 5. Day range "adjustment" rasters ----
 
 # we'll generate these using the habitat-specific step length
 # distribution adjustments from the fitted iSSFs
@@ -191,7 +284,7 @@ writeRaster(SSF.pred.C3H, paste0(getwd(), "/Rasters/SSF predictions/C3H.tif"), o
 # gamma SL distribution with E(x) = mean step length * 12
 
 #_______________________________________________________________________
-# 4a. Define function ----
+# 5a. Define function ----
 #_______________________________________________________________________
 
 sl_raster <- function(landscape.covs,     # raster
@@ -224,6 +317,17 @@ sl_raster <- function(landscape.covs,     # raster
            variability == id.variability,
            rep == id.rep)
   
+  # subset variance-covariance matrix
+  vcov.lookup.1 <- vcov.lookup %>% 
+    
+    filter(landscape == id.landscape,
+           variability == id.variability,
+           rep == id.rep,
+           type == "iSSF")
+  
+  # subset MVN samples
+  mvn.samples <- mvn.sampled.iSSF[[vcov.lookup.1$index - 12]]
+  
   # scale raster correctly
   landscape.covs.1 <- c((landscape.covs$stem - focal.scale$mean.stem) / focal.scale$sd.stem,
                         (landscape.covs$edge - focal.scale$mean.edge) / focal.scale$sd.edge,
@@ -246,13 +350,53 @@ sl_raster <- function(landscape.covs,     # raster
   # transform to day range (in km)
   adjusted.day.range <- (adjusted.mean.sl.crop * 12) / 1000
   
-  # return
-  return(adjusted.day.range)
+  # bootstrap for SE raster
+  pred.boot <- matrix(data = NA, nrow = nrow(values(adjusted.day.range)), ncol = 100)
   
+  for (i in 1:100) {
+    
+    # extract samples
+    mvn.samples.focal <- mvn.samples[i, ]
+    
+    # calculate spatially-explicit SL shape parameter adjustments
+    pred.sample <- mvn.samples.focal$V4 +
+                   landscape.covs.1$stem * mvn.samples.focal$V5 +
+                   landscape.covs.1$mature * mvn.samples.focal$V6
+    
+    # adjust the gamma distributions with the new shape parameters (in a raster)
+    shape.adjust.sample <- sl.dist$params$shape + pred.sample
+    
+    # and calculate the new expectation
+    adjusted.mean.sl.sample <- shape.adjust.sample * sl.dist$params$scale 
+    
+    # crop
+    adjusted.mean.sl.crop.sample <- crop(adjusted.mean.sl.sample, unit.bound)
+    
+    # transform to day range (in km)
+    adjusted.day.range.sample <- (adjusted.mean.sl.crop.sample * 12) / 1000
+    
+    # extract values
+    pred.values <- values(adjusted.day.range.sample)
+    
+    # bind into matrix
+    pred.boot[ , i] <- pred.values
+    
+  }
+  
+  # add rowwise SDs to a new raster
+  se.rast <- rast(adjusted.day.range, vals = rowSds(pred.boot))
+  
+  # bind together
+  pred.all <- c(adjusted.day.range, se.rast)
+  names(pred.all) <- c("mean", "se")
+  
+  # return predictive raster
+  return(pred.all)
+
 }
 
 #_______________________________________________________________________
-# 4b. Use function ----
+# 5b. Use function ----
 #_______________________________________________________________________
 
 adj.dr.S1L <- sl_raster(landscape.covs.S1, sl.dist.S1L, "simple", "low", 1)
@@ -270,7 +414,7 @@ adj.dr.C2H <- sl_raster(landscape.covs.C2, sl.dist.C2H, "complex", "high", 2)
 adj.dr.C3H <- sl_raster(landscape.covs.C3, sl.dist.C3H, "complex", "high", 3)
 
 #_______________________________________________________________________
-# 4c. Write rasters ----
+# 5c. Write rasters ----
 #_______________________________________________________________________
 
 writeRaster(adj.dr.S1L, paste0(getwd(), "/Rasters/Adjusted day range/S1L.tif"), overwrite = TRUE)
@@ -288,9 +432,9 @@ writeRaster(adj.dr.C2H, paste0(getwd(), "/Rasters/Adjusted day range/C2H.tif"), 
 writeRaster(adj.dr.C3H, paste0(getwd(), "/Rasters/Adjusted day range/C3H.tif"), overwrite = TRUE)
 
 #_______________________________________________________________________
-# 5. Scaled covariate rasters for UD simulation ----
+# 6. Scaled covariate rasters for UD simulation ----
 #_______________________________________________________________________
-# 5a. Define function ----
+# 6a. Define function ----
 #_______________________________________________________________________
 
 scaled_covs <- function(landscape.covs,     # raster
@@ -316,7 +460,7 @@ scaled_covs <- function(landscape.covs,     # raster
 }
 
 #_______________________________________________________________________
-# 5b. Use function ----
+# 6b. Use function ----
 #_______________________________________________________________________
 
 scaled.covs.S1L <- scaled_covs(landscape.covs.S1, "simple", "low", 1)
@@ -334,7 +478,7 @@ scaled.covs.C2H <- scaled_covs(landscape.covs.C2, "complex", "high", 2)
 scaled.covs.C3H <- scaled_covs(landscape.covs.C3, "complex", "high", 3)
 
 #_______________________________________________________________________
-# 5c. Write rasters ----
+# 6c. Write rasters ----
 #_______________________________________________________________________
 
 writeRaster(scaled.covs.S1L, paste0(getwd(), "/Rasters/Scaled covariates/S1L.tif"), overwrite = TRUE)

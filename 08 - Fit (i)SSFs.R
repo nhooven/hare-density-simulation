@@ -39,8 +39,6 @@ sim.data.all <- rbind(read.csv(paste0(getwd(), "/Derived_data/Simulated data/sim
                       read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C2H.csv")),
                       read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C3H.csv")))
                       
-
-
 # rasters
 landscape.covs.S1 <- rast("Rasters/S1.tif")
 landscape.covs.S2 <- rast("Rasters/S2.tif")
