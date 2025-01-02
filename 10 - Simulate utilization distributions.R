@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 31 Dec 2024
+# Date last modified: 02 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -119,6 +119,19 @@ sim_issf_tud <- function (landscape.covs,
   # loop through n.reps
   for (i in 1:n.reps) {
     
+    # draw random coefficients
+    indiv.stem.s <- rnorm(n = 1, 
+                          mean = focal.params$estimate[focal.params$term == "stem.s"],
+                          sd = focal.params$estimate[focal.params$term == "sd__stem.s"])
+    
+    indiv.edge.s <- rnorm(n = 1, 
+                          mean = focal.params$estimate[focal.params$term == "edge.s"],
+                          sd = focal.params$estimate[focal.params$term == "sd__edge.s"])
+    
+    indiv.mature <- rnorm(n = 1, 
+                          mean = focal.params$estimate[focal.params$term == "mature"],
+                          sd = focal.params$estimate[focal.params$term == "sd__mature"])
+    
     # define start step (centroid of unit to keep initial conditions constant)
     start.step <- make_start(x = c(unit.bbox[1] + (unit.bbox[3] - unit.bbox[1]) / 2,
                                    unit.bbox[2] + (unit.bbox[4] - unit.bbox[2]) / 2),
@@ -130,10 +143,10 @@ sim_issf_tud <- function (landscape.covs,
                              
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
-    issf.model <- make_issf_model(coefs = c("stem_end" = focal.params$estimate[focal.params$term == "stem.s"],  
+    issf.model <- make_issf_model(coefs = c("stem_end" = indiv.stem.s,  
                                             "stem_end:log(sl_)" = focal.params$estimate[focal.params$term == "stem.s:log(sl_)"],
-                                            "edge_end" = focal.params$estimate[focal.params$term == "edge.s"],
-                                            "mature_start" = focal.params$estimate[focal.params$term == "mature"],
+                                            "edge_end" = indiv.edge.s,
+                                            "mature_start" = indiv.mature,
                                             "log(sl_):mature_start" = focal.params$estimate[focal.params$term == "mature:log(sl_)"],
                                             "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"]),              
                                   sl = sl.dist,
@@ -210,25 +223,11 @@ sims.C3H <- sim_issf_tud(landscape.covs.C3H, sl.dist.C3H, "simple", "high", 3)
 # 6a. Convert to sf ----
 #_______________________________________________________________________
 
-sims.SL.sf <- st_as_sf(sims.SL %>% drop_na(x_),
+sims.test.sf <- st_as_sf(sim.test %>% drop_na(x_),
                        coords = c("x_", 
                                   "y_"),
                        crs = "epsg:32611") 
 
-sims.CL.sf <- st_as_sf(sims.CL %>% drop_na(x_),
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
-
-sims.SH.sf <- st_as_sf(sims.SH %>% drop_na(x_),
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
-
-sims.CH.sf <- st_as_sf(sims.CH %>% drop_na(x_),
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
 
 #_______________________________________________________________________
 # 6b. Plots ----
@@ -243,66 +242,9 @@ ggplot() +
   geom_sf(data = unit.bound,
           fill = NA) +
   
-  # paths
-  geom_sf(data = sims.SL.sf,
+  # points
+  geom_sf(data = sims.test.sf,
             alpha = 0.5) +
-  
-  # remove legend
-  theme(legend.position = "none") +
-  
-  # coordinate system to make nice axis labels
-  coord_sf(datum = st_crs(32611))
-
-# CL
-ggplot() +
-  
-  theme_bw() +
-  
-  # unit boundary as a black square
-  geom_sf(data = unit.bound,
-          fill = NA) +
-  
-  # paths
-  geom_sf(data = sims.CL.sf,
-          alpha = 0.5) +
-  
-  # remove legend
-  theme(legend.position = "none") +
-  
-  # coordinate system to make nice axis labels
-  coord_sf(datum = st_crs(32611))
-
-# SH
-ggplot() +
-  
-  theme_bw() +
-  
-  # unit boundary as a black square
-  geom_sf(data = unit.bound,
-          fill = NA) +
-  
-  # paths
-  geom_sf(data = sims.SH.sf,
-          alpha = 0.5) +
-  
-  # remove legend
-  theme(legend.position = "none") +
-  
-  # coordinate system to make nice axis labels
-  coord_sf(datum = st_crs(32611))
-
-# CH
-ggplot() +
-  
-  theme_bw() +
-  
-  # unit boundary as a black square
-  geom_sf(data = unit.bound,
-          fill = NA) +
-  
-  # paths
-  geom_sf(data = sims.CH.sf,
-          alpha = 0.5) +
   
   # remove legend
   theme(legend.position = "none") +
@@ -330,11 +272,9 @@ sims.all$scenario <- factor(sims.all$scenario, levels = c("SL", "CL", "SH", "CH"
 # 7b. Plot ----
 #_______________________________________________________________________
 
-ggplot(sims.all,
+ggplot(sim.test,
        aes(x = x_,
            y = y_)) +
-  
-  facet_wrap(~ scenario) +
   
   theme_bw() +
   
@@ -356,7 +296,7 @@ ggplot(sims.all,
 # 8a. Initialize a SpatialPixels object equivalent to the main raster ----
 #_______________________________________________________________________
 
-landscape.sp <- as(as(landscape.covs.simple$stem, "Raster"), "SpatialPixels")
+landscape.sp <- as(as(landscape.covs.S1L$stem, "Raster"), "SpatialPixels")
 
 #_______________________________________________________________________
 # 8b. Define function ----
@@ -383,10 +323,9 @@ sim_kernel <- function (template,     # SpatialPixels object
 # 8c. Use function ----
 #_______________________________________________________________________
 
-kernel.SL <- sim_kernel(landscape.sp, sims.SL.sf)
-kernel.CL <- sim_kernel(landscape.sp, sims.CL.sf)
-kernel.SH <- sim_kernel(landscape.sp, sims.SH.sf)
-kernel.CH <- sim_kernel(landscape.sp, sims.CH.sf)
+kernel.SL <- sim_kernel(landscape.sp, sims.test.sf)
+
+kernel.crop <- crop(kernel.SL, unit.bound)
 
 #_______________________________________________________________________
 # 8d. Plot ----
@@ -397,48 +336,14 @@ ggplot() +
   
   theme_bw() +
   
-  tidyterra::geom_spatraster(data = kernel.SL,
-                            aes(fill = ud)) +
-  
-  coord_sf(datum = sf::st_crs(32611)) +
-  
-  scale_fill_viridis_c(option = "magma")
-
-# CL
-ggplot() +
-  
-  theme_bw() +
-  
-  tidyterra::geom_spatraster(data = kernel.CL,
+  tidyterra::geom_spatraster(data = kernel.crop,
                              aes(fill = ud)) +
   
   coord_sf(datum = sf::st_crs(32611)) +
   
   scale_fill_viridis_c(option = "magma")
 
-# SH
-ggplot() +
-  
-  theme_bw() +
-  
-  tidyterra::geom_spatraster(data = kernel.SH,
-                             aes(fill = ud)) +
-  
-  coord_sf(datum = sf::st_crs(32611)) +
-  
-  scale_fill_viridis_c(option = "magma")
 
-# CL
-ggplot() +
-  
-  theme_bw() +
-  
-  tidyterra::geom_spatraster(data = kernel.CL,
-                             aes(fill = ud)) +
-  
-  coord_sf(datum = sf::st_crs(32611)) +
-  
-  scale_fill_viridis_c(option = "magma")
 
 #_______________________________________________________________________
 # 8e. Stack ----
