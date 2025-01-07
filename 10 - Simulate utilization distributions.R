@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 02 Jan 2025
+# Date last modified: 06 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -70,17 +70,130 @@ load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
 # keep only iSSF parameters
 model.params <- all.params %>% filter(type == "iSSF")
 
+model.params$term[model.params$term == "sd__mature.s"] <- "sd__mature"
+
 #_______________________________________________________________________
-# 3c. Initialization space ----
+# 3b. Initialization space ----
 #_______________________________________________________________________
 
 # extract bounding box
 unit.bbox <- st_bbox(unit.bound)
 
-# we'll take the centroid from this box to initialize each path
+# simulation "stage"
+unit.buff <- st_buffer(unit.bound, dist = 1000)
+
+plot(landscape.covs.S1L$stem)
+plot(st_geometry(unit.buff), add = T)
+plot(st_geometry(unit.bound), add = T)
 
 #_______________________________________________________________________
-# 3d. Redistribution kernel parameters ----
+# 3c. Convert everything outside the "stage" to the mean covariate value ----
+
+# we're only interested in simulated movement within a small area of the 
+# unit boundary. We want to avoid any large gradients pulling tracks away
+
+#_______________________________________________________________________
+
+# define function
+define_stage <- function (landscape.covs) {
+  
+  # initialize three rasters
+  out.stage.1 <- rast(landscape.covs$stem, vals = 0)
+  out.stage.2 <- rast(landscape.covs$edge, vals = 0)
+  out.stage.3 <- rast(landscape.covs$mature, vals = 0)
+  
+  # mask each raster
+  mask.1 <- mask(landscape.covs$stem, unit.buff)
+  mask.2 <- mask(landscape.covs$edge, unit.buff)
+  mask.3 <- mask(landscape.covs$mature, unit.buff)
+  
+  # mosaic
+  mosaic.1 <- mosaic(mask.1, out.stage.1)
+  mosaic.2 <- mosaic(mask.2, out.stage.2)
+  mosaic.3 <- mosaic(mask.3, out.stage.3)
+  
+  # ensure that what's "mature" is 1
+  mosaic.3 <- ifel(mosaic.3 == 0.5, 1, 0)
+  
+  # bind together and return
+  stage.rast <- c(mosaic.1, mosaic.2, mosaic.3)
+  
+  return(stage.rast)
+  
+}
+
+# use function
+landscape.covs.S1L.1 <- define_stage(landscape.covs.S1L)
+landscape.covs.S2L.1 <- define_stage(landscape.covs.S2L)
+landscape.covs.S3L.1 <- define_stage(landscape.covs.S3L)
+landscape.covs.S1H.1 <- define_stage(landscape.covs.S1H)
+landscape.covs.S2H.1 <- define_stage(landscape.covs.S2H)
+landscape.covs.S3H.1 <- define_stage(landscape.covs.S3H)
+
+landscape.covs.C1L.1 <- define_stage(landscape.covs.C1L)
+landscape.covs.C2L.1 <- define_stage(landscape.covs.C2L)
+landscape.covs.C3L.1 <- define_stage(landscape.covs.C3L)
+landscape.covs.C1H.1 <- define_stage(landscape.covs.C1H)
+landscape.covs.C2H.1 <- define_stage(landscape.covs.C2H)
+landscape.covs.C3H.1 <- define_stage(landscape.covs.C3H)
+
+#_______________________________________________________________________
+# 3d. Home range centroid and start step ----
+#_______________________________________________________________________
+
+# here we'll ensure that the HRC is within the unit (true target of density estimation)
+# while the start step is nearby
+
+make_hrc <- function() {
+  
+  hrc.x <- runif(n = 1,
+                 min = unit.bbox[1],
+                 max = unit.bbox[3])
+  
+  hrc.y <- runif(n = 1,
+                 min = unit.bbox[2],
+                 max = unit.bbox[4])
+  
+  # concatenate
+  hrc <- c(hrc.x, hrc.y)
+  
+  # return
+  return(hrc)
+  
+}
+
+#_______________________________________________________________________
+# 3e. Calculate home ranging parameters ----
+
+# we'll use 20k instead of 5k for variance here just to keep
+# simulated individuals somewhat near
+
+#_______________________________________________________________________
+
+hr_params <- function(e.var = 20000,         # expected variance of the bivariate normal
+                      e.var.sd = 100,        # sd of the draws for the bivariate normal variance
+                      hrc = hrc)             # home range centroid as previously drawn
+  
+{
+  
+  # variance
+  var.focal <- rnorm(n = 1, mean = e.var, sd = e.var.sd)
+  
+  # x2 + y2 coefficient
+  b.x2y2 <- -1 / var.focal
+  
+  # solve for x and y coefficients
+  b.x <- hrc[1] * 2 * -b.x2y2 
+  b.y <- hrc[2] * 2 * -b.x2y2
+  
+  hr.params <- c(b.x, b.y, b.x2y2)
+  
+  return(hr.params)
+  
+}
+
+#_______________________________________________________________________
+# 3f. Redistribution kernel parameters ----
 #_______________________________________________________________________
 
 # control steps
@@ -132,14 +245,22 @@ sim_issf_tud <- function (landscape.covs,
                           mean = focal.params$estimate[focal.params$term == "mature"],
                           sd = focal.params$estimate[focal.params$term == "sd__mature"])
     
-    # define start step (centroid of unit to keep initial conditions constant)
-    start.step <- make_start(x = c(unit.bbox[1] + (unit.bbox[3] - unit.bbox[1]) / 2,
-                                   unit.bbox[2] + (unit.bbox[4] - unit.bbox[2]) / 2),
-                                   ta_ = 0,
-                                   time = ymd_hm("2024-09-01 18:00", 
-                                                 tz = "America/Los_Angeles"),
-                                   dt = hours(2),
-                                   crs = crs("EPSG:32611"))
+    # define start step
+    
+    # define hrc
+    hrc <- make_hrc()
+    
+    # define start step
+    start.step <- make_start(x = c(hrc[1] + rnorm(n = 1, mean = 0, sd = 50),
+                                   hrc[2] + rnorm(n = 1, mean = 0, sd = 50)),
+                             ta_ = 0,
+                             time = ymd_hm("2024-09-01 18:00", 
+                                           tz = "America/Los_Angeles"),
+                             dt = hours(2),
+                             crs = crs("EPSG:32611"))
+    
+    # calculate home ranging parameters
+    hr.params <- hr_params(hrc = hrc)
                              
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
@@ -148,7 +269,10 @@ sim_issf_tud <- function (landscape.covs,
                                             "edge_end" = indiv.edge.s,
                                             "mature_start" = indiv.mature,
                                             "log(sl_):mature_start" = focal.params$estimate[focal.params$term == "mature:log(sl_)"],
-                                            "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"]),              
+                                            "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"],
+                                            x2_ = hr.params[1],
+                                            y2_ = hr.params[2], 
+                                            "I(x2_^2 + y2_^2)" = hr.params[3]),              
                                   sl = sl.dist,
                                   ta = ta.dist)
     
@@ -174,11 +298,14 @@ sim_issf_tud <- function (landscape.covs,
              rep = id.rep,
              sim.rep = i) %>%
       
-      # keep only the endpoint
-      slice(n())
+      # keep only the start and endpoints
+      slice(c(1, n())) %>%
+      
+      # add which point ID
+      mutate(which.point = c("start", "end"))
     
     # bind to df
-    sims.df <- rbind(sims.df, sim.path)
+    sims.df <- rbind(sims.df, sim.path.1)
     
     # status message (every 50 replicates)
     if (i %% 50 == 0) {
@@ -203,12 +330,12 @@ sim_issf_tud <- function (landscape.covs,
 # 4b. Run simulations ----
 #_______________________________________________________________________
 
-sims.S1L <- sim_issf_tud(landscape.covs.S1L, sl.dist.S1L, "simple", "low", 1)
-sims.S2L <- sim_issf_tud(landscape.covs.S2L, sl.dist.S2L, "simple", "low", 2)
-sims.S3L <- sim_issf_tud(landscape.covs.S3L, sl.dist.S3L, "simple", "low", 3)
-sims.S1H <- sim_issf_tud(landscape.covs.S1H, sl.dist.S1H, "simple", "high", 1)
-sims.S2H <- sim_issf_tud(landscape.covs.S2H, sl.dist.S2H, "simple", "high", 2)
-sims.S3H <- sim_issf_tud(landscape.covs.S3H, sl.dist.S3H, "simple", "high", 3)
+sims.S1L <- sim_issf_tud(landscape.covs.S1L.1, sl.dist.S1L, "simple", "low", 1)
+sims.S2L <- sim_issf_tud(landscape.covs.S2L.1, sl.dist.S2L, "simple", "low", 2)
+sims.S3L <- sim_issf_tud(landscape.covs.S3L.1, sl.dist.S3L, "simple", "low", 3)
+sims.S1H <- sim_issf_tud(landscape.covs.S1H.1, sl.dist.S1H, "simple", "high", 1)
+sims.S2H <- sim_issf_tud(landscape.covs.S2H.1, sl.dist.S2H, "simple", "high", 2)
+sims.S3H <- sim_issf_tud(landscape.covs.S3H.1, sl.dist.S3H, "simple", "high", 3)
 
 sims.C1L <- sim_issf_tud(landscape.covs.C1L, sl.dist.C1L, "simple", "low", 1)
 sims.C2L <- sim_issf_tud(landscape.covs.C2L, sl.dist.C2L, "simple", "low", 2)
@@ -223,11 +350,35 @@ sims.C3H <- sim_issf_tud(landscape.covs.C3H, sl.dist.C3H, "simple", "high", 3)
 # 6a. Convert to sf ----
 #_______________________________________________________________________
 
-sims.test.sf <- st_as_sf(sim.test %>% drop_na(x_),
-                       coords = c("x_", 
-                                  "y_"),
-                       crs = "epsg:32611") 
+sims.S1L.sf <- st_as_sf(sims.S1L %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611") 
 
+sims.S2L.sf <- st_as_sf(sims.S2L %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
+sims.S3L.sf <- st_as_sf(sims.S3L %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
+sims.S1H.sf <- st_as_sf(sims.S1H %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
+sims.S2H.sf <- st_as_sf(sims.S2H %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
+sims.S3H.sf <- st_as_sf(sims.S3H %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
 
 #_______________________________________________________________________
 # 6b. Plots ----
@@ -243,8 +394,8 @@ ggplot() +
           fill = NA) +
   
   # points
-  geom_sf(data = sims.test.sf,
-            alpha = 0.5) +
+  geom_sf(data = sims.S3H.sf,
+            alpha = 0.15) +
   
   # remove legend
   theme(legend.position = "none") +
@@ -253,53 +404,15 @@ ggplot() +
   coord_sf(datum = st_crs(32611))
 
 #_______________________________________________________________________
-# 7. Density maps ----
+# 7. Fit kernel UDs ----
 #_______________________________________________________________________
-# 7a. Add identifier ----
-#_______________________________________________________________________
-
-sims.SL$scenario <- "SL"
-sims.CL$scenario <- "CL"
-sims.SH$scenario <- "SH"
-sims.CH$scenario <- "CH"
-
-sims.all <- rbind(sims.SL, sims.CL, sims.SH, sims.CH)
-
-# order factor levels
-sims.all$scenario <- factor(sims.all$scenario, levels = c("SL", "CL", "SH", "CH"))
-
-#_______________________________________________________________________
-# 7b. Plot ----
-#_______________________________________________________________________
-
-ggplot(sim.test,
-       aes(x = x_,
-           y = y_)) +
-  
-  theme_bw() +
-  
-  stat_density2d_filled(aes(fill = after_stat(level))) +
-  
-  scale_fill_viridis_d(option = "magma") +
-  
-  theme(panel.grid = element_blank(),
-        legend.position = "none",
-        axis.text = element_blank(),
-        axis.title = element_blank())
-
-# SH is weird and has many NAs because of the positive edge coefficient - 
-# let's look at re-doing that model later
-
-#_______________________________________________________________________
-# 8. Fit kernel UDs ----
-#_______________________________________________________________________
-# 8a. Initialize a SpatialPixels object equivalent to the main raster ----
+# 7a. Initialize a SpatialPixels object equivalent to the main raster ----
 #_______________________________________________________________________
 
 landscape.sp <- as(as(landscape.covs.S1L$stem, "Raster"), "SpatialPixels")
 
 #_______________________________________________________________________
-# 8b. Define function ----
+# 7b. Define function ----
 #_______________________________________________________________________
 
 sim_kernel <- function (template,     # SpatialPixels object
@@ -320,50 +433,57 @@ sim_kernel <- function (template,     # SpatialPixels object
 }
 
 #_______________________________________________________________________
-# 8c. Use function ----
+# 7c. Use function ----
 #_______________________________________________________________________
 
-kernel.SL <- sim_kernel(landscape.sp, sims.test.sf)
+kernel.S1L <- sim_kernel(landscape.sp, sims.S1L.sf)
+kernel.S2L <- sim_kernel(landscape.sp, sims.S2L.sf)
+kernel.S3L <- sim_kernel(landscape.sp, sims.S3L.sf)
+kernel.S1H <- sim_kernel(landscape.sp, sims.S1H.sf)
+kernel.S2H <- sim_kernel(landscape.sp, sims.S2H.sf)
+kernel.S3H <- sim_kernel(landscape.sp, sims.S3H.sf)
 
-kernel.crop <- crop(kernel.SL, unit.bound)
+# crop to unit boundary
+kernel.S1L.crop <- crop(kernel.S1L, unit.bound)
+kernel.S2L.crop <- crop(kernel.S2L, unit.bound)
+kernel.S3L.crop <- crop(kernel.S3L, unit.bound)
+kernel.S1H.crop <- crop(kernel.S1H, unit.bound)
+kernel.S2H.crop <- crop(kernel.S2H, unit.bound)
+kernel.S3H.crop <- crop(kernel.S3H, unit.bound)
 
 #_______________________________________________________________________
-# 8d. Plot ----
+# 7d. Plot for a sanity check ----
 #_______________________________________________________________________
 
-# SL
 ggplot() +
   
   theme_bw() +
   
-  tidyterra::geom_spatraster(data = kernel.crop,
+  tidyterra::geom_spatraster(data = kernel.S1H.crop,
                              aes(fill = ud)) +
   
   coord_sf(datum = sf::st_crs(32611)) +
   
   scale_fill_viridis_c(option = "magma")
 
-
-
 #_______________________________________________________________________
-# 8e. Stack ----
+# 8. Write to .csvs ----
 #_______________________________________________________________________
 
-kernel.all <- c(kernel.SL, kernel.CL, kernel.SH, kernel.CH)
-
-names(kernel.all) <- c("SL", "CL", "SH", "CH")
-
-#_______________________________________________________________________
-# 9. Write to .csvs ----
-#_______________________________________________________________________
-
-write.csv(sims.SL, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_SL.csv"))
-write.csv(sims.CL, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_CL.csv"))
-write.csv(sims.SH, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_SH.csv"))
-write.csv(sims.CH, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_CH.csv"))
+write.csv(sims.S1L, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_S1L.csv"))
+write.csv(sims.S2L, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_S2L.csv"))
+write.csv(sims.S3L, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_S3L.csv"))
+write.csv(sims.S1H, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_S1H.csv"))
+write.csv(sims.S2H, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_S2H.csv"))
+write.csv(sims.S3H, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_S3H.csv"))
 
 #_______________________________________________________________________
-# 10. Write rasters ----
+# 9. Write rasters ----
 #_______________________________________________________________________
 
-writeRaster(kernel.all, filename = paste0(getwd(), "/Rasters/kernel_all_sim.tif"))
+writeRaster(kernel.S1L.crop, filename = paste0(getwd(), "/Rasters/kernel_S1L.tif"), overwrite = TRUE)
+writeRaster(kernel.S2L.crop, filename = paste0(getwd(), "/Rasters/kernel_S2L.tif"), overwrite = TRUE)
+writeRaster(kernel.S3L.crop, filename = paste0(getwd(), "/Rasters/kernel_S3L.tif"), overwrite = TRUE)
+writeRaster(kernel.S1H.crop, filename = paste0(getwd(), "/Rasters/kernel_S1H.tif"), overwrite = TRUE)
+writeRaster(kernel.S2H.crop, filename = paste0(getwd(), "/Rasters/kernel_S2H.tif"), overwrite = TRUE)
+writeRaster(kernel.S3H.crop, filename = paste0(getwd(), "/Rasters/kernel_S3H.tif"), overwrite = TRUE)
