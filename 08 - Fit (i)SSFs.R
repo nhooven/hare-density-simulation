@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 31 Dec 2024
+# Date last modified: 07 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -444,7 +444,7 @@ extract_coefs <- function(model,
                                    std.error = NA,
                                    statistic = NA,
                                    p.value = NA),
-                        data.frame(term = "sd__mature.s",
+                        data.frame(term = "sd__mature",
                                    estimate = 0.0,
                                    std.error = NA,
                                    statistic = NA,
