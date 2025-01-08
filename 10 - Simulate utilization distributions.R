@@ -395,6 +395,21 @@ sims.C3L.sf <- st_as_sf(sims.C3L %>% filter(which.point == "end"),
                                    "y_"),
                         crs = "epsg:32611")
 
+sims.C1H.sf <- st_as_sf(sims.C1H %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
+sims.C2H.sf <- st_as_sf(sims.C2H %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
+sims.C3H.sf <- st_as_sf(sims.C3H %>% filter(which.point == "end"),
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
 #_______________________________________________________________________
 # 6b. Plots ----
 #_______________________________________________________________________
@@ -409,7 +424,7 @@ ggplot() +
           fill = NA) +
   
   # points
-  geom_sf(data = sims.C3L.sf,
+  geom_sf(data = sims.C1H.sf,
             alpha = 0.15) +
   
   # remove legend
@@ -461,6 +476,9 @@ kernel.S3H <- sim_kernel(landscape.sp, sims.S3H.sf)
 kernel.C1L <- sim_kernel(landscape.sp, sims.C1L.sf)
 kernel.C2L <- sim_kernel(landscape.sp, sims.C2L.sf)
 kernel.C3L <- sim_kernel(landscape.sp, sims.C3L.sf)
+kernel.C1H <- sim_kernel(landscape.sp, sims.C1H.sf)
+kernel.C2H <- sim_kernel(landscape.sp, sims.C2H.sf)
+kernel.C3H <- sim_kernel(landscape.sp, sims.C3H.sf)
 
 # crop to unit boundary
 kernel.S1L.crop <- crop(kernel.S1L, unit.bound)
@@ -473,6 +491,9 @@ kernel.S3H.crop <- crop(kernel.S3H, unit.bound)
 kernel.C1L.crop <- crop(kernel.C1L, unit.bound)
 kernel.C2L.crop <- crop(kernel.C2L, unit.bound)
 kernel.C3L.crop <- crop(kernel.C3L, unit.bound)
+kernel.C1H.crop <- crop(kernel.C1H, unit.bound)
+kernel.C2H.crop <- crop(kernel.C2H, unit.bound)
+kernel.C3H.crop <- crop(kernel.C3H, unit.bound)
 
 #_______________________________________________________________________
 # 7d. Plot for a sanity check ----
@@ -482,7 +503,7 @@ ggplot() +
   
   theme_bw() +
   
-  tidyterra::geom_spatraster(data = kernel.C3L.crop,
+  tidyterra::geom_spatraster(data = kernel.C3H.crop,
                              aes(fill = ud)) +
   
   coord_sf(datum = sf::st_crs(32611)) +
@@ -503,6 +524,9 @@ write.csv(sims.S3H, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_S3H.cs
 write.csv(sims.C1L, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_C1L.csv"))
 write.csv(sims.C2L, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_C2L.csv"))
 write.csv(sims.C3L, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_C3L.csv"))
+write.csv(sims.C1H, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_C1H.csv"))
+write.csv(sims.C2H, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_C2H.csv"))
+write.csv(sims.C3H, paste0(getwd(), "/Derived_data/Simulated data/sims_UD_C3H.csv"))
 
 #_______________________________________________________________________
 # 9. Write rasters ----
@@ -518,3 +542,6 @@ writeRaster(kernel.S3H.crop, filename = paste0(getwd(), "/Rasters/kernel_S3H.tif
 writeRaster(kernel.C1L.crop, filename = paste0(getwd(), "/Rasters/kernel_C1L.tif"), overwrite = TRUE)
 writeRaster(kernel.C2L.crop, filename = paste0(getwd(), "/Rasters/kernel_C2L.tif"), overwrite = TRUE)
 writeRaster(kernel.C3L.crop, filename = paste0(getwd(), "/Rasters/kernel_C3L.tif"), overwrite = TRUE)
+writeRaster(kernel.C1H.crop, filename = paste0(getwd(), "/Rasters/kernel_C1H.tif"), overwrite = TRUE)
+writeRaster(kernel.C2H.crop, filename = paste0(getwd(), "/Rasters/kernel_C2H.tif"), overwrite = TRUE)
+writeRaster(kernel.C3H.crop, filename = paste0(getwd(), "/Rasters/kernel_C3H.tif"), overwrite = TRUE)
