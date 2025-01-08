@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 07 Jan 2025
+# Date last modified: 08 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -337,12 +337,12 @@ sims.S1H <- sim_issf_tud(landscape.covs.S1H.1, sl.dist.S1H, "simple", "high", 1)
 sims.S2H <- sim_issf_tud(landscape.covs.S2H.1, sl.dist.S2H, "simple", "high", 2)
 sims.S3H <- sim_issf_tud(landscape.covs.S3H.1, sl.dist.S3H, "simple", "high", 3)
 
-sims.C1L <- sim_issf_tud(landscape.covs.C1L.1, sl.dist.C1L, "simple", "low", 1)
-sims.C2L <- sim_issf_tud(landscape.covs.C2L.1, sl.dist.C2L, "simple", "low", 2)
-sims.C3L <- sim_issf_tud(landscape.covs.C3L.1, sl.dist.C3L, "simple", "low", 3)
-sims.C1H <- sim_issf_tud(landscape.covs.C1H.1, sl.dist.C1H, "simple", "high", 1)
-sims.C2H <- sim_issf_tud(landscape.covs.C2H.1, sl.dist.C2H, "simple", "high", 2)
-sims.C3H <- sim_issf_tud(landscape.covs.C3H.1, sl.dist.C3H, "simple", "high", 3)
+sims.C1L <- sim_issf_tud(landscape.covs.C1L.1, sl.dist.C1L, "complex", "low", 1)
+sims.C2L <- sim_issf_tud(landscape.covs.C2L.1, sl.dist.C2L, "complex", "low", 2)
+sims.C3L <- sim_issf_tud(landscape.covs.C3L.1, sl.dist.C3L, "complex", "low", 3)
+sims.C1H <- sim_issf_tud(landscape.covs.C1H.1, sl.dist.C1H, "complex", "high", 1)
+sims.C2H <- sim_issf_tud(landscape.covs.C2H.1, sl.dist.C2H, "complex", "high", 2)
+sims.C3H <- sim_issf_tud(landscape.covs.C3H.1, sl.dist.C3H, "complex", "high", 3)
 
 #_______________________________________________________________________
 # 6. Plot points ----
