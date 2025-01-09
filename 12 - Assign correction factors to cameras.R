@@ -215,4 +215,4 @@ ggplot(data = all.cam.values,
 # 6. Write to .csv ----
 #_______________________________________________________________________
 
-write.csv(all.cam.values, paste0(getwd(), "/Derived_data/Detections/cam_data.csv"))
+write.csv(all.cam.values, paste0(getwd(), "/Derived_data/Passes/cam_data.csv"))
