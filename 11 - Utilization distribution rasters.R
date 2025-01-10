@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 08 Jan 2025
 # Date completed: 08 Jan 2025
-# Date last modified: 08 Jan 2025
+# Date last modified: 09 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -138,7 +138,8 @@ sim_kernel <- function (id.landscape,
            rep == id.rep)
   
   # convert sf to SpatialPoints objects
-  sims.sp <- as(sims.focal, "Spatial") 
+  sims.sp <- SpatialPoints(as(sims.focal, "Spatial"))
+  sims.sp@proj4string <- CRS("+proj=utm +zone=11 +datum=WGS84 +units=m +no_defs +type=crs")
   
   # fit kernel with reference h parameter (way faster than LSCV)
   mean.kernel <- kernelUD(xy = sims.sp, h = "href", grid = template.sp)
@@ -148,6 +149,9 @@ sim_kernel <- function (id.landscape,
   
   # convert to "RSS" by scaling the mean to be 1
   mean.kernel.rss <- mean.kernel.rast / mean(values(mean.kernel.rast))
+  
+  # and convert to the correction factor for proper sampling variance
+  mean.kernel.cf <- 1 / mean.kernel.rss
   
   # bootstrap to calculate SE
   # we'll use 500 bootstrapped (replaced) samples
@@ -161,7 +165,7 @@ sim_kernel <- function (id.landscape,
   }
   
   # fit kernels for each, calculate RSS, then cast the SD to a raster
-  pred.values <- matrix(data = NA, nrow = nrow(values(mean.kernel.rss)), ncol = 500)
+  pred.values <- matrix(data = NA, nrow = nrow(values(mean.kernel.cf)), ncol = 500)
   
   for (j in 1:ncol(pred.values)) {
     
@@ -183,16 +187,19 @@ sim_kernel <- function (id.landscape,
     # convert to "RSS" by scaling the mean to be 1
     mean.kernel.sampled.rss <- mean.kernel.sampled.rast / mean(values(mean.kernel.sampled.rast))
     
+    # convert to correction factor
+    mean.kernel.sampled.cf <- 1 / mean.kernel.sampled.rss
+    
     # add the values to the matrix
-    pred.values[ , j] <- values(mean.kernel.sampled.rss)
+    pred.values[ , j] <- values(mean.kernel.sampled.cf)
     
   }
   
   # add rowwise SDs to a new raster
-  se.rast <- rast(mean.kernel.rss, vals = rowSds(pred.values))
+  se.rast <- rast(mean.kernel.cf, vals = rowSds(pred.values))
   
   # bind together
-  pred.all <- c(mean.kernel.rss, se.rast)
+  pred.all <- c(mean.kernel.cf, se.rast)
   names(pred.all) <- c("mean", "se")
   
   # return

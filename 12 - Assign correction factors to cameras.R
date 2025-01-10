@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 12 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 08 Jan 2025
+# Date last modified: 09 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -180,7 +180,7 @@ all.cam.values <- rbind(extract_vs_vals(4, "simple", "low", 1, dr.S1L, ssf.S1L, 
                         extract_vs_vals(16, "complex", "high", 3, dr.C3H, ssf.C3H, issf.C3H))
 
 #_______________________________________________________________________
-# 5. Plot of RSS predictions ----
+# 5. Plot of CF predictions ----
 #_______________________________________________________________________
 
 # mean
@@ -202,14 +202,14 @@ ggplot(data = all.cam.values,
   
   scale_color_manual(values = c("orange", "purple")) +
   
-  scale_x_continuous(breaks = c(0.5, 0.75, 1.0, 1.25, 1.5)) +
-  scale_y_continuous(breaks = c(0.5, 0.75, 1.0, 1.25, 1.5)) +
+  scale_x_continuous(breaks = c(0.5, 1.0, 1.5, 2.0)) +
+  scale_y_continuous(breaks = c(0.5, 1.0, 1.5, 2.0)) +
   
-  coord_cartesian(xlim = c(0.5, 1.55),
-                  ylim = c(0.5, 1.55)) +
+  coord_cartesian(xlim = c(0.5, 2.0),
+                  ylim = c(0.5, 2.0)) +
   
-  xlab("RSS from naive SSF prediction") +
-  ylab("RSS from iSSF simulated prediction")
+  xlab("CF from naive SSF prediction") +
+  ylab("CF from iSSF simulated prediction")
 
 #_______________________________________________________________________
 # 6. Write to .csv ----

@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 24 Dec 2024
 # Date completed: 27 Dec 2024
-# Date last modified: 02 Jan 2025
+# Date last modified: 09 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -198,8 +198,11 @@ SSF_pred <- function (landscape.covs,     # raster
   # calculate RSS for correction factor
   pred.mean.rss <- pred.mean.crop / mean(values(pred.mean.crop))
   
+  # convert to correction factor
+  pred.mean.cf <- 1 / pred.mean.rss
+  
   # bootstrap for SE raster
-  pred.boot <- matrix(data = NA, nrow = nrow(values(pred.mean.rss)), ncol = 100)
+  pred.boot <- matrix(data = NA, nrow = nrow(values(pred.mean.cf)), ncol = 100)
   
   for (i in 1:100) {
     
@@ -217,8 +220,11 @@ SSF_pred <- function (landscape.covs,     # raster
     # calculate RSS for correction factor
     pred.sample.rss <- pred.sample.crop / mean(values(pred.sample.crop))
     
+    # convert to correction factor
+    pred.sample.cf <- 1 / pred.sample.rss
+    
     # extract values and bind into matrix
-    pred.values <- values(pred.sample.rss)
+    pred.values <- values(pred.sample.cf)
     
     # bind into matrix
     pred.boot[ , i] <- pred.values
@@ -226,10 +232,10 @@ SSF_pred <- function (landscape.covs,     # raster
   }
   
   # add rowwise SDs to a new raster
-  se.rast <- rast(pred.mean.rss, vals = rowSds(pred.boot))
+  se.rast <- rast(pred.mean.cf, vals = rowSds(pred.boot))
   
   # bind together
-  pred.all <- c(pred.mean.rss, se.rast)
+  pred.all <- c(pred.mean.cf, se.rast)
   names(pred.all) <- c("mean", "se")
   
   # return predictive raster
