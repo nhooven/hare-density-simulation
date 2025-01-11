@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 08 Jan 2025
+# Date last modified: 10 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -138,49 +138,54 @@ landscape.covs.C2H.1 <- define_stage(landscape.covs.C2H)
 landscape.covs.C3H.1 <- define_stage(landscape.covs.C3H)
 
 #_______________________________________________________________________
-# 3d. Home range centroid and start step ----
+# 3d. Calculate home ranging parameters ----
 #_______________________________________________________________________
 
-# here we'll ensure that the HRC is within the unit (true target of density estimation)
-# while the start step is nearby
+# determine a reasonable bivariate normal size
+# we'll need to come up with a variance, simulate draws, and examine an
+# outer quantile (e.g., 95%)
 
-make_hrc <- function() {
-  
-  hrc.x <- runif(n = 1,
-                 min = unit.bbox[1],
-                 max = unit.bbox[3])
-  
-  hrc.y <- runif(n = 1,
-                 min = unit.bbox[2],
-                 max = unit.bbox[4])
-  
-  # concatenate
-  hrc <- c(hrc.x, hrc.y)
-  
-  # return
-  return(hrc)
-  
-}
+# load package
+library(MASS)
 
-#_______________________________________________________________________
-# 3e. Calculate home ranging parameters ----
+# define means
+bvn.mean <- c(ext(landscape.covs.C1H.1)[2] / 2, ext(landscape.covs.C1H.1)[2] / 2)
 
-# we'll use 20k instead of 5k for variance here just to keep
-# simulated individuals somewhat near
+# variance-covariance matrix (assume they don't covary at all)
+bvn.vcov <- matrix(c(300000, 0, 
+                     0, 300000),
+                   ncol = 2)
 
-#_______________________________________________________________________
+# sample
+bvn.samples <- as.data.frame(mvrnorm(n = 10000,
+                                     bvn.mean,
+                                     bvn.vcov))
 
-hr_params <- function(e.var = 20000,         # expected variance of the bivariate normal
-                      e.var.sd = 100,        # sd of the draws for the bivariate normal variance
+names(bvn.samples) <- c("x", "y")
+
+# plot
+ggplot() +
+  
+  geom_sf(data = st_as_sf(bvn.samples, 
+                   coords = c("x", "y"),
+                   crs = "epsg:32611"),
+          alpha = 0.15) +
+  
+  geom_sf(data = unit.buff,
+          fill = NA) +
+  
+  geom_sf(data = unit.bound) +
+  
+  coord_sf(datum = st_crs(32611))
+
+# define function
+hr_params <- function(e.var = 300000,        # variance of the bivariate normal
                       hrc = hrc)             # home range centroid as previously drawn
   
 {
   
-  # variance
-  var.focal <- rnorm(n = 1, mean = e.var, sd = e.var.sd)
-  
   # x2 + y2 coefficient
-  b.x2y2 <- -1 / var.focal
+  b.x2y2 <- -1 / e.var
   
   # solve for x and y coefficients
   b.x <- hrc[1] * 2 * -b.x2y2 
@@ -203,18 +208,18 @@ rk.control <- 10000
 rk.tolerance <- 0.10    # 10%
 
 #_______________________________________________________________________
-# 4. Run transient utilization distribution (TUD) simulations ----
+# 4. Run steady-state utilization distribution (SSUD) simulations ----
 #_______________________________________________________________________
 # 4a. Define function ----
 #_______________________________________________________________________
 
-sim_issf_tud <- function (landscape.covs,
-                          sl.dist, 
-                          id.landscape,
-                          id.variability,
-                          id.rep,
-                          n.reps = 5000,
-                          n.steps = 60) {
+sim_issf_ssud <- function (landscape.covs,
+                           sl.dist, 
+                           id.landscape,
+                           id.variability,
+                           id.rep,
+                           n.reps = 1,
+                           n.steps = 20000) {
   
   # extract fit parameters
   focal.params <- model.params %>%
@@ -232,42 +237,29 @@ sim_issf_tud <- function (landscape.covs,
   # loop through n.reps
   for (i in 1:n.reps) {
     
-    # draw random coefficients
-    indiv.stem.s <- rnorm(n = 1, 
-                          mean = focal.params$estimate[focal.params$term == "stem.s"],
-                          sd = focal.params$estimate[focal.params$term == "sd__stem.s"])
-    
-    indiv.edge.s <- rnorm(n = 1, 
-                          mean = focal.params$estimate[focal.params$term == "edge.s"],
-                          sd = focal.params$estimate[focal.params$term == "sd__edge.s"])
-    
-    indiv.mature <- rnorm(n = 1, 
-                          mean = focal.params$estimate[focal.params$term == "mature"],
-                          sd = focal.params$estimate[focal.params$term == "sd__mature"])
+    # home range center (centroid)
+    hrc <- c(ext(landscape.covs.C1H.1)[2] / 2, ext(landscape.covs.C1H.1)[2] / 2)
     
     # define start step
-    
-    # define hrc
-    hrc <- make_hrc()
-    
-    # define start step
-    start.step <- make_start(x = c(hrc[1] + rnorm(n = 1, mean = 0, sd = 50),
-                                   hrc[2] + rnorm(n = 1, mean = 0, sd = 50)),
+    start.step <- make_start(x = c(hrc[1],
+                                   hrc[2]),
                              ta_ = 0,
                              time = ymd_hm("2024-09-01 18:00", 
                                            tz = "America/Los_Angeles"),
                              dt = hours(2),
                              crs = crs("EPSG:32611"))
     
-    # calculate home ranging parameters
+    # calculate home ranging parameters and unname
     hr.params <- hr_params(hrc = hrc)
+    
+    hr.params <- unname(hr.params)
                              
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
-    issf.model <- make_issf_model(coefs = c("stem_end" = indiv.stem.s,  
+    issf.model <- make_issf_model(coefs = c("stem_end" = focal.params$estimate[focal.params$term == "stem.s"],  
                                             "stem_end:log(sl_)" = focal.params$estimate[focal.params$term == "stem.s:log(sl_)"],
-                                            "edge_end" = indiv.edge.s,
-                                            "mature_start" = indiv.mature,
+                                            "edge_end" = focal.params$estimate[focal.params$term == "edge.s"],
+                                            "mature_start" = focal.params$estimate[focal.params$term == "mature"],
                                             "log(sl_):mature_start" = focal.params$estimate[focal.params$term == "mature:log(sl_)"],
                                             "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"],
                                             x2_ = hr.params[1],
@@ -296,28 +288,18 @@ sim_issf_tud <- function (landscape.covs,
       mutate(landscape = id.landscape,
              variability = id.variability,
              rep = id.rep,
-             sim.rep = i) %>%
-      
-      # keep only the start and endpoints
-      slice(c(1, n())) %>%
-      
-      # add which point ID
-      mutate(which.point = c("start", "end"))
+             sim.rep = i)
     
     # bind to df
     sims.df <- rbind(sims.df, sim.path.1)
     
-    # status message (every 50 replicates)
-    if (i %% 50 == 0) {
+    # status message
+    elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                              start.time, 
+                                              units = "mins")), 
+                          digits = 1)
       
-      elapsed.time <- round(as.numeric(difftime(Sys.time(), 
-                                                start.time, 
-                                                units = "mins")), 
-                            digits = 1)
-      
-      print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
-      
-    }
+    print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
   
 }
 
@@ -330,19 +312,19 @@ sim_issf_tud <- function (landscape.covs,
 # 4b. Run simulations ----
 #_______________________________________________________________________
 
-sims.S1L <- sim_issf_tud(landscape.covs.S1L.1, sl.dist.S1L, "simple", "low", 1)
-sims.S2L <- sim_issf_tud(landscape.covs.S2L.1, sl.dist.S2L, "simple", "low", 2)
-sims.S3L <- sim_issf_tud(landscape.covs.S3L.1, sl.dist.S3L, "simple", "low", 3)
-sims.S1H <- sim_issf_tud(landscape.covs.S1H.1, sl.dist.S1H, "simple", "high", 1)
-sims.S2H <- sim_issf_tud(landscape.covs.S2H.1, sl.dist.S2H, "simple", "high", 2)
-sims.S3H <- sim_issf_tud(landscape.covs.S3H.1, sl.dist.S3H, "simple", "high", 3)
+sims.S1L <- sim_issf_ssud(landscape.covs.S1L.1, sl.dist.S1L, "simple", "low", 1)
+sims.S2L <- sim_issf_ssud(landscape.covs.S2L.1, sl.dist.S2L, "simple", "low", 2)
+sims.S3L <- sim_issf_ssud(landscape.covs.S3L.1, sl.dist.S3L, "simple", "low", 3)
+sims.S1H <- sim_issf_ssud(landscape.covs.S1H.1, sl.dist.S1H, "simple", "high", 1)
+sims.S2H <- sim_issf_ssud(landscape.covs.S2H.1, sl.dist.S2H, "simple", "high", 2)
+sims.S3H <- sim_issf_ssud(landscape.covs.S3H.1, sl.dist.S3H, "simple", "high", 3)
 
-sims.C1L <- sim_issf_tud(landscape.covs.C1L.1, sl.dist.C1L, "complex", "low", 1)
-sims.C2L <- sim_issf_tud(landscape.covs.C2L.1, sl.dist.C2L, "complex", "low", 2)
-sims.C3L <- sim_issf_tud(landscape.covs.C3L.1, sl.dist.C3L, "complex", "low", 3)
-sims.C1H <- sim_issf_tud(landscape.covs.C1H.1, sl.dist.C1H, "complex", "high", 1)
-sims.C2H <- sim_issf_tud(landscape.covs.C2H.1, sl.dist.C2H, "complex", "high", 2)
-sims.C3H <- sim_issf_tud(landscape.covs.C3H.1, sl.dist.C3H, "complex", "high", 3)
+sims.C1L <- sim_issf_ssud(landscape.covs.C1L.1, sl.dist.C1L, "complex", "low", 1)
+sims.C2L <- sim_issf_ssud(landscape.covs.C2L.1, sl.dist.C2L, "complex", "low", 2)
+sims.C3L <- sim_issf_ssud(landscape.covs.C3L.1, sl.dist.C3L, "complex", "low", 3)
+sims.C1H <- sim_issf_ssud(landscape.covs.C1H.1, sl.dist.C1H, "complex", "high", 1)
+sims.C2H <- sim_issf_ssud(landscape.covs.C2H.1, sl.dist.C2H, "complex", "high", 2)
+sims.C3H <- sim_issf_ssud(landscape.covs.C3H.1, sl.dist.C3H, "complex", "high", 3)
 
 #_______________________________________________________________________
 # 6. Plot points ----
@@ -350,7 +332,7 @@ sims.C3H <- sim_issf_tud(landscape.covs.C3H.1, sl.dist.C3H, "complex", "high", 3
 # 6a. Convert to sf ----
 #_______________________________________________________________________
 
-sims.S1L.sf <- st_as_sf(sims.S1L %>% filter(which.point == "end"),
+sims.S1L.sf <- st_as_sf(sims.S1L,
                         coords = c("x_", 
                                    "y_"),
                         crs = "epsg:32611") 
@@ -419,13 +401,18 @@ ggplot() +
   
   theme_bw() +
   
-  # unit boundary as a black square
-  geom_sf(data = unit.bound,
-          fill = NA) +
+  geom_sf(data = unit.buff) +
   
   # points
-  geom_sf(data = sims.C1H.sf,
-            alpha = 0.15) +
+  geom_sf(data = sims.S1L.sf,
+            alpha = 0.15,
+          size = 0.50) +
+  
+  # unit boundary as a black square
+  geom_sf(data = unit.bound,
+          fill = NA,
+          color = "yellow",
+          linewidth = 1.25) +
   
   # remove legend
   theme(legend.position = "none") +
