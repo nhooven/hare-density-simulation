@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 20 Dec 2024
+# Date last modified: 30 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,16 +15,7 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 
 #_______________________________________________________________________
-# 2. Read in passes data ----
-#_______________________________________________________________________
-
-passes.simple.low <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_simple_low.csv"))
-passes.complex.low <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_complex_low.csv"))
-passes.simple.high <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_simple_high.csv"))
-passes.complex.high <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_complex_high.csv"))
-
-#_______________________________________________________________________
-# 3. Sample individuals from each scenario without replacement ----
+# 2. Sample individuals from each scenario without replacement ----
 #_______________________________________________________________________
 
 # how are abundances set up?
