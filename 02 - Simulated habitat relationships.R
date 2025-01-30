@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 02 Dec 2024
-# Date last modified: 18 Dec 2024
+# Date last modified: 30 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -56,11 +56,11 @@ lsl.hig <- log(qgamma(p = 0.975, shape = sl.dist$params$shape, scale = sl.dist$p
 
 # importantly, these are *standardized* coefficients
 
-coef.stem <- 1.0          # selection for stem density
-coef.stem.sl <- -0.3      # higher selection with shorter sl       
-coef.edge <- -0.5         # avoidance of edge distance
-coef.mature <- -1.5       # base avoidance of mature (start of step)
-coef.mature.sl <- 0.5     # interaction with log(sl) (longer movements when starting in mature)
+coef.forage <- 1.5          # selection for forage
+coef.forage.sl <- -0.3      # shorter sl with higher forage       
+coef.edge <- -0.5           # avoidance of edge distance
+coef.open <- -1.5           # base avoidance of open (start of step)
+coef.open.sl <- 0.5         # interaction with log(sl) (longer movements when starting in open)
 
 #_______________________________________________________________________
 # 5. Random slope standard deviations  ----
@@ -77,20 +77,20 @@ sd.high <- 0.75
 #_______________________________________________________________________
 
 # selection for stem
-iv.stem <- data.frame(coef = "stem",
-                      estimate = coef.stem,
-                      q.low.l = qnorm(p = 0.025, mean = coef.stem, sd = sd.low),
-                      q.low.u = qnorm(p = 0.975, mean = coef.stem, sd = sd.low),
-                      q.high.l = qnorm(p = 0.025, mean = coef.stem, sd = sd.high),
-                      q.high.u = qnorm(p = 0.975, mean = coef.stem, sd = sd.high))
+iv.forage <- data.frame(coef = "forage",
+                        estimate = coef.forage,
+                        q.low.l = qnorm(p = 0.025, mean = coef.forage, sd = sd.low),
+                        q.low.u = qnorm(p = 0.975, mean = coef.forage, sd = sd.low),
+                        q.high.l = qnorm(p = 0.025, mean = coef.forage, sd = sd.high),
+                        q.high.u = qnorm(p = 0.975, mean = coef.forage, sd = sd.high))
 
 # stem step length interaction
-iv.stem.sl <- data.frame(coef = "stem:log(sl)",
-                         estimate = coef.stem.sl,
-                         q.low.l = NA,
-                         q.low.u = NA,
-                         q.high.l = NA,
-                         q.high.u = NA)
+iv.forage.sl <- data.frame(coef = "forage:log(sl)",
+                           estimate = coef.forage.sl,
+                           q.low.l = NA,
+                           q.low.u = NA,
+                           q.high.l = NA,
+                           q.high.u = NA)
 
 # avoidance of edge
 iv.edge <- data.frame(coef = "edge",
@@ -100,28 +100,28 @@ iv.edge <- data.frame(coef = "edge",
                       q.high.l = qnorm(p = 0.025, mean = coef.edge, sd = sd.high),
                       q.high.u = qnorm(p = 0.975, mean = coef.edge, sd = sd.high))
 
-# base avoidance of mature
-iv.mature <- data.frame(coef = "mature",
-                        estimate = coef.mature,
-                        q.low.l = qnorm(p = 0.025, mean = coef.mature, sd = sd.low),
-                        q.low.u = qnorm(p = 0.975, mean = coef.mature, sd = sd.low),
-                        q.high.l = qnorm(p = 0.025, mean = coef.mature, sd = sd.high),
-                        q.high.u = qnorm(p = 0.975, mean = coef.mature, sd = sd.high))
+# base avoidance of open"
+iv.open <- data.frame(coef = "open",
+                      estimate = coef.open,
+                      q.low.l = qnorm(p = 0.025, mean = coef.open, sd = sd.low),
+                      q.low.u = qnorm(p = 0.975, mean = coef.open, sd = sd.low),
+                      q.high.l = qnorm(p = 0.025, mean = coef.open, sd = sd.high),
+                      q.high.u = qnorm(p = 0.975, mean = coef.open, sd = sd.high))
 
-# greater steps starting in mature
-iv.mature.sl <- data.frame(coef = "mature:log(sl)",
-                           estimate = coef.mature.sl,
-                           q.low.l = NA,
-                           q.low.u = NA,
-                           q.high.l = NA,
-                           q.high.u = NA)
+# greater steps starting in open
+iv.open.sl <- data.frame(coef = "open:log(sl)",
+                         estimate = coef.open.sl,
+                         q.low.l = NA,
+                         q.low.u = NA,
+                         q.high.l = NA,
+                         q.high.u = NA)
 
 # bind together
-iv.all <- rbind(iv.stem, iv.stem.sl, iv.edge, iv.mature, iv.mature.sl)
+iv.all <- rbind(iv.forage, iv.forage.sl, iv.edge, iv.open, iv.open.sl)
 
 # reorder factor levels
 iv.all$coef <- factor(iv.all$coef,
-                      levels = rev(c("stem", "stem:log(sl)", "edge", "mature", "mature:log(sl)")))
+                      levels = rev(c("forage", "forage:log(sl)", "edge", "open", "open:log(sl)")))
 
 #_______________________________________________________________________
 # 5b. Plot ----
@@ -167,11 +167,15 @@ ggplot(data = iv.all,
 
 #_______________________________________________________________________
 # 6. Density plots ----
+
+# unusued for now - in the future it might be nice to show implied relationships
+# and density plots for the step length adjustments
+
 #_______________________________________________________________________
 # 6a. Stem ----
 #_______________________________________________________________________
 
-ggplot(iv.stem,
+ggplot(iv.forage,
        aes(x = x,
            y = d)) +
   
@@ -180,7 +184,7 @@ ggplot(iv.stem,
   geom_vline(xintercept = 0,
              linetype = "dashed") +
   
-  geom_vline(xintercept = coef.stem) +
+  geom_vline(xintercept = coef.forage) +
   
   geom_line(color = "darkblue",
             linewidth = 1.5) +
@@ -333,54 +337,3 @@ ggplot(data = mature.response) +
   xlab("Step length") +
   ylab("log-RSS")
 
-#_______________________________________________________________________
-# 8. Movement-free habitat kernel predictions ----
-#_______________________________________________________________________
-# 8a. Simple ----
-#_______________________________________________________________________
-
-# low
-pred.simple.low <- simple$stem * coef.stem + simple$stem * lsl.low * coef.stem.sl +
-                   simple$edge * coef.edge +
-                   simple$mature * coef.mature + coef.mature.sl * lsl.low 
-
-plot(pred.simple.low)
-
-# med
-pred.simple.med <- simple$stem * coef.stem + simple$stem * lsl.med * coef.stem.sl +
-                   simple$edge * coef.edge +
-                   simple$mature * coef.mature + coef.mature.sl * lsl.med
-
-plot(pred.simple.med)
-
-# hig
-pred.simple.hig <- simple$stem * coef.stem + simple$stem * lsl.hig * coef.stem.sl +
-                   simple$edge * coef.edge +
-                   simple$mature * coef.mature + coef.mature.sl * lsl.hig
-
-plot(pred.simple.hig)
-
-#_______________________________________________________________________
-# 8b. Complex ----
-#_______________________________________________________________________
-
-# low
-pred.complex.low <- complex$stem * coef.stem + complex$stem * lsl.low * coef.stem.sl +
-                    complex$edge * coef.edge +
-                    complex$mature * coef.mature + coef.mature.sl * lsl.low 
-
-plot(pred.complex.low)
-
-# med
-pred.complex.med <- complex$stem * coef.stem + complex$stem * lsl.med * coef.stem.sl +
-                    complex$edge * coef.edge +
-                    complex$mature * coef.mature + coef.mature.sl * lsl.med
-
-plot(pred.complex.med)
-
-# hig
-pred.complex.hig <- complex$stem * coef.stem + complex$stem * lsl.hig * coef.stem.sl +
-                    complex$edge * coef.edge +
-                    complex$mature * coef.mature + coef.mature.sl * lsl.hig
-
-plot(pred.complex.hig)
