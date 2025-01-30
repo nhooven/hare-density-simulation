@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 03a - Movement simulations (simple - low)
+# Script: 03a - Movement simulations (simple)
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 19 Dec 2024
+# Date last modified: 30 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -28,18 +28,21 @@ landscape.covs.3 <- rast("Rasters/S3.tif")
 
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
 
-# scale raster
-landscape.covs.s <- c(scale(landscape.covs.3$stem),
-                      scale(landscape.covs.3$edge),
-                      landscape.covs.3$mature)
+# scale rasters
+landscape.covs.s <- list(c(scale(landscape.covs.1$forage),
+                           scale(landscape.covs.1$edge),
+                           landscape.covs.1$open),
+                         c(scale(landscape.covs.2$forage),
+                           scale(landscape.covs.2$edge),
+                           landscape.covs.2$open),
+                         c(scale(landscape.covs.3$forage),
+                           scale(landscape.covs.3$edge),
+                           landscape.covs.3$open))
 
 #_______________________________________________________________________
 # 3. Define simulation parameters ----
 #_______________________________________________________________________
 # 3a. Movement parameter distributions ----
-
-# here we'll just approximate hare movement from preliminary data
-
 #_______________________________________________________________________
 
 # step lengths (gamma)
@@ -57,14 +60,14 @@ ta.dist <- make_unif_distr(min = -pi,
 #_______________________________________________________________________
 
 # mean coefficients
-coef.stem <- 1.0          # selection for stem density
-coef.stem.sl <- -0.3      # higher selection with shorter sl       
-coef.edge <- -0.5         # avoidance of edge distance
-coef.mature <- -1.5       # base avoidance of mature (start of step)
-coef.mature.sl <- 0.5     # interaction with log(sl) (longer movements when starting in mature)
+coef.forage <- 1.5          # selection for forage
+coef.forage.sl <- -0.3      # shorter sl with higher forage       
+coef.edge <- -0.5           # avoidance of edge distance
+coef.open <- -1.5           # base avoidance of open (start of step)
+coef.open.sl <- 0.5         # interaction with log(sl) (longer movements when starting in open)
 
 id.landscape <- "simple"
-id.variability <- "low"
+id.variability <- "high"
 id.rep <- 3
 
 #_______________________________________________________________________
@@ -79,12 +82,9 @@ unit.bbox <- st_bbox(unit.bound)
 
 # we'll take a random draw from both distributions as each path is initialized
 
-# home range size variance
+# bivariate normal variance
 # during initial runs it appears that 5,000 gives reasonable HRs (~ 2 ha)
 e.var <- 5000
-e.var.sd <- 100
-
-# we'll draw this value from a normal distribution with mean = 5000 and sd = 100
 
 # the Bx and By coefficients are then calculated from the "home range" centroid and the variance
 
@@ -93,7 +93,7 @@ e.var.sd <- 100
 #_______________________________________________________________________
 
 # control steps
-rk.control <- 10000
+rk.control <- 100
 
 # tolerance outside the landscape (hopefully we won't have to deal with this much)
 rk.tolerance <- 0.01    # 1%
@@ -130,16 +130,12 @@ make_hrc <- function() {
 #_______________________________________________________________________
 
 hr_params <- function(e.var = e.var,          # expected variance of the bivariate normal
-                      e.var.sd = e.var.sd,    # sd of the draws for the bivariate normal variance
                       hrc = hrc)              # home range centroid as previously drawn
   
   {
   
-  # variance
-  var.focal <- rnorm(n = 1, mean = e.var, sd = e.var.sd)
-  
   # x2 + y2 coefficient
-  b.x2y2 <- -1 / var.focal
+  b.x2y2 <- -1 / e.var
   
   # solve for x and y coefficients
   b.x <- hrc[1] * 2 * -b.x2y2 
@@ -157,8 +153,8 @@ hr_params <- function(e.var = e.var,          # expected variance of the bivaria
 # n of replicates
 n.reps <- 100
 
-# calculate approximate time in hours (assuming 336 locations)
-(12 * n.reps) / (60 * 60)
+# each one takes about 3 seconds
+(3 * 100) / 60      # 5 minutes??
 
 #_______________________________________________________________________
 # 5a. Create dfs to hold all sims ----
@@ -190,7 +186,6 @@ for (i in 1:n.reps) {
   
   # calculate home ranging parameters
   hr.params <- hr_params(e.var = e.var,
-                         e.var.sd = e.var.sd,
                          hrc = hrc)
   
   # make iSSF model
@@ -199,16 +194,16 @@ for (i in 1:n.reps) {
                     0.10,
                     0.75)
   
-  coef.draws <- data.frame(coef.stem.1 = rnorm(1, coef.stem, coef.sd),
+  coef.draws <- data.frame(coef.forage.1 = rnorm(1, coef.forage, coef.sd),
                            coef.edge.1 = rnorm(1, coef.edge, coef.sd),
-                           coef.mature.1 = rnorm(1, coef.mature, coef.sd))
+                           coef.open.1 = rnorm(1, coef.open, coef.sd))
   
   # here the terms are important to get right so redistribution_kernel() works okay
-  issf.model <- make_issf_model(coefs = c("stem_end" = coef.draws$coef.stem.1[1],  
-                                          "stem_end:log(sl_)" = coef.stem.sl,
+  issf.model <- make_issf_model(coefs = c("forage_end" = coef.draws$coef.forage.1[1],  
+                                          "forage_end:log(sl_)" = coef.forage.sl,
                                           "edge_end" = coef.draws$coef.edge.1[1],
-                                          "mature_start" = coef.draws$coef.mature.1[1],
-                                          "log(sl_):mature_start" = coef.mature.sl,
+                                          "open_start" = coef.draws$coef.open.1[1],
+                                          "log(sl_):open_start" = coef.open.sl,
                                           x2_ = hr.params[1],
                                           y2_ = hr.params[2], 
                                           "I(x2_^2 + y2_^2)" = hr.params[3]),              
@@ -218,7 +213,7 @@ for (i in 1:n.reps) {
   # initialize redistribution kernel
   rk <- redistribution_kernel(x = issf.model,
                               start = start.step,
-                              map = landscape.covs.s,
+                              map = landscape.covs.s[[id.rep]],     # use correct landscape here
                               n.control = rk.control,   
                               max.dist = get_max_dist(issf.model),
                               tolerance.outside = rk.tolerance)
@@ -242,13 +237,17 @@ for (i in 1:n.reps) {
   
   all.coef.draws <- rbind(all.coef.draws, coef.draws)
   
-  # status message
+  # status message (every 10 iterations)
+  if (i %% 10 == 0) {
+  
   elapsed.time <- round(as.numeric(difftime(Sys.time(), 
                                             start.time, 
                                             units = "mins")), 
                         digits = 1)
   
   print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
+  
+  }
   
 }
 
@@ -287,5 +286,5 @@ ggplot() +
 # 7. Write to .csvs ----
 #_______________________________________________________________________
 
-write.csv(sims.df, paste0(getwd(), "/Derived_data/Simulated data/sims_31L.csv"))
-write.csv(all.coef.draws, paste0(getwd(), "/Derived_data/Simulated data/coefs_S3L.csv"))
+write.csv(sims.df, paste0(getwd(), "/Derived_data/Simulated data/sims_S3H.csv"))
+write.csv(all.coef.draws, paste0(getwd(), "/Derived_data/Simulated data/coefs_S3H.csv"))
