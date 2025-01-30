@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 20 Dec 2024
+# Date last modified: 30 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -159,13 +159,72 @@ passes.gp.9 <- group_passes(passes.extracted.9, 9)
 passes.gp.16 <- group_passes(passes.extracted.16, 16)
 
 #_______________________________________________________________________
-# 5. Bind together ----
+# 5. Look at NAs in the 4 cam set ----
+#_______________________________________________________________________
+
+passes.na <- passes.gp.4 %>% 
+  
+  filter(n.indiv == 2 &
+         landscape == "complex" & 
+         variability == "high") %>%
+  
+  group_by(rep) %>%
+  
+  summarize(n())
+
+# looks like these are all from:
+# nindiv = 2
+# landscape = "complex"
+# variability = "high"
+# rep = 2
+
+# guessing that none of these cameras got any detections
+# let's add this so we don't have any issues later
+
+passes.gp.4 <- passes.gp.4 %>%
+  
+  drop_na() %>%
+  
+  add_row(cam.id = 1,
+          total.passes = 0,
+          n.indiv = 2,
+          landscape = "complex",
+          variability = "high",
+          rep = 2,
+          cams = 4) %>%
+  
+  add_row(cam.id = 2,
+          total.passes = 0,
+          n.indiv = 2,
+          landscape = "complex",
+          variability = "high",
+          rep = 2,
+          cams = 4) %>%
+  
+  add_row(cam.id = 3,
+          total.passes = 0,
+          n.indiv = 2,
+          landscape = "complex",
+          variability = "high",
+          rep = 2,
+          cams = 4) %>%
+  
+  add_row(cam.id = 4,
+          total.passes = 0,
+          n.indiv = 2,
+          landscape = "complex",
+          variability = "high",
+          rep = 2,
+          cams = 4)
+
+#_______________________________________________________________________
+# 6. Bind together ----
 #_______________________________________________________________________
 
 passes.gp.all <- rbind(passes.gp.4, passes.gp.9, passes.gp.16)
 
 #_______________________________________________________________________
-# 6. Plot (sanity check) ----
+# 7. Plot Passes by n.indiv ----
 #_______________________________________________________________________
 
 ggplot(passes.gp.all) +
