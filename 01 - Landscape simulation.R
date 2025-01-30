@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 15 Nov 2024
-# Date last modified: 18 Dec 2024
+# Date last modified: 30 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,6 +15,7 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 library(terra)           # work with rasters
 library(NLMR)            # simulate landscapes
+library(spatialEco)      # Gaussian blur
 library(landscapetools)  # work with simulated landscapes
 library(sf)              # bounding polygons
 library(tidyterra)       # plot in ggplot
@@ -28,7 +29,7 @@ library(cowplot)         # multiple plots
 # don't tend to move outside
 
 # how many hectares?
-hectares <- 1000
+hectares <- 100
 
 # square meters
 n.sqm <- hectares * 10000
@@ -41,33 +42,49 @@ columns <- as.integer(ceiling(sqrt(n.sqm / resol)))
 rows <- as.integer(ceiling(sqrt(n.sqm / resol)))
 
 #_______________________________________________________________________
-# 3. Covariate 1 - "stem density" ----
+# 3. Covariate 1 - "forage" ----
 
 # strong selection
-# decreased speed with higher stem
-# we'll use the planar gradient function here, with a random orientation
+# decreased speed with higher forage ("foraging behavior")
+# we'll use the Gaussian random field function here
 
 #_______________________________________________________________________
 # 3a. Simple landscape ----
+
+# low autocorrelation in this continuous variable
+
+# parameters
+# autocorrelation range: maximum range of spatial autocorrelation
+S.cov1.autocorr <- 1
+
+# magnitude of variation
+S.cov1.magvar <- 0.5
+
 #_______________________________________________________________________
 
 # S1
-set.seed(74)
-S1.cov1 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
+set.seed(24)
+S1.cov1 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = S.cov1.autocorr,
+                             mag_var = S.cov1.magvar)
 
 # S2
 set.seed(539)
-S2.cov1 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
+S2.cov1 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = S.cov1.autocorr,
+                             mag_var = S.cov1.magvar)
 
 # S3
 set.seed(1010)
-S3.cov1 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
+S3.cov1 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = S.cov1.autocorr,
+                             mag_var = S.cov1.magvar)
 
 # bind together
 S.cov1 <- c(rast(S1.cov1), rast(S2.cov1), rast(S3.cov1))
@@ -81,28 +98,41 @@ plot(S.cov1)
 
 #_______________________________________________________________________
 # 3b. Complex landscape ----
+
+# high autocorrelation in this continuous variable
+
+# parameters
+# autocorrelation range: maximum range of spatial autocorrelation
+C.cov1.autocorr <- 50
+
+# magnitude of variation
+C.cov1.magvar <- 2
+
 #_______________________________________________________________________
 
 # C1
-set.seed(841)
-C1.cov1 <- nlm_mpd(ncol = columns + 2,  # mpd will force these to be odd
-                   nrow = rows + 2, 
-                   resolution = resol, 
-                   roughness = 0.7)
+set.seed(89)
+C1.cov1 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = C.cov1.autocorr,
+                             mag_var = C.cov1.magvar)
 
 # C2
-set.seed(45)
-C2.cov1 <- nlm_mpd(ncol = columns + 2,  # mpd will force these to be odd
-                   nrow = rows + 2, 
-                   resolution = resol, 
-                   roughness = 0.7)
+set.seed(923)
+C2.cov1 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = C.cov1.autocorr,
+                             mag_var = C.cov1.magvar)
 
 # C3
-set.seed(989)
-C3.cov1 <- nlm_mpd(ncol = columns + 2,  # mpd will force these to be odd
-                   nrow = rows + 2, 
-                   resolution = resol, 
-                   roughness = 0.7)
+set.seed(12)
+C3.cov1 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = C.cov1.autocorr,
+                             mag_var = C.cov1.magvar)
 
 # bind together
 C.cov1 <- c(rast(C1.cov1), rast(C2.cov1), rast(C3.cov1))
@@ -180,10 +210,13 @@ cov2 <- cov2 / max(values(cov2))
 # att UTM crs
 crs(cov2) <- crs("EPSG:32611")
 
-#_______________________________________________________________________
-# 5. Covariate 3 - "mature forest" ----
+# plot
+plot(cov2)
 
-# weak base avoidance
+#_______________________________________________________________________
+# 5. Covariate 3 - "cover type" ----
+
+# weak base avoidance of cover type 1 (maybe we can think of it as open cover)
 # longer steps that start in it
 
 # to do this, we'll classify a midpoint landscape
@@ -216,11 +249,14 @@ create_discrete_ls <- function (seed = runif(1, 1, 1000),
 
 #_______________________________________________________________________
 # 5a. Simple landscape ----
+
+# low "roughness" = 0.5
+
 #_______________________________________________________________________
 
 # run function 
-S1.cov3 <- create_discrete_ls(455, 0.5)
-S2.cov3 <- create_discrete_ls(1889, 0.5)
+S1.cov3 <- create_discrete_ls(721, 0.5)
+S2.cov3 <- create_discrete_ls(1222, 0.5)
 S3.cov3 <- create_discrete_ls(101, 0.5)
 
 # bind together
@@ -230,13 +266,16 @@ names(S.cov3) <- c("S1", "S2", "S3")
 crs(S.cov3) <- crs("EPSG:32611")
 
 #_______________________________________________________________________
-# 5b. Complex landscape
+# 5b. Complex landscape ----
+
+# high "roughness" = 0.9
+
 #_______________________________________________________________________
 
 # run function 
-C1.cov3 <- create_discrete_ls(1603, 0.9)
+C1.cov3 <- create_discrete_ls(1253, 0.9)
 C2.cov3 <- create_discrete_ls(78, 0.9)
-C3.cov3 <- create_discrete_ls(366, 0.9)
+C3.cov3 <- create_discrete_ls(367, 0.9)
 
 # bind together
 C.cov3 <- c(rast(C1.cov3), rast(C2.cov3), rast(C3.cov3))
@@ -256,9 +295,9 @@ S2.ls <- c(S.cov1$S2, cov2, S.cov3$S2)
 S3.ls <- c(S.cov1$S3, cov2, S.cov3$S3)
 
 # rename
-names(S1.ls) <- c("stem", "edge", "mature")
-names(S2.ls) <- c("stem", "edge", "mature")
-names(S3.ls) <- c("stem", "edge", "mature")
+names(S1.ls) <- c("forage", "edge", "open")
+names(S2.ls) <- c("forage", "edge", "open")
+names(S3.ls) <- c("forage", "edge", "open")
 
 #_______________________________________________________________________
 # 5b. Complex ----
@@ -270,9 +309,9 @@ C2.ls <- c(C.cov1$C2, cov2, C.cov3$C2)
 C3.ls <- c(C.cov1$C3, cov2, C.cov3$C3)
 
 # rename
-names(C1.ls) <- c("stem", "edge", "mature")
-names(C2.ls) <- c("stem", "edge", "mature")
-names(C3.ls) <- c("stem", "edge", "mature")
+names(C1.ls) <- c("forage", "edge", "open")
+names(C2.ls) <- c("forage", "edge", "open")
+names(C3.ls) <- c("forage", "edge", "open")
 
 #_______________________________________________________________________
 # 7. Plot ----
@@ -304,7 +343,7 @@ plot_group_rast <- function (ls) {
     theme_bw() +
     
     # add in raster
-    geom_spatraster(data = ls$stem) +
+    geom_spatraster(data = ls$forage) +
     
     # viridis colors
     scale_fill_viridis_c() +
@@ -316,7 +355,7 @@ plot_group_rast <- function (ls) {
     
     # remove axis text
     theme(axis.text = element_blank(),
-          legend.position = "none") -> stem
+          legend.position = "none") -> forage
   
   # edge
   ggplot() +
@@ -344,7 +383,7 @@ plot_group_rast <- function (ls) {
     theme_bw() +
     
     # add in raster
-    geom_spatraster(data = ls$mature) +
+    geom_spatraster(data = ls$open) +
     
     # viridis colors
     scale_fill_viridis_c() +
@@ -356,10 +395,10 @@ plot_group_rast <- function (ls) {
     
     # remove axis text
     theme(axis.text = element_blank(),
-          legend.position = "none") -> mature
+          legend.position = "none") -> open
   
   # plot together
-  focal.plot <- plot_grid(stem, edge, mature, nrow = 1)
+  focal.plot <- plot_grid(forage, edge, open, nrow = 1)
   
   # return
   return(focal.plot)
@@ -394,7 +433,7 @@ plot_grid(C1.plot, C2.plot, C3.plot, nrow = 3)
 # 8. Save and write rasters ----
 #_______________________________________________________________________
 
-save.image("Progress/rasters_12_18_2024.RData")
+save.image("Progress/rasters_01_30_2025.RData")
 
 writeRaster(S1.ls, filename = "Rasters/S1.tif", overwrite = T)
 writeRaster(S2.ls, filename = "Rasters/S2.tif", overwrite = T)
