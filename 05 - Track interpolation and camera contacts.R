@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 21 Nov 2024
 # Date completed: 26 Nov 2024
-# Date last modified: 20 Dec 2024
+# Date last modified: 30 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -218,33 +218,7 @@ passes.16 <- rbind(track_contacts("simple", "low", 1, 16),
                    track_contacts("complex", "high", 3, 16))
 
 #_______________________________________________________________________
-# 4. Example plot ----
-#_______________________________________________________________________
-
-ggplot() +
-  
-  theme_bw() +
-  
-  geom_point(data = indiv.track,
-             aes(x = x_,
-                 y = y_),
-             size = 0.5) +
-  
-  geom_sf(data = interp.lines.1,
-          alpha = 0.15) +
-  
-  geom_sf(data = vs,
-          color = "gold",
-          fill = NA) +
-  
-  geom_sf_text(data = vs,
-               aes(label = cam.id),
-               color = "gold") +
-  
-  coord_sf(datum = sf::st_crs(32611))
-
-#_______________________________________________________________________
-# 5. Write data to files ----
+# 4. Write data to files ----
 #_______________________________________________________________________
 
 # passes
