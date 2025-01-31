@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 10 Jan 2025
+# Date last modified: 31 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -17,15 +17,12 @@ library(sf)              # read in shapefiles
 library(terra)           # rasters
 library(amt)             # simulate tracks
 library(lubridate)       # work with time
-library(sp)              # spatial points
-library(raster)          # rasters
-library(adehabitatHR)    # fit kernels
 
 #_______________________________________________________________________
 # 2. Read in data ----
 #_______________________________________________________________________
 
-# SSF/iSSF coefficients
+# iSSF coefficients
 all.params <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
 
 # unit boundary
@@ -70,8 +67,6 @@ load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
 # keep only iSSF parameters
 model.params <- all.params %>% filter(type == "iSSF")
 
-model.params$term[model.params$term == "sd__mature.s"] <- "sd__mature"
-
 #_______________________________________________________________________
 # 3b. Initialization space ----
 #_______________________________________________________________________
@@ -79,107 +74,8 @@ model.params$term[model.params$term == "sd__mature.s"] <- "sd__mature"
 # extract bounding box
 unit.bbox <- st_bbox(unit.bound)
 
-# simulation "stage"
-unit.buff <- st_buffer(unit.bound, dist = 1000)
-
-plot(landscape.covs.S1L$stem)
-plot(st_geometry(unit.buff), add = T)
-plot(st_geometry(unit.bound), add = T)
-
-#_______________________________________________________________________
-# 3c. Convert everything outside the "stage" to the mean covariate value ----
-
-# we're only interested in simulated movement within a small area of the 
-# unit boundary. We want to avoid any large gradients pulling tracks away
-
-#_______________________________________________________________________
-
 # define function
-define_stage <- function (landscape.covs) {
-  
-  # initialize three rasters
-  out.stage.1 <- rast(landscape.covs$stem, vals = 0)
-  out.stage.2 <- rast(landscape.covs$edge, vals = 0)
-  out.stage.3 <- rast(landscape.covs$mature, vals = 0)
-  
-  # mask each raster
-  mask.1 <- mask(landscape.covs$stem, unit.buff)
-  mask.2 <- mask(landscape.covs$edge, unit.buff)
-  mask.3 <- mask(landscape.covs$mature, unit.buff)
-  
-  # mosaic
-  mosaic.1 <- mosaic(mask.1, out.stage.1)
-  mosaic.2 <- mosaic(mask.2, out.stage.2)
-  mosaic.3 <- mosaic(mask.3, out.stage.3)
-  
-  # ensure that what's "mature" is 1
-  mosaic.3 <- ifel(mosaic.3 == 0.5, 1, 0)
-  
-  # bind together and return
-  stage.rast <- c(mosaic.1, mosaic.2, mosaic.3)
-  
-  return(stage.rast)
-  
-}
-
-# use function
-landscape.covs.S1L.1 <- define_stage(landscape.covs.S1L)
-landscape.covs.S2L.1 <- define_stage(landscape.covs.S2L)
-landscape.covs.S3L.1 <- define_stage(landscape.covs.S3L)
-landscape.covs.S1H.1 <- define_stage(landscape.covs.S1H)
-landscape.covs.S2H.1 <- define_stage(landscape.covs.S2H)
-landscape.covs.S3H.1 <- define_stage(landscape.covs.S3H)
-
-landscape.covs.C1L.1 <- define_stage(landscape.covs.C1L)
-landscape.covs.C2L.1 <- define_stage(landscape.covs.C2L)
-landscape.covs.C3L.1 <- define_stage(landscape.covs.C3L)
-landscape.covs.C1H.1 <- define_stage(landscape.covs.C1H)
-landscape.covs.C2H.1 <- define_stage(landscape.covs.C2H)
-landscape.covs.C3H.1 <- define_stage(landscape.covs.C3H)
-
-#_______________________________________________________________________
-# 3d. Calculate home ranging parameters ----
-#_______________________________________________________________________
-
-# determine a reasonable bivariate normal size
-# we'll need to come up with a variance, simulate draws, and examine an
-# outer quantile (e.g., 95%)
-
-# load package
-library(MASS)
-
-# define means
-bvn.mean <- c(ext(landscape.covs.C1H.1)[2] / 2, ext(landscape.covs.C1H.1)[2] / 2)
-
-# variance-covariance matrix (assume they don't covary at all)
-bvn.vcov <- matrix(c(300000, 0, 
-                     0, 300000),
-                   ncol = 2)
-
-# sample
-bvn.samples <- as.data.frame(mvrnorm(n = 10000,
-                                     bvn.mean,
-                                     bvn.vcov))
-
-names(bvn.samples) <- c("x", "y")
-
-# plot
-ggplot() +
-  
-  geom_sf(data = st_as_sf(bvn.samples, 
-                   coords = c("x", "y"),
-                   crs = "epsg:32611"),
-          alpha = 0.15) +
-  
-  geom_sf(data = unit.buff,
-          fill = NA) +
-  
-  geom_sf(data = unit.bound) +
-  
-  coord_sf(datum = st_crs(32611))
-
-# define function
-hr_params <- function(e.var = 300000,        # variance of the bivariate normal
+hr_params <- function(e.var = 5000,          # variance of the bivariate normal
                       hrc = hrc)             # home range centroid as previously drawn
   
 {
@@ -198,28 +94,23 @@ hr_params <- function(e.var = 300000,        # variance of the bivariate normal
 }
 
 #_______________________________________________________________________
-# 3f. Redistribution kernel parameters ----
-#_______________________________________________________________________
+# 4. Burn-in simulations (half a "month") ----
 
-# control steps
-rk.control <- 10000
+# here we'll start 100 simulations from the landscape centroid,
+# use the point estimates from the iSSF, and extract the 
+# endpoints as starting steps for the subsequent sims
 
-# tolerance outside the landscape (hopefully we won't have to deal with this much)
-rk.tolerance <- 0.10    # 10%
-
-#_______________________________________________________________________
-# 4. Run steady-state utilization distribution (SSUD) simulations ----
 #_______________________________________________________________________
 # 4a. Define function ----
 #_______________________________________________________________________
 
-sim_issf_ssud <- function (landscape.covs,
-                           sl.dist, 
-                           id.landscape,
-                           id.variability,
-                           id.rep,
-                           n.reps = 1,
-                           n.steps = 20000) {
+tud_sim_burnin <- function (landscape.covs,
+                            sl.dist, 
+                            id.landscape,
+                            id.variability,
+                            id.rep,
+                            n.reps = 100,
+                            n.steps = 168) {
   
   # extract fit parameters
   focal.params <- model.params %>%
@@ -229,7 +120,7 @@ sim_issf_ssud <- function (landscape.covs,
            rep == id.rep)
   
   # create df to hold all sims
-  sims.df <- data.frame()
+  sim.endpoint.all <- data.frame()
   
   # run simulations
   start.time <- Sys.time()
@@ -238,7 +129,7 @@ sim_issf_ssud <- function (landscape.covs,
   for (i in 1:n.reps) {
     
     # home range center (centroid)
-    hrc <- c(ext(landscape.covs.C1H.1)[2] / 2, ext(landscape.covs.C1H.1)[2] / 2)
+    hrc <- c(ext(landscape.covs)[2] / 2, ext(landscape.covs)[2] / 2)
     
     # define start step
     start.step <- make_start(x = c(hrc[1],
@@ -253,14 +144,14 @@ sim_issf_ssud <- function (landscape.covs,
     hr.params <- hr_params(hrc = hrc)
     
     hr.params <- unname(hr.params)
-                             
+    
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
-    issf.model <- make_issf_model(coefs = c("stem_end" = focal.params$estimate[focal.params$term == "stem.s"],  
-                                            "stem_end:log(sl_)" = focal.params$estimate[focal.params$term == "stem.s:log(sl_)"],
+    issf.model <- make_issf_model(coefs = c("forage_end" = focal.params$estimate[focal.params$term == "forage.s"],  
+                                            "forage_end:log(sl_)" = focal.params$estimate[focal.params$term == "forage.s:log(sl_)"],
                                             "edge_end" = focal.params$estimate[focal.params$term == "edge.s"],
-                                            "mature_start" = focal.params$estimate[focal.params$term == "mature"],
-                                            "log(sl_):mature_start" = focal.params$estimate[focal.params$term == "mature:log(sl_)"],
+                                            "open_start" = focal.params$estimate[focal.params$term == "open"],
+                                            "log(sl_):open_start" = focal.params$estimate[focal.params$term == "open:log(sl_)"],
                                             "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"],
                                             x2_ = hr.params[1],
                                             y2_ = hr.params[2], 
@@ -272,9 +163,9 @@ sim_issf_ssud <- function (landscape.covs,
     rk <- redistribution_kernel(x = issf.model,
                                 start = start.step,
                                 map = landscape.covs,
-                                n.control = rk.control,   
+                                n.control = 100,   
                                 max.dist = get_max_dist(issf.model),
-                                tolerance.outside = rk.tolerance)
+                                tolerance.outside = 0.01)
     
     # run simulation
     sim.path <- simulate_path(rk,
@@ -282,8 +173,10 @@ sim_issf_ssud <- function (landscape.covs,
                               start = start.step,
                               verbose = TRUE)
     
-    # add identifiers
-    sim.path.1 <- sim.path %>%
+    # add identifiers and extract endpoint
+    sim.endpoint <- sim.path %>%
+      
+      slice(n()) %>%
       
       mutate(landscape = id.landscape,
              variability = id.variability,
@@ -291,40 +184,243 @@ sim_issf_ssud <- function (landscape.covs,
              sim.rep = i)
     
     # bind to df
-    sims.df <- rbind(sims.df, sim.path.1)
+    sim.endpoint.all <- rbind(sim.endpoint.all, sim.endpoint)
     
-    # status message
-    elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+    # status message (every 10 iterations)
+    if (i %% 10 == 0) {
+      
+      elapsed.time <- round(as.numeric(difftime(Sys.time(), 
                                               start.time, 
                                               units = "mins")), 
                           digits = 1)
+    
+      print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
       
-    print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
+    }
+    
+  }
   
-}
-
   # return
-  return(sims.df)
+  return(sim.endpoint.all)
   
 }
 
+test.run <- tud_sim_burnin(landscape.covs.S1L, sl.dist.S1L, "simple", "low", 1)
+
+
+test.run.sf <- st_as_sf(test.run,
+                        coords = c("x_", 
+                                   "y_"),
+                        crs = "epsg:32611")
+
+# plot
+ggplot() +
+  
+  theme_bw() +
+  
+  # points
+  geom_sf(data = test.run.sf,
+          size = 1.5) +
+  
+  # unit boundary as a black square
+  geom_sf(data = unit.bound,
+          fill = NA,
+          color = "black",
+          linewidth = 1.25) +
+  
+  # remove legend
+  theme(legend.position = "none") +
+  
+  # coordinate system to make nice axis labels
+  coord_sf(datum = st_crs(32611))
+
+# looks reasonable - we can use this procedure to generate starting locations no problem
+
 #_______________________________________________________________________
-# 4b. Run simulations ----
+# 4b. Use function ----
 #_______________________________________________________________________
 
-sims.S1L <- sim_issf_ssud(landscape.covs.S1L.1, sl.dist.S1L, "simple", "low", 1)
-sims.S2L <- sim_issf_ssud(landscape.covs.S2L.1, sl.dist.S2L, "simple", "low", 2)
-sims.S3L <- sim_issf_ssud(landscape.covs.S3L.1, sl.dist.S3L, "simple", "low", 3)
-sims.S1H <- sim_issf_ssud(landscape.covs.S1H.1, sl.dist.S1H, "simple", "high", 1)
-sims.S2H <- sim_issf_ssud(landscape.covs.S2H.1, sl.dist.S2H, "simple", "high", 2)
-sims.S3H <- sim_issf_ssud(landscape.covs.S3H.1, sl.dist.S3H, "simple", "high", 3)
+burnin.S1L <- tud_sim_burnin(landscape.covs.S1L, sl.dist.S1L, "simple", "low", 1)   # completed 01-30-2025
+burnin.S2L <- tud_sim_burnin(landscape.covs.S2L, sl.dist.S2L, "simple", "low", 2)   # completed 01-30-2025
+burnin.S3L <- tud_sim_burnin(landscape.covs.S3L, sl.dist.S3L, "simple", "low", 3)   # completed 01-30-2025
+burnin.S1H <- tud_sim_burnin(landscape.covs.S1H, sl.dist.S1H, "simple", "high", 1)  # completed 01-31-2025
+burnin.S2H <- tud_sim_burnin(landscape.covs.S2H, sl.dist.S2H, "simple", "high", 2)  # completed 01-31-2025
+burnin.S3h <- tud_sim_burnin(landscape.covs.S3H, sl.dist.S3H, "simple", "high", 3)  # completed 01-31-2025
 
-sims.C1L <- sim_issf_ssud(landscape.covs.C1L.1, sl.dist.C1L, "complex", "low", 1)
-sims.C2L <- sim_issf_ssud(landscape.covs.C2L.1, sl.dist.C2L, "complex", "low", 2)
-sims.C3L <- sim_issf_ssud(landscape.covs.C3L.1, sl.dist.C3L, "complex", "low", 3)
-sims.C1H <- sim_issf_ssud(landscape.covs.C1H.1, sl.dist.C1H, "complex", "high", 1)
-sims.C2H <- sim_issf_ssud(landscape.covs.C2H.1, sl.dist.C2H, "complex", "high", 2)
-sims.C3H <- sim_issf_ssud(landscape.covs.C3H.1, sl.dist.C3H, "complex", "high", 3)
+burnin.C1L <- tud_sim_burnin(landscape.covs.C1L, sl.dist.C1L, "complex", "low", 1)  # completed 01-31-2025
+burnin.C2L <- tud_sim_burnin(landscape.covs.C2L, sl.dist.C2L, "complex", "low", 2)  # completed 01-31-2025
+burnin.C3L <- tud_sim_burnin(landscape.covs.C3L, sl.dist.C3L, "complex", "low", 3)  # completed 01-31-2025
+burnin.C1H <- tud_sim_burnin(landscape.covs.C1H, sl.dist.C1H, "complex", "high", 1) # completed 01-31-2025
+burnin.C2H <- tud_sim_burnin(landscape.covs.C2H, sl.dist.C2H, "complex", "high", 2) # completed 01-31-2025
+burnin.C3H <- tud_sim_burnin(landscape.covs.C3H, sl.dist.C3H, "complex", "high", 3) # completed 01-31-2025
+
+#_______________________________________________________________________
+# 5. Run transient UD simulations ----
+#_______________________________________________________________________
+# 5a. Define function ----
+#_______________________________________________________________________
+
+tud_sim <- function (burnin,
+                     landscape.covs,
+                     sl.dist, 
+                     id.landscape,
+                     id.variability,
+                     id.rep,
+                     n.reps = 100,
+                     n.steps = 336) {
+  
+  # extract fit parameters
+  focal.params <- model.params %>%
+    
+    filter(landscape == id.landscape &
+             variability == id.variability,
+           rep == id.rep)
+  
+  # loop through individuals (sim.rep from burnin)
+  sim.all <- data.frame()
+  
+  start.time <- Sys.time()
+  
+  for (i in unique(burnin$sim.rep)) {
+    
+    # define focal burnin row
+    burnin.focal <- burnin[i, ]
+    
+    # draw from random slope distributions (each individual gets its own)
+    focal.params.draw <- data.frame(forage = rnorm(1,
+                                                   focal.params$estimate[focal.params$term == "forage.s"],
+                                                   focal.params$estimate[focal.params$term == "sd__forage.s"]),
+                                    edge = rnorm(1,
+                                                 focal.params$estimate[focal.params$term == "edge.s"],
+                                                 focal.params$estimate[focal.params$term == "sd__edge.s"]), 
+                                    open = rnorm(1,
+                                                 focal.params$estimate[focal.params$term == "open"],
+                                                 focal.params$estimate[focal.params$term == "sd__open"]),
+                                    log.sl = focal.params$estimate[focal.params$term == "log(sl_)"],
+                                    forage.log.sl = focal.params$estimate[focal.params$term == "forage.s:log(sl_)"],
+                                    open.log.sl = focal.params$estimate[focal.params$term == "open:log(sl_)"])
+    
+    # start step - common to all reps within this individual
+    hrc <- c(burnin.focal$x_, burnin.focal$y_)
+    
+    start.step <- make_start(x = c(hrc[1],
+                                   hrc[2]),
+                             ta_ = 0,
+                             time = ymd_hm("2024-09-01 18:00", 
+                                           tz = "America/Los_Angeles"),
+                             dt = hours(2),
+                             crs = crs("EPSG:32611"))
+    
+    # home ranging parameters
+    hr.params <- hr_params(hrc = hrc)
+    
+    hr.params <- unname(hr.params)
+    
+    # make iSSF model
+    # here the terms are important to get right so redistribution_kernel() works okay
+    issf.model <- make_issf_model(coefs = c("forage_end" = focal.params.draw$forage,  
+                                            "forage_end:log(sl_)" = focal.params.draw$forage.log.sl,
+                                            "edge_end" = focal.params.draw$edge,
+                                            "open_start" = focal.params.draw$open,
+                                            "log(sl_):open_start" = focal.params.draw$open.log.sl,
+                                            "log(sl_)" = focal.params.draw$log.sl,
+                                            x2_ = hr.params[1],
+                                            y2_ = hr.params[2], 
+                                            "I(x2_^2 + y2_^2)" = hr.params[3]),              
+                                  sl = sl.dist,
+                                  ta = ta.dist)
+    
+    # initialize redistribution kernel
+    rk <- redistribution_kernel(x = issf.model,
+                                start = start.step,
+                                map = landscape.covs,
+                                n.control = 100,   
+                                max.dist = get_max_dist(issf.model),
+                                tolerance.outside = 0.01)
+    
+    # create df to hold all sims
+    sim.indiv.all <- data.frame()
+    
+    # run simulations
+    
+    
+    # run simulations - loop through n.reps
+    for (j in 1:n.reps) {
+      
+      # run simulation
+      sim.path <- simulate_path(rk,
+                                n.steps = n.steps,
+                                start = start.step,
+                                verbose = TRUE)
+      
+      # add identifiers
+      sim.path <- sim.path %>%
+        
+        mutate(landscape = id.landscape,
+               variability = id.variability,
+               rep = id.rep,
+               indiv = i,
+               sim.rep = j)
+      
+      # bind to df
+      sim.indiv.all <- rbind(sim.indiv.all, sim.path)
+      
+    }
+    
+    # bind to df
+    sim.all <- rbind(sim.all, sim.indiv.all)
+    
+    # status message (every 10 individuals)
+    if (i %% 10 == 0) {
+      
+      elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                                start.time, 
+                                                units = "mins")), 
+                            digits = 1)
+      
+      print(paste0("Completed individual ", i, " of ", nrow(burnin), " - ", elapsed.time, " mins"))
+      
+    }
+    
+  }
+  
+  # return
+  return(sim.all)
+  
+}
+
+# 100 runs of this takes 5.3 minutes, so the full 100 x 100 would take 8.83 hours
+
+#_______________________________________________________________________
+# 5b. Run simulations ----
+#_______________________________________________________________________
+
+sims.S1L <- tud_sim(burnin.S1L, landscape.covs.S1L, sl.dist.S1L, "simple", "low", 1)
+sims.S2L <- tud_sim(burnin.S2L, landscape.covs.S2L, sl.dist.S2L, "simple", "low", 2)
+sims.S3L <- tud_sim(burnin.S3L, landscape.covs.S3L, sl.dist.S3L, "simple", "low", 3)
+sims.S1H <- tud_sim(burnin.S1H, landscape.covs.S1H, sl.dist.S1H, "simple", "high", 1)
+sims.S2H <- tud_sim(burnin.S2H, landscape.covs.S2H, sl.dist.S2H, "simple", "high", 2)
+sims.S3H <- tud_sim(burnin.S3H, landscape.covs.S3H, sl.dist.S3H, "simple", "high", 3)
+
+sims.C1L <- tud_sim(burnin.C1L, landscape.covs.C1L, sl.dist.C1L, "complex", "low", 1)
+sims.C2L <- tud_sim(burnin.C2L, landscape.covs.C2L, sl.dist.C2L, "complex", "low", 2)
+sims.C3L <- tud_sim(burnin.C3L, landscape.covs.C3L, sl.dist.C3L, "complex", "low", 3)
+sims.C1H <- tud_sim(burnin.C1H, landscape.covs.C1H, sl.dist.C1H, "complex", "high", 1)
+sims.C2H <- tud_sim(burnin.C2H, landscape.covs.C2H, sl.dist.C2H, "complex", "high", 2)
+sims.C3H <- tud_sim(burnin.C3H, landscape.covs.C3H, sl.dist.C3H, "complex", "high", 3)
+
+
+
+# 01-31-2025
+# let's write a separate script for fitting aKDEs, just keeps things cleaner
+
+
+
+
+
+
+
+
 
 #_______________________________________________________________________
 # 6. Plot points ----
