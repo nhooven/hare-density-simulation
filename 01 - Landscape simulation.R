@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 15 Nov 2024
-# Date last modified: 30 Jan 2025
+# Date last modified: 10 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -29,7 +29,7 @@ library(cowplot)         # multiple plots
 # don't tend to move outside
 
 # how many hectares?
-hectares <- 100
+hectares <- 501
 
 # square meters
 n.sqm <- hectares * 10000
@@ -49,100 +49,52 @@ rows <- as.integer(ceiling(sqrt(n.sqm / resol)))
 # we'll use the Gaussian random field function here
 
 #_______________________________________________________________________
-# 3a. Simple landscape ----
-
-# low autocorrelation in this continuous variable
-
-# parameters
-# autocorrelation range: maximum range of spatial autocorrelation
-S.cov1.autocorr <- 1
-
-# magnitude of variation
-S.cov1.magvar <- 0.5
-
-#_______________________________________________________________________
-
-# S1
-set.seed(24)
-S1.cov1 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = S.cov1.autocorr,
-                             mag_var = S.cov1.magvar)
-
-# S2
-set.seed(539)
-S2.cov1 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = S.cov1.autocorr,
-                             mag_var = S.cov1.magvar)
-
-# S3
-set.seed(1010)
-S3.cov1 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = S.cov1.autocorr,
-                             mag_var = S.cov1.magvar)
-
-# bind together
-S.cov1 <- c(rast(S1.cov1), rast(S2.cov1), rast(S3.cov1))
-names(S.cov1) <- c("S1", "S2", "S3")
-
-# add UTM CRS so spatial layers work together
-crs(S.cov1) <- crs("EPSG:32611")
-
-# plot
-plot(S.cov1)
-
-#_______________________________________________________________________
-# 3b. Complex landscape ----
+# 3a. Before landscape ----
 
 # high autocorrelation in this continuous variable
 
 # parameters
 # autocorrelation range: maximum range of spatial autocorrelation
-C.cov1.autocorr <- 50
+B.cov1.autocorr <- 50
 
 # magnitude of variation
-C.cov1.magvar <- 2
+B.cov1.magvar <- 2
 
 #_______________________________________________________________________
 
-# C1
+# B1
 set.seed(89)
-C1.cov1 <- nlm_gaussianfield(ncol = columns,
+B1.cov1 <- nlm_gaussianfield(ncol = columns,
                              nrow = rows,
                              resolution = resol,
-                             autocorr_range = C.cov1.autocorr,
-                             mag_var = C.cov1.magvar)
+                             autocorr_range = B.cov1.autocorr,
+                             mag_var = B.cov1.magvar)
 
 # C2
 set.seed(923)
-C2.cov1 <- nlm_gaussianfield(ncol = columns,
+B2.cov1 <- nlm_gaussianfield(ncol = columns,
                              nrow = rows,
                              resolution = resol,
-                             autocorr_range = C.cov1.autocorr,
-                             mag_var = C.cov1.magvar)
+                             autocorr_range = B.cov1.autocorr,
+                             mag_var = B.cov1.magvar)
 
 # C3
 set.seed(12)
-C3.cov1 <- nlm_gaussianfield(ncol = columns,
+B3.cov1 <- nlm_gaussianfield(ncol = columns,
                              nrow = rows,
                              resolution = resol,
-                             autocorr_range = C.cov1.autocorr,
-                             mag_var = C.cov1.magvar)
+                             autocorr_range = B.cov1.autocorr,
+                             mag_var = B.cov1.magvar)
 
 # bind together
-C.cov1 <- c(rast(C1.cov1), rast(C2.cov1), rast(C3.cov1))
-names(C.cov1) <- c("C1", "C2", "C3")
+B.cov1 <- c(rast(B1.cov1), rast(B2.cov1), rast(B3.cov1))
+names(B.cov1) <- c("B1", "B2", "B3")
 
 # add UTM CRS so spatial layers work together
-crs(C.cov1) <- crs("EPSG:32611")
+crs(B.cov1) <- crs("EPSG:32611")
 
 # plot
-plot(C.cov1)
+plot(B.cov1)
 
 #_______________________________________________________________________
 # 4. Covariate 2 - "edge distance" ----
@@ -154,8 +106,8 @@ plot(C.cov1)
 #_______________________________________________________________________
 
 # extract coordinates - find centroid of raster
-rast.centroid <- c(S1.cov1@extent@xmax / 2,
-                   S1.cov1@extent@ymax / 2)
+rast.centroid <- c(B1.cov1@extent@xmax / 2,
+                   B1.cov1@extent@ymax / 2)
 
 # how many meters per side? (let's make our unit 10 ha)
 m.side <- sqrt(10 * 10000)
@@ -195,7 +147,7 @@ unit.bound.lines <- as(as_Spatial(st_sfc(unit.bound)), "SpatialLines")
 
 # rasterize the unit boundary
 boundary.rast <- rasterize(x = unit.bound.lines, 
-                           y = S1.cov1, 
+                           y = B1.cov1, 
                            mask = TRUE)
 
 # create distance to edge of unit raster
@@ -213,10 +165,11 @@ crs(cov2) <- crs("EPSG:32611")
 # plot
 plot(cov2)
 
-#_______________________________________________________________________
+ #_______________________________________________________________________
 # 5. Covariate 3 - "cover type" ----
 
-# weak base avoidance of cover type 1 (maybe we can think of it as open cover)
+# this is what we'll manipulate
+# strong base avoidance of cover type 1 ( we can think of it as open cover)
 # longer steps that start in it
 
 # to do this, we'll classify a midpoint landscape
@@ -242,76 +195,109 @@ create_discrete_ls <- function (seed = runif(1, 1, 1000),
   # reclassify
   ls.class.1 <- ls.class - 1
   
+  # add crs
+  crs(ls.class.1) <- crs("EPSG:32611")
+  
+  # crop to be the same size as the other variables
+  ls.class.2 <- terra::crop(x = ls.class.1, 
+                            y = B1.cov1)
+  
   # return
-  return(ls.class.1)
+  return(ls.class.2)
   
 }
 
 #_______________________________________________________________________
-# 5a. Simple landscape ----
-
-# low "roughness" = 0.5
-
-#_______________________________________________________________________
-
-# run function 
-S1.cov3 <- create_discrete_ls(721, 0.5)
-S2.cov3 <- create_discrete_ls(1222, 0.5)
-S3.cov3 <- create_discrete_ls(101, 0.5)
-
-# bind together
-S.cov3 <- c(rast(S1.cov3), rast(S2.cov3), rast(S3.cov3))
-names(S.cov3) <- c("S1", "S2", "S3")
-
-crs(S.cov3) <- crs("EPSG:32611")
-
-#_______________________________________________________________________
-# 5b. Complex landscape ----
+# 5a. Before landscape ----
 
 # high "roughness" = 0.9
 
 #_______________________________________________________________________
 
 # run function 
-C1.cov3 <- create_discrete_ls(1253, 0.9)
-C2.cov3 <- create_discrete_ls(78, 0.9)
-C3.cov3 <- create_discrete_ls(367, 0.9)
+B1.cov3 <- create_discrete_ls(1284, 0.9)
+B2.cov3 <- create_discrete_ls(78, 0.9)
+B3.cov3 <- create_discrete_ls(394, 0.9)
 
 # bind together
-C.cov3 <- c(rast(C1.cov3), rast(C2.cov3), rast(C3.cov3))
-names(C.cov3) <- c("C1", "C2", "C3")
-
-crs(C.cov3) <- crs("EPSG:32611")
+B.cov3 <- c(rast(B1.cov3), rast(B2.cov3), rast(B3.cov3))
+names(B.cov3) <- c("B1", "B2", "B3")
 
 #_______________________________________________________________________
-# 5. Bind each landscape / replicate together ----
+# 5b. After landscape ----
 #_______________________________________________________________________
-# 5a. Simple ----
+
+# first, we'll crop each one by the unit boundary to examine what we'll change
+B.cov3.crop <- crop(B.cov3, unit.bound.sf)
+
+plot(B.cov3.crop)
+
+# now we'll simulate alteration by flipping zeroes ("closed") to ones ("open")
+# each landscape has a different proportion of 0s and 1s, this will be good!
+# write a function that does it
+alter_cover <- function(landscape,
+                        percent) {
+  
+  # focal landscape
+  landscape.1 <- landscape
+  
+  # how many can we flip?
+  n.0 <- length(values(landscape.1)[values(landscape.1) == 0])
+  
+  # randomly sample a percentage of them to flip
+  to.flip <- sample(which(values(landscape.1) == 0), size = round(n.0 * percent))
+  
+  # flip them
+  values(landscape.1)[to.flip] <- 1
+  
+  # return
+  return(landscape.1)
+  
+}
+
+# use function
+A.cov3.crop <- c(alter_cover(B.cov3.crop$B1, 0.30),
+                 alter_cover(B.cov3.crop$B2, 0.30),
+                 alter_cover(B.cov3.crop$B3, 0.30))
+
+plot(B.cov3.crop)
+plot(A.cov3.crop)
+
+# looks decent!
+# now just to mosaic into the landscape
+A1.cov3 <- merge(A.cov3.crop$B1, B.cov3$B1)
+A2.cov3 <- merge(A.cov3.crop$B2, B.cov3$B2)
+A3.cov3 <- merge(A.cov3.crop$B3, B.cov3$B3)
+
+#_______________________________________________________________________
+# 6. Bind each landscape / replicate together ----
+#_______________________________________________________________________
+# 6a. Before ----
 #_______________________________________________________________________
 
 # bind
-S1.ls <- c(S.cov1$S1, cov2, S.cov3$S1)
-S2.ls <- c(S.cov1$S2, cov2, S.cov3$S2)
-S3.ls <- c(S.cov1$S3, cov2, S.cov3$S3)
+B1.ls <- c(B.cov1$B1, cov2, B.cov3$B1)
+B2.ls <- c(B.cov1$B2, cov2, B.cov3$B2)
+B3.ls <- c(B.cov1$B3, cov2, B.cov3$B3)
 
 # rename
-names(S1.ls) <- c("forage", "edge", "open")
-names(S2.ls) <- c("forage", "edge", "open")
-names(S3.ls) <- c("forage", "edge", "open")
+names(B1.ls) <- c("forage", "edge", "open")
+names(B2.ls) <- c("forage", "edge", "open")
+names(B3.ls) <- c("forage", "edge", "open")
 
 #_______________________________________________________________________
-# 5b. Complex ----
+# 6b. After ----
 #_______________________________________________________________________
 
 # bind
-C1.ls <- c(C.cov1$C1, cov2, C.cov3$C1)
-C2.ls <- c(C.cov1$C2, cov2, C.cov3$C2)
-C3.ls <- c(C.cov1$C3, cov2, C.cov3$C3)
+A1.ls <- c(B.cov1$B1, cov2, A1.cov3)
+A2.ls <- c(B.cov1$B2, cov2, A2.cov3)
+A3.ls <- c(B.cov1$B3, cov2, A3.cov3)
 
 # rename
-names(C1.ls) <- c("forage", "edge", "open")
-names(C2.ls) <- c("forage", "edge", "open")
-names(C3.ls) <- c("forage", "edge", "open")
+names(A1.ls) <- c("forage", "edge", "open")
+names(A2.ls) <- c("forage", "edge", "open")
+names(A3.ls) <- c("forage", "edge", "open")
 
 #_______________________________________________________________________
 # 7. Plot ----
@@ -323,13 +309,13 @@ names(C3.ls) <- c("forage", "edge", "open")
 unit.buff <- st_buffer(unit.bound.sf, dist = 100)
 
 # crop
-S1.ls.crop <- crop(S1.ls, unit.buff)
-S2.ls.crop <- crop(S2.ls, unit.buff)
-S3.ls.crop <- crop(S3.ls, unit.buff)
+B1.ls.crop <- crop(B1.ls, unit.buff)
+B2.ls.crop <- crop(B2.ls, unit.buff)
+B3.ls.crop <- crop(B3.ls, unit.buff)
 
-C1.ls.crop <- crop(C1.ls, unit.buff)
-C2.ls.crop <- crop(C2.ls, unit.buff)
-C3.ls.crop <- crop(C3.ls, unit.buff)
+A1.ls.crop <- crop(A1.ls, unit.buff)
+A2.ls.crop <- crop(A2.ls, unit.buff)
+A3.ls.crop <- crop(A3.ls, unit.buff)
 
 #_______________________________________________________________________
 # 7b. Define function ----
@@ -337,7 +323,7 @@ C3.ls.crop <- crop(C3.ls, unit.buff)
 
 plot_group_rast <- function (ls) {
   
-  # stem
+  # forage
   ggplot() +
     
     theme_bw() +
@@ -410,35 +396,36 @@ plot_group_rast <- function (ls) {
 #_______________________________________________________________________
 
 # simple
-S1.plot <- plot_group_rast(S1.ls.crop)
-S2.plot <- plot_group_rast(S2.ls.crop)
-S3.plot <- plot_group_rast(S3.ls.crop)
+B1.plot <- plot_group_rast(B1.ls.crop)
+B2.plot <- plot_group_rast(B2.ls.crop)
+B3.plot <- plot_group_rast(B3.ls.crop)
 
 # complex
-C1.plot <- plot_group_rast(C1.ls.crop)
-C2.plot <- plot_group_rast(C2.ls.crop)
-C3.plot <- plot_group_rast(C3.ls.crop)
+A1.plot <- plot_group_rast(A1.ls.crop)
+A2.plot <- plot_group_rast(A2.ls.crop)
+A3.plot <- plot_group_rast(A3.ls.crop)
 
 #_______________________________________________________________________
 # 7d. Plot together ----
 #_______________________________________________________________________
 
 # simple
-plot_grid(S1.plot, S2.plot, S3.plot, nrow = 3)
+plot_grid(B1.plot, B2.plot, B3.plot, nrow = 3)
 
 # complex
-plot_grid(C1.plot, C2.plot, C3.plot, nrow = 3)
+plot_grid(A1.plot, A2.plot, A3.plot, nrow = 3)
 
 #_______________________________________________________________________
 # 8. Save and write rasters ----
 #_______________________________________________________________________
 
-save.image("Progress/rasters_01_30_2025.RData")
+save.image("Progress/rasters_02_10_2025.RData")
 
-writeRaster(S1.ls, filename = "Rasters/S1.tif", overwrite = T)
-writeRaster(S2.ls, filename = "Rasters/S2.tif", overwrite = T)
-writeRaster(S3.ls, filename = "Rasters/S3.tif", overwrite = T)
+writeRaster(B1.ls, filename = "Rasters/B1.tif", overwrite = T)
+writeRaster(B2.ls, filename = "Rasters/B2.tif", overwrite = T)
+writeRaster(B3.ls, filename = "Rasters/B3.tif", overwrite = T)
 
-writeRaster(C1.ls, filename = "Rasters/C1.tif", overwrite = T)
-writeRaster(C2.ls, filename = "Rasters/C2.tif", overwrite = T)
-writeRaster(C3.ls, filename = "Rasters/C3.tif", overwrite = T)
+writeRaster(A1.ls, filename = "Rasters/A1.tif", overwrite = T)
+writeRaster(A2.ls, filename = "Rasters/A2.tif", overwrite = T)
+writeRaster(A3.ls, filename = "Rasters/A3.tif", overwrite = T)
+

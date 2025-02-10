@@ -312,7 +312,8 @@ tud_sim <- function (burnin,
                              crs = crs("EPSG:32611"))
     
     # home ranging parameters
-    hr.params <- hr_params(hrc = hrc)
+    hr.params <- hr_params(e.var = 5000 * 50,      # 20 times just to ensure tracks stay close but not too close
+                           hrc = hrc)
     
     hr.params <- unname(hr.params)
     
