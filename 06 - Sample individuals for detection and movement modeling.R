@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 30 Jan 2025
+# Date last modified: 10 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,81 +15,71 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 
 #_______________________________________________________________________
-# 2. Sample individuals from each scenario without replacement ----
+# 2. Sample individuals for before and after ----
 #_______________________________________________________________________
 
-# how are abundances set up?
-abundances <- c(2, 5, 10, 15, 25, 40)
+# here, we need the same individuals to be present before and after treatment
+# we have 100 individuals on each landscape, so let's just subsample iteratively
 
-# how will individuals be allocated to each abundance?
-abundances.allocation <- c(rep(abundances[1], abundances[1]),
-                           rep(abundances[2], abundances[2]),
-                           rep(abundances[3], abundances[3]),
-                           rep(abundances[4], abundances[4]),
-                           rep(abundances[5], abundances[5]),
-                           rep(abundances[6], abundances[6]))
-
-# how many individuals are available?
-possible.indivs <- 100
-
-# how many individuals do we need to sample?
-total.indivs <- sum(abundances)
+abundances <- c(100, 75, 50, 25, 15, 10, 5, 2)
 
 #_______________________________________________________________________
-# 3. Sample individuals for detections and bind into lookup table  ----
+# 2a. Function to subsample ----
 #_______________________________________________________________________
 
-all.combos <- expand.grid(landscape = c("simple", "complex"),
-                          variability = c("low", "high"),
-                          rep = 1:3)
-
-# loop through all combos
-detection.lookup <- data.frame()
-
-for (i in 1:nrow(all.combos)) {
+subsample_indivs <- function() {
   
-  focal.combo <- all.combos[i, ]
+  samp.75 <- sample(1:100, size = 75, replace = FALSE)
+  samp.50 <- sample(samp.75, size = 50, replace = FALSE)
+  samp.25 <- sample(samp.50, size = 25, replace = FALSE)
+  samp.15 <- sample(samp.25, size = 15, replace = FALSE)
+  samp.10 <- sample(samp.15, size = 10, replace = FALSE)
+  samp.05 <- sample(samp.10, size = 5, replace = FALSE)
+  samp.02 <- sample(samp.05, size = 2, replace = FALSE)
   
-  # create df
-  focal.df <- data.frame("landscape" = focal.combo$landscape,
-                         "variability" = focal.combo$variability,
-                         "rep" = focal.combo$rep,
-                         "indiv" = sample(1:possible.indivs, size = total.indivs),
-                         "n" = abundances.allocation)
+  # list
+  sampled.indivs <- list(samp.75,
+                         samp.50,
+                         samp.25,
+                         samp.15,
+                         samp.10,
+                         samp.05,
+                         samp.02)
   
-  # bind into full df
-  detection.lookup <- rbind(detection.lookup, focal.df)
+  # return
+  return(sampled.indivs)
   
 }
 
 #_______________________________________________________________________
-# 4. Sample "collared" individuals for SSF/iSSF modeling  ----
+# 2b. Use function ----
 #_______________________________________________________________________
 
-# let's take a random sample of n individuals
-collared.n <- 10
-
-# loop through all combos
-collared.lookup <- data.frame()
-
-for (i in 1:nrow(all.combos)) {
-  
-  focal.combo <- all.combos[i, ]
-  
-  # create df
-  focal.df <- data.frame("landscape" = focal.combo$landscape,
-                         "variability" = focal.combo$variability,
-                         "rep" = focal.combo$rep,
-                         "indiv" = sample(1:possible.indivs, size = collared.n))
-  
-  # bind into full df
-  collared.lookup <- rbind(collared.lookup, focal.df)
-  
-}
+sampled.indivs.1 <- subsample_indivs()
+sampled.indivs.2 <- subsample_indivs()
+sampled.indivs.3 <- subsample_indivs()
 
 #_______________________________________________________________________
-# 5. Write to .csvs ----
+# 3. Sample "collared" individuals for RSF/iSSF modeling  ----
 #_______________________________________________________________________
 
-write.csv(detection.lookup, paste0(getwd(), "/Derived_data/Lookup/detection_lookup.csv"))
-write.csv(collared.lookup, paste0(getwd(), "/Derived_data/Lookup/collared_lookup.csv"))
+# these will be the 10 individuals sampled above, for simplicity
+# they occur in all of the higher densities, and have individuals in the two lower densities
+collared.1 <- sampled.indivs.1[[5]]
+collared.2 <- sampled.indivs.2[[5]]
+collared.3 <- sampled.indivs.3[[5]]
+
+#_______________________________________________________________________
+# 5. Write to files ----
+#_______________________________________________________________________
+
+# detection
+save(sampled.indivs.1, file = paste0(getwd(), "/Derived_data/Lookup/detection_lookup_1.RData"))
+save(sampled.indivs.2, file = paste0(getwd(), "/Derived_data/Lookup/detection_lookup_2.RData"))
+save(sampled.indivs.3, file = paste0(getwd(), "/Derived_data/Lookup/detection_lookup_3.RData"))
+
+# collared
+save(collared.1, file = paste0(getwd(), "/Derived_data/Lookup/collared_lookup_1.RData"))
+save(collared.2, file = paste0(getwd(), "/Derived_data/Lookup/collared_lookup_2.RData"))
+save(collared.3, file = paste0(getwd(), "/Derived_data/Lookup/collared_lookup_3.RData"))
+
