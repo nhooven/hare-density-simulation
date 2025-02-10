@@ -20,25 +20,7 @@ library(sf)              # spatial data
 # 2. Read in data ----
 #_______________________________________________________________________
 
-sims.S1L.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S1L.csv"))
-sims.S2L.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S2L.csv"))
-sims.S3L.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S3L.csv"))
-sims.S1H.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S1H.csv"))
-sims.S2H.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S2H.csv"))
-sims.S3H.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S3H.csv"))
-
-sims.C1L.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C1L.csv"))
-sims.C2L.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C2L.csv"))
-sims.C3L.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C3L.csv"))
-sims.C1H.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C1H.csv"))
-sims.C2H.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C2H.csv"))
-sims.C3H.df <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C3H.csv"))
-
-# bind together
-sims.df <- rbind(sims.S1L.df, sims.S2L.df, sims.S3L.df,
-                 sims.S1H.df, sims.S2H.df, sims.S3H.df,
-                 sims.C1L.df, sims.C2L.df, sims.C3L.df,
-                 sims.C1H.df, sims.C2H.df, sims.C3H.df)
+sims.all <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/init_sims.csv"))
 
 # viewsheds
 vs.4 <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/cams_4_vs.shp"))
@@ -56,16 +38,14 @@ vs.16$cam.id <- 1:nrow(vs.16)
 # 3a. Define function ----
 #_______________________________________________________________________
 
-track_contacts <- function (id.landscape,
-                            id.variability,
+track_contacts <- function (id.trt,
                             id.rep,
                             n.cams) {
   
   # subset sims.df
-  sims.df.1 <- sims.df %>%
+  sims.focal <- sims.all %>%
     
-    filter(landscape == id.landscape &
-           variability == id.variability &
+    filter(trt == id.trt &
            rep == id.rep)
   
   # use correct vs
@@ -90,10 +70,10 @@ track_contacts <- function (id.landscape,
   # initialize df
   all.passes <- data.frame()
   
-  for (i in unique(sims.df.1$indiv)) {
+  for (i in unique(sims.focal$indiv)) {
     
     # subset individual's data and create a track
-    indiv.track <- sims.df.1 %>% 
+    indiv.track <- sims.focal %>% 
       
       filter(indiv == i) %>%
       
@@ -161,8 +141,7 @@ track_contacts <- function (id.landscape,
   # bind in ids
   all.passes <- all.passes %>%
     
-    mutate(landscape = id.landscape,
-           variability = id.variability,
+    mutate(trt = id.trt,
            rep = id.rep,
            cams = n.cams)
   
@@ -176,46 +155,28 @@ track_contacts <- function (id.landscape,
 #_______________________________________________________________________
 
 # 4
-passes.4 <- rbind(track_contacts("simple", "low", 1, 4),
-                  track_contacts("simple", "low", 2, 4),
-                  track_contacts("simple", "low", 3, 4),
-                  track_contacts("simple", "high", 1, 4),
-                  track_contacts("simple", "high", 2, 4),
-                  track_contacts("simple", "high", 3, 4),
-                  track_contacts("complex", "low", 1, 4),
-                  track_contacts("complex", "low", 2, 4),
-                  track_contacts("complex", "low", 3, 4),
-                  track_contacts("complex", "high", 1, 4),
-                  track_contacts("complex", "high", 2, 4),
-                  track_contacts("complex", "high", 3, 4))
+passes.4 <- rbind(track_contacts("before", 1, 4),
+                  track_contacts("before", 2, 4),
+                  track_contacts("before", 3, 4),
+                  track_contacts("after", 1, 4),
+                  track_contacts("after", 2, 4),
+                  track_contacts("after", 3, 4))
 
 # 9
-passes.9 <- rbind(track_contacts("simple", "low", 1, 9),
-                  track_contacts("simple", "low", 2, 9),
-                  track_contacts("simple", "low", 3, 9),
-                  track_contacts("simple", "high", 1, 9),
-                  track_contacts("simple", "high", 2, 9),
-                  track_contacts("simple", "high", 3, 9),
-                  track_contacts("complex", "low", 1, 9),
-                  track_contacts("complex", "low", 2, 9),
-                  track_contacts("complex", "low", 3, 9),
-                  track_contacts("complex", "high", 1, 9),
-                  track_contacts("complex", "high", 2, 9),
-                  track_contacts("complex", "high", 3, 9))
+passes.9 <- rbind(track_contacts("before", 1, 9),
+                  track_contacts("before", 2, 9),
+                  track_contacts("before", 3, 9),
+                  track_contacts("after", 1, 9),
+                  track_contacts("after", 2, 9),
+                  track_contacts("after", 3, 9))
 
 # 16
-passes.16 <- rbind(track_contacts("simple", "low", 1, 16),
-                   track_contacts("simple", "low", 2, 16),
-                   track_contacts("simple", "low", 3, 16),
-                   track_contacts("simple", "high", 1, 16),
-                   track_contacts("simple", "high", 2, 16),
-                   track_contacts("simple", "high", 3, 16),
-                   track_contacts("complex", "low", 1, 16),
-                   track_contacts("complex", "low", 2, 16),
-                   track_contacts("complex", "low", 3, 16),
-                   track_contacts("complex", "high", 1, 16),
-                   track_contacts("complex", "high", 2, 16),
-                   track_contacts("complex", "high", 3, 16))
+passes.16 <- rbind(track_contacts("before", 1, 16),
+                   track_contacts("before", 2, 16),
+                   track_contacts("before", 3, 16),
+                   track_contacts("after", 1, 16),
+                   track_contacts("after", 2, 16),
+                   track_contacts("after", 3, 16))
 
 #_______________________________________________________________________
 # 4. Write data to files ----
