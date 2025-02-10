@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 03b - Movement simulations (complex)
+# Script: 03 - Initial movement simulations
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 30 Jan 2025
+# Date last modified: 10 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -22,22 +22,36 @@ library(lubridate)       # work with time
 # 2. Read in rasters and unit boundary ----
 #_______________________________________________________________________
 
-landscape.covs.1 <- rast("Rasters/C1.tif")
-landscape.covs.2 <- rast("Rasters/C2.tif")
-landscape.covs.3 <- rast("Rasters/C3.tif")
+B1 <- rast(paste0(getwd(), "/Rasters/B1.tif"))
+B2 <- rast(paste0(getwd(), "/Rasters/B2.tif"))
+B3 <- rast(paste0(getwd(), "/Rasters/B3.tif"))
+
+A1 <- rast(paste0(getwd(), "/Rasters/A1.tif"))
+A2 <- rast(paste0(getwd(), "/Rasters/A2.tif"))
+A3 <- rast(paste0(getwd(), "/Rasters/A3.tif"))
 
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
 
 # scale rasters
-landscape.covs.s <- list(c(scale(landscape.covs.1$forage),
-                           scale(landscape.covs.1$edge),
-                           landscape.covs.1$open),
-                         c(scale(landscape.covs.2$forage),
-                           scale(landscape.covs.2$edge),
-                           landscape.covs.2$open),
-                         c(scale(landscape.covs.3$forage),
-                           scale(landscape.covs.3$edge),
-                           landscape.covs.3$open))
+landscape.covs.B <- list(c(scale(B1$forage),
+                           scale(B1$edge),
+                           B1$open),
+                         c(scale(B2$forage),
+                           scale(B2$edge),
+                           B2$open),
+                         c(scale(B3$forage),
+                           scale(B3$edge),
+                           B3$open))
+
+landscape.covs.A <- list(c(scale(A1$forage),
+                           scale(A1$edge),
+                           A1$open),
+                         c(scale(A2$forage),
+                           scale(A2$edge),
+                           A2$open),
+                         c(scale(A3$forage),
+                           scale(A3$edge),
+                           A3$open))
 
 #_______________________________________________________________________
 # 3. Define simulation parameters ----
@@ -56,19 +70,15 @@ ta.dist <- make_unif_distr(min = -pi,
                            max = pi)
 
 #_______________________________________________________________________
-# 3b. Habitat selection coefficients and identifiers ----
+# 3b. Habitat selection coefficients ----
 #_______________________________________________________________________
 
 # mean coefficients
 coef.forage <- 1.5          # selection for forage
 coef.forage.sl <- -0.3      # shorter sl with higher forage       
 coef.edge <- -0.5           # avoidance of edge distance
-coef.open <- -1.5           # base avoidance of open (start of step)
+coef.open <- -2.5           # base avoidance of open (start of step)
 coef.open.sl <- 0.5         # interaction with log(sl) (longer movements when starting in open)
-
-id.landscape <- "complex"
-id.variability <- "high"
-id.rep <- 3
 
 #_______________________________________________________________________
 # 3c. Home ranging parameters ----
@@ -132,7 +142,7 @@ make_hrc <- function() {
 hr_params <- function(e.var = e.var,          # expected variance of the bivariate normal
                       hrc = hrc)              # home range centroid as previously drawn
   
-{
+  {
   
   # x2 + y2 coefficient
   b.x2y2 <- -1 / e.var
@@ -150,7 +160,7 @@ hr_params <- function(e.var = e.var,          # expected variance of the bivaria
 #_______________________________________________________________________
 # 5. Run simulations iteratively ----
 
-# n of replicates
+# n of replicates for each landscape replicate
 n.reps <- 100
 
 # each one takes about 3 seconds
@@ -162,83 +172,107 @@ n.reps <- 100
 
 sims.df <- data.frame()
 
-all.coef.draws <- data.frame()
-
 #_______________________________________________________________________
-# 5b. Run simulations ----
+# 5b. Define function ----
 #_______________________________________________________________________
 
-start.time <- Sys.time()
-
-for (i in 1:n.reps) {
+init_sim <- function(id.rep) {
   
-  # define hrc
-  hrc <- make_hrc()
+  # extract landscapes
+  focal.landscape.B <- landscape.covs.B[[id.rep]]
+  focal.landscape.A <- landscape.covs.A[[id.rep]]
   
-  # define start step
-  start.step <- make_start(x = c(hrc[1] + rnorm(n = 1, mean = 0, sd = 50),
-                                 hrc[2] + rnorm(n = 1, mean = 0, sd = 50)),
+  # loop through each replicate
+  sims.df <- data.frame()
+  
+  start.time <- Sys.time()
+  
+  for (i in 1:n.reps) {
+    
+    # define hrc
+    hrc <- make_hrc()
+    
+    # define start step
+    start.step <- make_start(x = c(hrc[1] + rnorm(n = 1, mean = 0, sd = 50),
+                                   hrc[2] + rnorm(n = 1, mean = 0, sd = 50)),
+                             ta_ = 0,
+                             time = ymd_hm("2024-09-01 18:00", 
+                                           tz = "America/Los_Angeles"),
+                             dt = hours(2),
+                             crs = crs("EPSG:32611"))
+    
+    # calculate home ranging parameters
+    hr.params <- hr_params(e.var = e.var,
+                           hrc = hrc)
+    
+    # make iSSF model
+    # here the terms are important to get right so redistribution_kernel() works okay
+    issf.model <- make_issf_model(coefs = c("forage_end" = coef.forage,  
+                                            "forage_end:log(sl_)" = coef.forage.sl,
+                                            "edge_end" = coef.edge,
+                                            "open_start" = coef.open,
+                                            "log(sl_):open_start" = coef.open.sl,
+                                            x2_ = hr.params[1],
+                                            y2_ = hr.params[2], 
+                                            "I(x2_^2 + y2_^2)" = hr.params[3]),              
+                                  sl = sl.dist,
+                                  ta = ta.dist)
+    
+    # BEFORE simulations
+    # initialize redistribution kernel
+    rk.B <- redistribution_kernel(x = issf.model,
+                                  start = start.step,
+                                  map = focal.landscape.B,     # use correct landscape here
+                                  n.control = rk.control,   
+                                  max.dist = get_max_dist(issf.model),
+                                  tolerance.outside = rk.tolerance)
+    
+    # run simulation
+    sim.path.B <- simulate_path(rk.B,
+                                n.steps = 336,
+                                start = start.step,
+                                verbose = TRUE)
+    
+    # extract endpoint for starting point of AFTER simulation
+    end.step <- make_start(x = c(sim.path.B$x_[337],
+                                 sim.path.B$y_[337]),
                            ta_ = 0,
-                           time = ymd_hm("2024-09-01 18:00", 
-                                         tz = "America/Los_Angeles"),
+                           time = sim.path.B$t_[337],
                            dt = hours(2),
                            crs = crs("EPSG:32611"))
-  
-  # calculate home ranging parameters
-  hr.params <- hr_params(e.var = e.var,
-                         hrc = hrc)
-  
-  # make iSSF model
-  # draw from appropriate distributions
-  coef.sd <- ifelse(id.variability == "low",
-                    0.10,
-                    0.75)
-  
-  coef.draws <- data.frame(coef.forage.1 = rnorm(1, coef.forage, coef.sd),
-                           coef.edge.1 = rnorm(1, coef.edge, coef.sd),
-                           coef.open.1 = rnorm(1, coef.open, coef.sd))
-  
-  # here the terms are important to get right so redistribution_kernel() works okay
-  issf.model <- make_issf_model(coefs = c("forage_end" = coef.draws$coef.forage.1[1],  
-                                          "forage_end:log(sl_)" = coef.forage.sl,
-                                          "edge_end" = coef.draws$coef.edge.1[1],
-                                          "open_start" = coef.draws$coef.open.1[1],
-                                          "log(sl_):open_start" = coef.open.sl,
-                                          x2_ = hr.params[1],
-                                          y2_ = hr.params[2], 
-                                          "I(x2_^2 + y2_^2)" = hr.params[3]),              
-                                sl = sl.dist,
-                                ta = ta.dist)
-  
-  # initialize redistribution kernel
-  rk <- redistribution_kernel(x = issf.model,
-                              start = start.step,
-                              map = landscape.covs.s[[id.rep]],     # use correct landscape here
-                              n.control = rk.control,   
-                              max.dist = get_max_dist(issf.model),
-                              tolerance.outside = rk.tolerance)
-  
-  # run simulation
-  sim.path <- simulate_path(rk,
-                            n.steps = 336,
-                            start = start.step,
-                            verbose = TRUE)
-  
-  # add in identifiers
-  sim.path.1 <- sim.path %>% 
     
-    mutate(indiv = i,
-           landscape = id.landscape,
-           variability = id.variability,
-           rep = id.rep)
-  
-  # bind to df
-  sims.df <- bind_rows(sims.df, sim.path.1)
-  
-  all.coef.draws <- rbind(all.coef.draws, coef.draws)
-  
-  # status message (every 10 iterations)
-  if (i %% 10 == 0) {
+    # AFTER simulations
+    # initialize redistribution kernel
+    rk.A <- redistribution_kernel(x = issf.model,  # same issf parameters
+                                  start = end.step,
+                                  map = focal.landscape.A,     # use correct landscape here
+                                  n.control = rk.control,   
+                                  max.dist = get_max_dist(issf.model),
+                                  tolerance.outside = rk.tolerance)
+    
+    # run simulation
+    sim.path.A <- simulate_path(rk.A,
+                                n.steps = 336,
+                                start = end.step,
+                                verbose = TRUE)
+    
+    # bind together
+    sim.path.B$trt <- "before"
+    sim.path.A$trt <- "after"
+    
+    sim.path <- rbind(sim.path.B,
+                      sim.path.A)
+    
+    sim.path.1 <- sim.path %>% 
+      
+      mutate(indiv = i,
+             rep = id.rep)
+    
+    # bind to df
+    sims.df <- rbind(sims.df, sim.path.1)
+    
+    # status message (every 10 iterations)
+    if (i %% 10 == 0) {
     
     elapsed.time <- round(as.numeric(difftime(Sys.time(), 
                                               start.time, 
@@ -247,18 +281,26 @@ for (i in 1:n.reps) {
     
     print(paste0("Completed path ", i, " of ", n.reps, " - ", elapsed.time, " mins"))
     
+    }
+  
   }
   
+  # return
+  return(sims.df)
+
 }
+
+#_______________________________________________________________________
+# 5c. Use function ----
+#_______________________________________________________________________
+
+init.sim.1 <- init_sim(1)
+init.sim.2 <- init_sim(2)
+init.sim.3 <- init_sim(3)
 
 #_______________________________________________________________________
 # 6. Plot tracks ----
 #_______________________________________________________________________
-
-sims.sf <- st_as_sf(sims.df,
-                    coords = c("x_", 
-                               "y_"),
-                    crs = "epsg:32611") 
 
 # plot paths
 ggplot() +
@@ -269,15 +311,15 @@ ggplot() +
   geom_sf(data = unit.bound,
           fill = NA) +
   
-  # paths
-  geom_path(data = sims.df,
-            aes(x = x_,
-                y = y_,
-                color = as.factor(indiv)),
-            alpha = 0.10) +
+  facet_wrap(~ trt) +
   
-  # remove legend
-  theme(legend.position = "none") +
+  # paths
+  geom_point(data = init.sim.3,
+            aes(x = x_,
+                y = y_),
+            alpha = 0.05,
+            size = 0.5,
+            color = "purple") +
   
   # coordinate system to make nice axis labels
   coord_sf(datum = st_crs(32611))
@@ -286,5 +328,7 @@ ggplot() +
 # 7. Write to .csvs ----
 #_______________________________________________________________________
 
-write.csv(sims.df, paste0(getwd(), "/Derived_data/Simulated data/sims_C3H.csv"))
-write.csv(all.coef.draws, paste0(getwd(), "/Derived_data/Simulated data/coefs_C3H.csv"))
+# bind together
+init.sim.all <- rbind(init.sim.1, init.sim.2, init.sim.3)
+
+write.csv(init.sim.all, paste0(getwd(), "/Derived_data/Simulated data/init_sims.csv"))

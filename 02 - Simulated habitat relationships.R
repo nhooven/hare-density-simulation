@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 02 Dec 2024
-# Date last modified: 30 Jan 2025
+# Date last modified: 10 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -20,13 +20,13 @@ library(amt)             # distributions
 # 2. Read in rasters ----
 #_______________________________________________________________________
 
-S1 <- rast(paste0(getwd(), "/Rasters/S1.tif"))
-S2 <- rast(paste0(getwd(), "/Rasters/S2.tif"))
-S3 <- rast(paste0(getwd(), "/Rasters/S3.tif"))
+B1 <- rast(paste0(getwd(), "/Rasters/B1.tif"))
+B2 <- rast(paste0(getwd(), "/Rasters/B2.tif"))
+B3 <- rast(paste0(getwd(), "/Rasters/B3.tif"))
 
-C1 <- rast(paste0(getwd(), "/Rasters/C1.tif"))
-C2 <- rast(paste0(getwd(), "/Rasters/C2.tif"))
-C3 <- rast(paste0(getwd(), "/Rasters/C3.tif"))
+A1 <- rast(paste0(getwd(), "/Rasters/A1.tif"))
+A2 <- rast(paste0(getwd(), "/Rasters/A2.tif"))
+A3 <- rast(paste0(getwd(), "/Rasters/A3.tif"))
 
 #_______________________________________________________________________
 # 3. Movement parameter distributions ----
@@ -59,75 +59,43 @@ lsl.hig <- log(qgamma(p = 0.975, shape = sl.dist$params$shape, scale = sl.dist$p
 coef.forage <- 1.5          # selection for forage
 coef.forage.sl <- -0.3      # shorter sl with higher forage       
 coef.edge <- -0.5           # avoidance of edge distance
-coef.open <- -1.5           # base avoidance of open (start of step)
+coef.open <- -2.5           # base avoidance of open (start of step)
 coef.open.sl <- 0.5         # interaction with log(sl) (longer movements when starting in open)
 
 #_______________________________________________________________________
 # 5. Random slope standard deviations  ----
 #_______________________________________________________________________
 
-# here we'll draw iSSF slopes (habitat selection only) from normal distributions
-sd.low <- 0.10
-sd.high <- 0.75
+# we'll just simulate everything off the same betas, assuming that home ranging will
+# introduce any individual variability for our purposes
 
 #_______________________________________________________________________
-# 5. Parameter expectation and variation ----
+# 5. Parameter expectation plot ----
 #_______________________________________________________________________
-# 5a. Quantiles for plotting ----
+# 5a. Data.frame ----
 #_______________________________________________________________________
-
-# selection for stem
-iv.forage <- data.frame(coef = "forage",
-                        estimate = coef.forage,
-                        q.low.l = qnorm(p = 0.025, mean = coef.forage, sd = sd.low),
-                        q.low.u = qnorm(p = 0.975, mean = coef.forage, sd = sd.low),
-                        q.high.l = qnorm(p = 0.025, mean = coef.forage, sd = sd.high),
-                        q.high.u = qnorm(p = 0.975, mean = coef.forage, sd = sd.high))
-
-# stem step length interaction
-iv.forage.sl <- data.frame(coef = "forage:log(sl)",
-                           estimate = coef.forage.sl,
-                           q.low.l = NA,
-                           q.low.u = NA,
-                           q.high.l = NA,
-                           q.high.u = NA)
-
-# avoidance of edge
-iv.edge <- data.frame(coef = "edge",
-                      estimate = coef.edge,
-                      q.low.l = qnorm(p = 0.025, mean = coef.edge, sd = sd.low),
-                      q.low.u = qnorm(p = 0.975, mean = coef.edge, sd = sd.low),
-                      q.high.l = qnorm(p = 0.025, mean = coef.edge, sd = sd.high),
-                      q.high.u = qnorm(p = 0.975, mean = coef.edge, sd = sd.high))
-
-# base avoidance of open"
-iv.open <- data.frame(coef = "open",
-                      estimate = coef.open,
-                      q.low.l = qnorm(p = 0.025, mean = coef.open, sd = sd.low),
-                      q.low.u = qnorm(p = 0.975, mean = coef.open, sd = sd.low),
-                      q.high.l = qnorm(p = 0.025, mean = coef.open, sd = sd.high),
-                      q.high.u = qnorm(p = 0.975, mean = coef.open, sd = sd.high))
-
-# greater steps starting in open
-iv.open.sl <- data.frame(coef = "open:log(sl)",
-                         estimate = coef.open.sl,
-                         q.low.l = NA,
-                         q.low.u = NA,
-                         q.high.l = NA,
-                         q.high.u = NA)
 
 # bind together
-iv.all <- rbind(iv.forage, iv.forage.sl, iv.edge, iv.open, iv.open.sl)
+coef.all <- data.frame(coef = c("forage",
+                                "forage:log(sl)",
+                                "edge",
+                                "open",
+                                "open:log(sl)"),
+                     estimate = c(coef.forage,
+                                  coef.forage.sl,
+                                  coef.edge,
+                                  coef.open,
+                                  coef.open.sl))
 
 # reorder factor levels
-iv.all$coef <- factor(iv.all$coef,
-                      levels = rev(c("forage", "forage:log(sl)", "edge", "open", "open:log(sl)")))
+coef.all$coef <- factor(coef.all$coef,
+                        levels = rev(c("forage", "forage:log(sl)", "edge", "open", "open:log(sl)")))
 
 #_______________________________________________________________________
 # 5b. Plot ----
 #_______________________________________________________________________
 
-ggplot(data = iv.all,
+ggplot(data = coef.all,
        aes(x = estimate,
            y = coef,
            group = coef)) +
@@ -136,22 +104,6 @@ ggplot(data = iv.all,
   
   geom_vline(xintercept = 0,
              linetype = "dashed") +
-  
-  # high variability
-  geom_errorbarh(aes(xmin = q.high.l,
-                     xmax = q.high.u),
-                 height = 0,
-                 linewidth = 2.5,
-                 color = "darkblue",
-                 alpha = 0.25) +
-  
-  # low variability
-  geom_errorbarh(aes(xmin = q.low.l,
-                     xmax = q.low.u),
-                 height = 0,
-                 linewidth = 2.5,
-                 color = "darkblue",
-                 alpha = 0.75) +
   
   geom_point(size = 2,
              shape = 21,
