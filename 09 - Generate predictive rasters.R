@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 24 Dec 2024
 # Date completed: 27 Dec 2024
-# Date last modified: 30 Jan 2025
+# Date last modified: 10 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -28,6 +28,9 @@ all.params <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/all_param
 # scaling factors (mean and sd)
 all.scale <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/mean_sd_covs.csv"))
 
+# add in trt because I forgot it
+all.scale$trt <- rep(c("before", "after", "before", "after"), each = 3)
+
 # variance-covariance matrices
 load(paste0(getwd(), "/Derived_data/Model parameters/vcov.RData"))
 
@@ -38,26 +41,20 @@ vcov.lookup <- read.csv(paste0(getwd(), "/Derived_data/Lookup/vcov.csv"))
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
 
 # unprocessed covariate rasters
-landscape.covs.S1 <- rast("Rasters/S1.tif")
-landscape.covs.S2 <- rast("Rasters/S2.tif")
-landscape.covs.S3 <- rast("Rasters/S3.tif")
-landscape.covs.C1 <- rast("Rasters/C1.tif")
-landscape.covs.C2 <- rast("Rasters/C2.tif")
-landscape.covs.C3 <- rast("Rasters/C3.tif")
+landscape.covs.B1 <- rast("Rasters/B1.tif")
+landscape.covs.B2 <- rast("Rasters/B2.tif")
+landscape.covs.B3 <- rast("Rasters/B3.tif")
+landscape.covs.A1 <- rast("Rasters/A1.tif")
+landscape.covs.A2 <- rast("Rasters/A2.tif")
+landscape.covs.A3 <- rast("Rasters/A3.tif")
 
 # sl/ta distributions
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S1L.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S2L.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S3L.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S1H.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S2H.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_S3H.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C1L.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C2L.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C3L.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C1H.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C2H.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_C3H.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B1.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B2.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B3.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A1.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A2.RData"))
+load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A3.RData"))
 load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
 
 #_______________________________________________________________________
@@ -67,24 +64,21 @@ load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
 #_______________________________________________________________________
 
 sample_mvn <- function (n.samples,
-                        id.landscape,
-                        id.variability,
+                        id.trt,
                         id.rep,
                         id.type) {
   
   # subset all.params
   focal.params <- all.params %>%
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            type == id.type)
   
   # subset variance-covariance matrix
   vcov.lookup.1 <- vcov.lookup %>% 
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            type == id.type)
   
@@ -116,32 +110,20 @@ sample_mvn <- function (n.samples,
 #_______________________________________________________________________
 
 # RSF
-mvn.sampled.RSF <- list(sample_mvn(100, "simple", "low", 1, "RSF"),
-                        sample_mvn(100, "simple", "low", 2, "RSF"),
-                        sample_mvn(100, "simple", "low", 3, "RSF"),
-                        sample_mvn(100, "simple", "high", 1, "RSF"),
-                        sample_mvn(100, "simple", "high", 2, "RSF"),
-                        sample_mvn(100, "simple", "high", 3, "RSF"),
-                        sample_mvn(100, "complex", "low", 1, "RSF"),
-                        sample_mvn(100, "complex", "low", 2, "RSF"),
-                        sample_mvn(100, "complex", "low", 3, "RSF"),
-                        sample_mvn(100, "complex", "high", 1, "RSF"),
-                        sample_mvn(100, "complex", "high", 2, "RSF"),
-                        sample_mvn(100, "complex", "high", 3, "RSF"))
+mvn.sampled.RSF <- list(sample_mvn(100, "before", 1, "RSF"),
+                        sample_mvn(100, "before", 2, "RSF"),
+                        sample_mvn(100, "before", 3, "RSF"),
+                        sample_mvn(100, "after", 1, "RSF"),
+                        sample_mvn(100, "after", 2, "RSF"),
+                        sample_mvn(100, "after", 3, "RSF"))
 
 # iSSF
-mvn.sampled.iSSF <- list(sample_mvn(100, "simple", "low", 1, "iSSF"),
-                         sample_mvn(100, "simple", "low", 2, "iSSF"),
-                         sample_mvn(100, "simple", "low", 3, "iSSF"),
-                         sample_mvn(100, "simple", "high", 1, "iSSF"),
-                         sample_mvn(100, "simple", "high", 2, "iSSF"),
-                         sample_mvn(100, "simple", "high", 3, "iSSF"),
-                         sample_mvn(100, "complex", "low", 1, "iSSF"),
-                         sample_mvn(100, "complex", "low", 2, "iSSF"),
-                         sample_mvn(100, "complex", "low", 3, "iSSF"),
-                         sample_mvn(100, "complex", "high", 1, "iSSF"),
-                         sample_mvn(100, "complex", "high", 2, "iSSF"),
-                         sample_mvn(100, "complex", "high", 3, "iSSF"))
+mvn.sampled.iSSF <- list(sample_mvn(100, "before", 1, "iSSF"),
+                         sample_mvn(100, "before", 2, "iSSF"),
+                         sample_mvn(100, "before", 3, "iSSF"),
+                         sample_mvn(100, "after", 1, "iSSF"),
+                         sample_mvn(100, "after", 2, "iSSF"),
+                         sample_mvn(100, "after", 3, "iSSF"))
 
 #_______________________________________________________________________
 # 4. RSF predictions ----
@@ -150,31 +132,27 @@ mvn.sampled.iSSF <- list(sample_mvn(100, "simple", "low", 1, "iSSF"),
 #_______________________________________________________________________
 
 RSF_pred <- function (landscape.covs,     # raster
-                      id.landscape,
-                      id.variability,
+                      id.trt,
                       id.rep) {
   
   # subset all.params
   focal.params <- all.params %>%
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            type == "RSF")
   
   # subset scaling factors
   focal.scale <- all.scale %>%
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            model == "RSF")
   
   # subset variance-covariance matrix
   vcov.lookup.1 <- vcov.lookup %>% 
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            type == "RSF")
   
@@ -248,37 +226,23 @@ RSF_pred <- function (landscape.covs,     # raster
 # 4b. Use function ----
 #_______________________________________________________________________
 
-RSF.pred.S1L <- RSF_pred(landscape.covs.S1, "simple", "low", 1)
-RSF.pred.S2L <- RSF_pred(landscape.covs.S2, "simple", "low", 2)
-RSF.pred.S3L <- RSF_pred(landscape.covs.S3, "simple", "low", 3)
-RSF.pred.S1H <- RSF_pred(landscape.covs.S1, "simple", "high", 1)
-RSF.pred.S2H <- RSF_pred(landscape.covs.S2, "simple", "high", 2)
-RSF.pred.S3H <- RSF_pred(landscape.covs.S3, "simple", "high", 3)
-
-RSF.pred.C1L <- RSF_pred(landscape.covs.C1, "complex", "low", 1)
-RSF.pred.C2L <- RSF_pred(landscape.covs.C2, "complex", "low", 2)
-RSF.pred.C3L <- RSF_pred(landscape.covs.C3, "complex", "low", 3)
-RSF.pred.C1H <- RSF_pred(landscape.covs.C1, "complex", "high", 1)
-RSF.pred.C2H <- RSF_pred(landscape.covs.C2, "complex", "high", 2)
-RSF.pred.C3H <- RSF_pred(landscape.covs.C3, "complex", "high", 3)
+RSF.pred.B1 <- RSF_pred(landscape.covs.B1, "before", 1)
+RSF.pred.B2 <- RSF_pred(landscape.covs.B2, "before", 2)
+RSF.pred.B3 <- RSF_pred(landscape.covs.B3, "before", 3)
+RSF.pred.A1 <- RSF_pred(landscape.covs.A1, "after", 1)
+RSF.pred.A2 <- RSF_pred(landscape.covs.A2, "after", 2)
+RSF.pred.A3 <- RSF_pred(landscape.covs.A3, "after", 3)
 
 #_______________________________________________________________________
 # 4c. Write rasters ----
 #_______________________________________________________________________
 
-writeRaster(RSF.pred.S1L, paste0(getwd(), "/Rasters/RSF predictions/S1L.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.S2L, paste0(getwd(), "/Rasters/RSF predictions/S2L.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.S3L, paste0(getwd(), "/Rasters/RSF predictions/S3L.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.S1H, paste0(getwd(), "/Rasters/RSF predictions/S1H.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.S2H, paste0(getwd(), "/Rasters/RSF predictions/S2H.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.S3H, paste0(getwd(), "/Rasters/RSF predictions/S3H.tif"), overwrite = TRUE)
-
-writeRaster(RSF.pred.C1L, paste0(getwd(), "/Rasters/RSF predictions/C1L.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.C2L, paste0(getwd(), "/Rasters/RSF predictions/C2L.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.C3L, paste0(getwd(), "/Rasters/RSF predictions/C3L.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.C1H, paste0(getwd(), "/Rasters/RSF predictions/C1H.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.C2H, paste0(getwd(), "/Rasters/RSF predictions/C2H.tif"), overwrite = TRUE)
-writeRaster(RSF.pred.C3H, paste0(getwd(), "/Rasters/RSF predictions/C3H.tif"), overwrite = TRUE)
+writeRaster(RSF.pred.B1, paste0(getwd(), "/Rasters/RSF predictions/B1.tif"), overwrite = TRUE)
+writeRaster(RSF.pred.B2, paste0(getwd(), "/Rasters/RSF predictions/B2.tif"), overwrite = TRUE)
+writeRaster(RSF.pred.B3, paste0(getwd(), "/Rasters/RSF predictions/B3.tif"), overwrite = TRUE)
+writeRaster(RSF.pred.A1, paste0(getwd(), "/Rasters/RSF predictions/A1.tif"), overwrite = TRUE)
+writeRaster(RSF.pred.A2, paste0(getwd(), "/Rasters/RSF predictions/A2.tif"), overwrite = TRUE)
+writeRaster(RSF.pred.A3, paste0(getwd(), "/Rasters/RSF predictions/A3.tif"), overwrite = TRUE)
 
 #_______________________________________________________________________
 # 5. Day range "adjustment" rasters ----
@@ -298,41 +262,42 @@ writeRaster(RSF.pred.C3H, paste0(getwd(), "/Rasters/RSF predictions/C3H.tif"), o
 #_______________________________________________________________________
 
 # simulated data
-sim.data.all <- rbind(read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S1L.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S2L.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S3L.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S1H.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S2H.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_S3H.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C1L.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C2L.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C3L.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C1H.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C2H.csv")),
-                      read.csv(paste0(getwd(), "/Derived_data/Simulated data/sims_C3H.csv")))
+sim.data.all <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/init_sims.csv"))
 
-# lookup table
-lookup <- read.csv(paste0(getwd(), "/Derived_data/Lookup/collared_lookup.csv"))
+# collared lookup tables
+load(paste0(getwd(), "/Derived_data/Lookup/collared_lookup_1.RData"))
+load(paste0(getwd(), "/Derived_data/Lookup/collared_lookup_2.RData"))
+load(paste0(getwd(), "/Derived_data/Lookup/collared_lookup_3.RData"))
 
 # define function
-static_dr <- function (id.landscape,
-                       id.variability,
+static_dr <- function (id.trt,
                        id.rep) {
   
   # subset lookup table
-  lookup.focal <- lookup %>%
+  if (id.rep == 1) {
     
-    filter(landscape == id.landscape &
-           variability == id.variability &
-           rep == id.rep)
-  
+    lookup.focal <- collared.1
+    
+  } else {
+    
+    if (id.rep == 2) {
+      
+      lookup.focal <- collared.2
+      
+    } else {
+      
+      lookup.focal <- collared.3
+      
+    }
+    
+  }
+
   # subset all data
   sim.data.focal <- sim.data.all %>%
     
-    filter(landscape == id.landscape &
-             variability == id.variability &
-             rep == id.rep &
-             indiv %in% lookup.focal$indiv)
+    filter(trt == id.trt &
+           rep == id.rep &
+           indiv %in% lookup.focal)
   
   # loop through all individuals
   all.static.dr <- data.frame()
@@ -370,8 +335,7 @@ static_dr <- function (id.landscape,
     
     # create df and bind together
     all.static.dr <- rbind(all.static.dr, 
-                           data.frame(landscape = id.landscape,
-                                      variability = id.variability,
+                           data.frame(trt = id.trt,
                                       rep = id.rep,
                                       indiv = i,
                                       mean.dr = dr.focal))
@@ -384,26 +348,20 @@ static_dr <- function (id.landscape,
 }
 
 # apply function
-static.dr.all <- rbind(static_dr("simple", "low", 1),
-                       static_dr("simple", "low", 2),
-                       static_dr("simple", "low", 3),
-                       static_dr("simple", "high", 1),
-                       static_dr("simple", "high", 2),
-                       static_dr("simple", "high", 3),
-                       static_dr("complex", "low", 1),
-                       static_dr("complex", "low", 2),
-                       static_dr("complex", "low", 3),
-                       static_dr("complex", "high", 1),
-                       static_dr("complex", "high", 2),
-                       static_dr("complex", "high", 3))
+static.dr.all <- rbind(static_dr("before", 1),
+                       static_dr("before", 2),
+                       static_dr("before", 3),
+                       static_dr("after", 1),
+                       static_dr("after", 2),
+                       static_dr("after", 3))
 
-# calculate means and SDs
+# calculate means and SDs (and divide by 1000 since we really want this to be in km)
 static.dr.summary <- static.dr.all %>%
   
-  group_by(landscape, variability, rep) %>%
+  group_by(trt, rep) %>%
   
-  summarize(dr.mean = mean(mean.dr),
-            dr.sd = sd(mean.dr))
+  summarize(dr.mean = mean(mean.dr) / 1000,
+            dr.sd = sd(mean.dr) / 1000)
 
 static.dr.summary
 
@@ -416,8 +374,7 @@ write.csv(static.dr.summary, "Derived_data/Model parameters/static_dr.csv")
 
 sl_raster <- function(landscape.covs,     # raster
                       sl.dist,
-                      id.landscape,
-                      id.variability,
+                      id.trt,
                       id.rep) {
   
   # calculate expectation (shape * scale)
@@ -432,29 +389,26 @@ sl_raster <- function(landscape.covs,     # raster
   # extract iSSF parameters
   focal.params <- all.params %>%
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            type == "iSSF")
   
   # subset scaling factors
   focal.scale <- all.scale %>%
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            model == "SSF")
   
   # subset variance-covariance matrix
   vcov.lookup.1 <- vcov.lookup %>% 
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            type == "iSSF")
   
   # subset MVN samples
-  mvn.samples <- mvn.sampled.iSSF[[vcov.lookup.1$index - 12]]
+  mvn.samples <- mvn.sampled.iSSF[[vcov.lookup.1$index - 6]]
   
   # scale raster correctly
   landscape.covs.1 <- c((landscape.covs$forage - focal.scale$mean.forage) / focal.scale$sd.forage,
@@ -462,9 +416,11 @@ sl_raster <- function(landscape.covs,     # raster
                         landscape.covs$open)
   
   # calculate spatially-explicit SL shape parameter adjustments
+  # this is a bit weird since one adjustment is on the start location and one is on the end location
+  # we'll just roll with it
   pred.mean <- focal.params$estimate[focal.params$term == "log(sl_)"] +
                landscape.covs.1$forage * focal.params$estimate[focal.params$term == "forage.s:log(sl_)"] +
-               landscape.covs.1$open * focal.params$estimate[focal.params$term == "open:log(sl_)"]
+               landscape.covs.1$open * focal.params$estimate[focal.params$term == "open_start:log(sl_)"]
   
   # adjust the gamma distributions with the new shape parameters (in a raster)
   shape.adjust <- sl.dist$params$shape + pred.mean
@@ -527,37 +483,23 @@ sl_raster <- function(landscape.covs,     # raster
 # 5b. Use function ----
 #_______________________________________________________________________
 
-adj.dr.S1L <- sl_raster(landscape.covs.S1, sl.dist.S1L, "simple", "low", 1)
-adj.dr.S2L <- sl_raster(landscape.covs.S2, sl.dist.S2L, "simple", "low", 2)
-adj.dr.S3L <- sl_raster(landscape.covs.S3, sl.dist.S3L, "simple", "low", 3)
-adj.dr.S1H <- sl_raster(landscape.covs.S1, sl.dist.S1H, "simple", "high", 1)
-adj.dr.S2H <- sl_raster(landscape.covs.S2, sl.dist.S2H, "simple", "high", 2)
-adj.dr.S3H <- sl_raster(landscape.covs.S3, sl.dist.S3H, "simple", "high", 3)
-
-adj.dr.C1L <- sl_raster(landscape.covs.C1, sl.dist.C1L, "complex", "low", 1)
-adj.dr.C2L <- sl_raster(landscape.covs.C2, sl.dist.C2L, "complex", "low", 2)
-adj.dr.C3L <- sl_raster(landscape.covs.C3, sl.dist.C3L, "complex", "low", 3)
-adj.dr.C1H <- sl_raster(landscape.covs.C1, sl.dist.C1H, "complex", "high", 1)
-adj.dr.C2H <- sl_raster(landscape.covs.C2, sl.dist.C2H, "complex", "high", 2)
-adj.dr.C3H <- sl_raster(landscape.covs.C3, sl.dist.C3H, "complex", "high", 3)
+adj.dr.B1 <- sl_raster(landscape.covs.B1, sl.dist.B1, "before", 1)
+adj.dr.B2 <- sl_raster(landscape.covs.B2, sl.dist.B2, "before", 2)
+adj.dr.B3 <- sl_raster(landscape.covs.B3, sl.dist.B3, "before", 3)
+adj.dr.A1 <- sl_raster(landscape.covs.A1, sl.dist.A1, "after", 1)
+adj.dr.A2 <- sl_raster(landscape.covs.A2, sl.dist.A2, "after", 2)
+adj.dr.A3 <- sl_raster(landscape.covs.A3, sl.dist.A3, "after", 3)
 
 #_______________________________________________________________________
 # 5c. Write rasters ----
 #_______________________________________________________________________
 
-writeRaster(adj.dr.S1L, paste0(getwd(), "/Rasters/Adjusted day range/S1L.tif"), overwrite = TRUE)
-writeRaster(adj.dr.S2L, paste0(getwd(), "/Rasters/Adjusted day range/S2L.tif"), overwrite = TRUE)
-writeRaster(adj.dr.S3L, paste0(getwd(), "/Rasters/Adjusted day range/S3L.tif"), overwrite = TRUE)
-writeRaster(adj.dr.S1H, paste0(getwd(), "/Rasters/Adjusted day range/S1H.tif"), overwrite = TRUE)
-writeRaster(adj.dr.S2H, paste0(getwd(), "/Rasters/Adjusted day range/S2H.tif"), overwrite = TRUE)
-writeRaster(adj.dr.S3H, paste0(getwd(), "/Rasters/Adjusted day range/S3H.tif"), overwrite = TRUE)
-
-writeRaster(adj.dr.C1L, paste0(getwd(), "/Rasters/Adjusted day range/C1L.tif"), overwrite = TRUE)
-writeRaster(adj.dr.C2L, paste0(getwd(), "/Rasters/Adjusted day range/C2L.tif"), overwrite = TRUE)
-writeRaster(adj.dr.C3L, paste0(getwd(), "/Rasters/Adjusted day range/C3L.tif"), overwrite = TRUE)
-writeRaster(adj.dr.C1H, paste0(getwd(), "/Rasters/Adjusted day range/C1H.tif"), overwrite = TRUE)
-writeRaster(adj.dr.C2H, paste0(getwd(), "/Rasters/Adjusted day range/C2H.tif"), overwrite = TRUE)
-writeRaster(adj.dr.C3H, paste0(getwd(), "/Rasters/Adjusted day range/C3H.tif"), overwrite = TRUE)
+writeRaster(adj.dr.B1, paste0(getwd(), "/Rasters/Adjusted day range/B1.tif"), overwrite = TRUE)
+writeRaster(adj.dr.B2, paste0(getwd(), "/Rasters/Adjusted day range/B2.tif"), overwrite = TRUE)
+writeRaster(adj.dr.B3, paste0(getwd(), "/Rasters/Adjusted day range/B3.tif"), overwrite = TRUE)
+writeRaster(adj.dr.A1, paste0(getwd(), "/Rasters/Adjusted day range/A1.tif"), overwrite = TRUE)
+writeRaster(adj.dr.A2, paste0(getwd(), "/Rasters/Adjusted day range/A2.tif"), overwrite = TRUE)
+writeRaster(adj.dr.A3, paste0(getwd(), "/Rasters/Adjusted day range/A3.tif"), overwrite = TRUE)
 
 #_______________________________________________________________________
 # 6. Scaled covariate rasters for UD simulation ----
@@ -566,15 +508,13 @@ writeRaster(adj.dr.C3H, paste0(getwd(), "/Rasters/Adjusted day range/C3H.tif"), 
 #_______________________________________________________________________
 
 scaled_covs <- function(landscape.covs,     # raster
-                        id.landscape,
-                        id.variability,
+                        id.trt,
                         id.rep) {
   
   # subset scaling factors
   focal.scale <- all.scale %>%
     
-    filter(landscape == id.landscape,
-           variability == id.variability,
+    filter(trt == id.trt,
            rep == id.rep,
            model == "SSF")
   
@@ -592,35 +532,21 @@ scaled_covs <- function(landscape.covs,     # raster
 # 6b. Use function ----
 #_______________________________________________________________________
 
-scaled.covs.S1L <- scaled_covs(landscape.covs.S1, "simple", "low", 1)
-scaled.covs.S2L <- scaled_covs(landscape.covs.S2, "simple", "low", 2)
-scaled.covs.S3L <- scaled_covs(landscape.covs.S3, "simple", "low", 3)
-scaled.covs.S1H <- scaled_covs(landscape.covs.S1, "simple", "high", 1)
-scaled.covs.S2H <- scaled_covs(landscape.covs.S2, "simple", "high", 2)
-scaled.covs.S3H <- scaled_covs(landscape.covs.S3, "simple", "high", 3)
-
-scaled.covs.C1L <- scaled_covs(landscape.covs.C1, "complex", "low", 1)
-scaled.covs.C2L <- scaled_covs(landscape.covs.C2, "complex", "low", 2)
-scaled.covs.C3L <- scaled_covs(landscape.covs.C3, "complex", "low", 3)
-scaled.covs.C1H <- scaled_covs(landscape.covs.C1, "complex", "high", 1)
-scaled.covs.C2H <- scaled_covs(landscape.covs.C2, "complex", "high", 2)
-scaled.covs.C3H <- scaled_covs(landscape.covs.C3, "complex", "high", 3)
+scaled.covs.B1 <- scaled_covs(landscape.covs.B1, "before", 1)
+scaled.covs.B2 <- scaled_covs(landscape.covs.B2, "before", 2)
+scaled.covs.B3 <- scaled_covs(landscape.covs.B3, "before", 3)
+scaled.covs.A1 <- scaled_covs(landscape.covs.A1, "after", 1)
+scaled.covs.A2 <- scaled_covs(landscape.covs.A2, "after", 2)
+scaled.covs.A3 <- scaled_covs(landscape.covs.A3, "after", 3)
 
 #_______________________________________________________________________
 # 6c. Write rasters ----
 #_______________________________________________________________________
 
-writeRaster(scaled.covs.S1L, paste0(getwd(), "/Rasters/Scaled covariates/S1L.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.S2L, paste0(getwd(), "/Rasters/Scaled covariates/S2L.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.S3L, paste0(getwd(), "/Rasters/Scaled covariates/S3L.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.S1H, paste0(getwd(), "/Rasters/Scaled covariates/S1H.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.S2H, paste0(getwd(), "/Rasters/Scaled covariates/S2H.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.S3H, paste0(getwd(), "/Rasters/Scaled covariates/S3H.tif"), overwrite = TRUE)
-
-writeRaster(scaled.covs.C1L, paste0(getwd(), "/Rasters/Scaled covariates/C1L.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.C2L, paste0(getwd(), "/Rasters/Scaled covariates/C2L.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.C3L, paste0(getwd(), "/Rasters/Scaled covariates/C3L.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.C1H, paste0(getwd(), "/Rasters/Scaled covariates/C1H.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.C2H, paste0(getwd(), "/Rasters/Scaled covariates/C2H.tif"), overwrite = TRUE)
-writeRaster(scaled.covs.C3H, paste0(getwd(), "/Rasters/Scaled covariates/C3H.tif"), overwrite = TRUE)
+writeRaster(scaled.covs.B1, paste0(getwd(), "/Rasters/Scaled covariates/B1.tif"), overwrite = TRUE)
+writeRaster(scaled.covs.B2, paste0(getwd(), "/Rasters/Scaled covariates/B2.tif"), overwrite = TRUE)
+writeRaster(scaled.covs.B3, paste0(getwd(), "/Rasters/Scaled covariates/B3.tif"), overwrite = TRUE)
+writeRaster(scaled.covs.A1, paste0(getwd(), "/Rasters/Scaled covariates/A1.tif"), overwrite = TRUE)
+writeRaster(scaled.covs.A2, paste0(getwd(), "/Rasters/Scaled covariates/A2.tif"), overwrite = TRUE)
+writeRaster(scaled.covs.A3, paste0(getwd(), "/Rasters/Scaled covariates/A3.tif"), overwrite = TRUE)
 

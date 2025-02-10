@@ -35,11 +35,12 @@ load(paste0(getwd(), "/Derived_data/Lookup/detection_lookup_3.RData"))
 #_______________________________________________________________________
 
 # expand grid
-all.combos <- expand.grid(id.rep = 1:3,
+all.combos <- expand.grid(id.trt = c("before", "after"),
+                          id.rep = 1:3,
                           n = c(2, 5, 10, 15, 25, 50, 75, 100))
 
 # add correct list index
-all.combos$list.index <- rep(c(7, 6, 5, 4, 3, 2, 1, NA), each = 3)
+all.combos$list.index <- rep(c(7, 6, 5, 4, 3, 2, 1, NA), each = 6)
 
 extract_passes <- function(df) {
   
@@ -74,7 +75,8 @@ extract_passes <- function(df) {
       
       focal.passes <- df %>%
       
-      filter(rep == focal.combo$id.rep &
+      filter(trt == focal.combo$id.trt &
+             rep == focal.combo$id.rep &
              indiv %in% focal.lookup[[focal.combo$list.index]]) %>%
       
       # ensure that I'm not confused by what "n" means
@@ -85,7 +87,8 @@ extract_passes <- function(df) {
       
       focal.passes <- df %>%
         
-        filter(rep == focal.combo$id.rep &
+        filter(trt == focal.combo$id.trt &
+               rep == focal.combo$id.rep &
                indiv %in% 1:100) %>%
         
         # ensure that I'm not confused by what "n" means
@@ -134,34 +137,68 @@ group_passes <- function (df,
       filter(rep == focal.combo$id.rep &
              n.indiv == focal.combo$n)
     
-    # group by cam and sum all passes
-    focal.passes.1 <- focal.passes %>% 
+    # split by trt and group by camand sum all passes
+    focal.passes.1.B <- focal.passes %>% 
+      
+      filter(trt == "before") %>%
+      
+      group_by(cam.id) %>%
+      
+      summarize(total.passes = sum(passes))
+    
+    focal.passes.1.A <- focal.passes %>% 
+      
+      filter(trt == "after") %>%
       
       group_by(cam.id) %>%
       
       summarize(total.passes = sum(passes))
     
     # determine if any cams have no passes
-    no.passes <- which(!c(1:n.cams) %in% focal.passes.1$cam.id)
+    no.passes.B <- which(!c(1:n.cams) %in% focal.passes.1.B$cam.id)
+    no.passes.A <- which(!c(1:n.cams) %in% focal.passes.1.A$cam.id)
     
     # add a zero entry for each one
-    for (j in no.passes) {
+    # BEFORE
+    for (j in no.passes.B) {
       
-      new.row <- data.frame(cam.id = j,
-                            total.passes = 0)
+      new.row.B <- data.frame(cam.id = j,
+                              total.passes = 0)
       
-      focal.passes.1 <- rbind(focal.passes.1, new.row)
+      focal.passes.1.B <- rbind(focal.passes.1.B, new.row.B)
       
     }
     
+    # AFTER
+    for (k in no.passes.A) {
+      
+      new.row.A <- data.frame(cam.id = k,
+                              total.passes = 0)
+      
+      focal.passes.1.A <- rbind(focal.passes.1.A, new.row.A)
+
+    }
+    
     # sort by cam.id and add in identifiers
-    focal.passes.2 <- focal.passes.1 %>% 
+    focal.passes.2.B <- focal.passes.1.B %>% 
       
       arrange(cam.id) %>%
       
-      mutate(n.indiv = focal.passes$n.indiv[1],
+      mutate(trt = "before",
+             n.indiv = focal.passes$n.indiv[1],
              rep = focal.passes$rep[1],
              cams = focal.passes$cams[1])
+    
+    focal.passes.2.A <- focal.passes.1.A %>% 
+      
+      arrange(cam.id) %>%
+      
+      mutate(trt = "after",
+             n.indiv = focal.passes$n.indiv[1],
+             rep = focal.passes$rep[1],
+             cams = focal.passes$cams[1])
+    
+    focal.passes.2 <- rbind(focal.passes.2.B, focal.passes.2.A)
     
     # bind
     all.passes.grouped <- rbind(all.passes.grouped, focal.passes.2)
@@ -184,7 +221,6 @@ passes.gp.16 <- group_passes(passes.extracted.16, 16)
 #_______________________________________________________________________
 # 5. Look at NAs in the 4 cam set ----
 #_______________________________________________________________________
-
 
 # UNUSED 
 passes.na <- passes.gp.4 %>% 
@@ -256,7 +292,7 @@ ggplot(passes.gp.all) +
   
   theme_bw() +
   
-  facet_grid(landscape ~ variability) +
+  facet_wrap(~ trt) +
   
   geom_point(aes(x = as.factor(n.indiv),
                  y = total.passes,
