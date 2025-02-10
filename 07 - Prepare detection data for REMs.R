@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 30 Jan 2025
+# Date last modified: 10 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -23,8 +23,10 @@ passes.4 <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_4.csv"))
 passes.9 <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_9.csv"))
 passes.16 <- read.csv(paste0(getwd(), "/Derived_data/Passes/passes_16.csv"))
 
-# lookup table
-lookup.passes <- read.csv(paste0(getwd(), "/Derived_data/Lookup/detection_lookup.csv"))
+# lookup files
+load(paste0(getwd(), "/Derived_data/Lookup/detection_lookup_1.RData"))
+load(paste0(getwd(), "/Derived_data/Lookup/detection_lookup_2.RData"))
+load(paste0(getwd(), "/Derived_data/Lookup/detection_lookup_3.RData"))
 
 #_______________________________________________________________________
 # 3. Extract individual data at each density ----
@@ -33,10 +35,11 @@ lookup.passes <- read.csv(paste0(getwd(), "/Derived_data/Lookup/detection_lookup
 #_______________________________________________________________________
 
 # expand grid
-all.combos <- expand.grid(landscape = c("simple", "complex"),
-                          variability = c("low", "high"),
-                          rep = 1:3,
-                          n = c(2, 5, 10, 15, 25, 40))
+all.combos <- expand.grid(id.rep = 1:3,
+                          n = c(2, 5, 10, 15, 25, 50, 75, 100))
+
+# add correct list index
+all.combos$list.index <- rep(c(7, 6, 5, 4, 3, 2, 1, NA), each = 3)
 
 extract_passes <- function(df) {
   
@@ -47,25 +50,49 @@ extract_passes <- function(df) {
     
     focal.combo <- all.combos[i, ]
     
-    # subset lookup table
-    focal.lookup <- lookup.passes %>%
+    # use correct lookup file
+    if (focal.combo$id.rep == 1) {
       
-      filter(landscape == focal.combo$landscape &
-             variability == focal.combo$variability &
-             rep == focal.combo$rep &
-             n == focal.combo$n)
-    
+      focal.lookup <- sampled.indivs.1
+      
+    } else {
+      
+      if (focal.combo$id.rep == 2) {
+        
+        focal.lookup <- sampled.indivs.2
+        
+      } else {
+        
+        focal.lookup <- sampled.indivs.3
+        
+      }
+      
+    }
+     
     # subset correct individuals from passes df
-    focal.passes <- df %>%
+    if (is.na(focal.combo$list.index) == FALSE) {
       
-      filter(landscape == focal.combo$landscape &
-             variability == focal.combo$variability &
-             rep == focal.combo$rep &
-             indiv %in% focal.lookup$indiv) %>%
+      focal.passes <- df %>%
+      
+      filter(rep == focal.combo$id.rep &
+             indiv %in% focal.lookup[[focal.combo$list.index]]) %>%
       
       # ensure that I'm not confused by what "n" means
       mutate(n.indiv = focal.combo$n) %>%
       rename(passes = n)
+      
+    } else {
+      
+      focal.passes <- df %>%
+        
+        filter(rep == focal.combo$id.rep &
+               indiv %in% 1:100) %>%
+        
+        # ensure that I'm not confused by what "n" means
+        mutate(n.indiv = focal.combo$n) %>%
+        rename(passes = n)
+      
+    }
     
     # bind into df
     all.focal.passes <- rbind(all.focal.passes, focal.passes)
@@ -104,9 +131,7 @@ group_passes <- function (df,
     # subset extracted passes
     focal.passes <- df %>%
       
-      filter(landscape == focal.combo$landscape &
-             variability == focal.combo$variability &
-             rep == focal.combo$rep &
+      filter(rep == focal.combo$id.rep &
              n.indiv == focal.combo$n)
     
     # group by cam and sum all passes
@@ -135,8 +160,6 @@ group_passes <- function (df,
       arrange(cam.id) %>%
       
       mutate(n.indiv = focal.passes$n.indiv[1],
-             landscape = focal.passes$landscape[1],
-             variability = focal.passes$variability[1],
              rep = focal.passes$rep[1],
              cams = focal.passes$cams[1])
     
@@ -162,6 +185,8 @@ passes.gp.16 <- group_passes(passes.extracted.16, 16)
 # 5. Look at NAs in the 4 cam set ----
 #_______________________________________________________________________
 
+
+# UNUSED 
 passes.na <- passes.gp.4 %>% 
   
   filter(n.indiv == 2 &
