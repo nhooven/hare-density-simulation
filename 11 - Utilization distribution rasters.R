@@ -5,19 +5,19 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 12 Feb 2025
 # Date completed: 12 Feb 2025
-# Date last modified: 12 Feb 2025
+# Date last modified: 18 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
 # 1. Load in packages ----
 #_______________________________________________________________________
 
-library(tidyverse)
-library(lubridate)
-library(terra)
-library(sf)
-library(amt)
-library(ctmm)
+library(tidyverse)          
+library(lubridate)          # work with dates
+library(terra)              # rasters
+library(sf)                 # polygons
+library(amt)                # tracks
+library(ctmm)               # ctmms/aKDEs
 
 #_______________________________________________________________________
 # 2. Read in data ----
@@ -37,7 +37,7 @@ unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp")
 # define a raster grid on which to calculate the aKDE
 landscape.covs.B1 <- rast("Rasters/Scaled covariates/B1.tif")
 
-base.grid <- raster(landscape.covs.B1$forage)
+base.grid <- raster::raster(landscape.covs.B1$forage)
 
 #_______________________________________________________________________
 # 2. Define function ----
@@ -56,7 +56,7 @@ akde_count <- function(sims) {
   all.rast.m <- crop(rast(nrows = nrow(base.grid),
                           ncols = ncol(base.grid),
                           resolution = res(base.grid),
-                          extent = extent(base.grid),
+                          extent = raster::extent(base.grid),
                           vals = NA,
                           crs = "EPSG:32611"),
                      unit.bound)
@@ -154,18 +154,6 @@ akde_count <- function(sims) {
     
   }
   
-  # status message
-  if (i %% 10 == 0) {
-    
-    elapsed.time <- round(as.numeric(difftime(Sys.time(), 
-                                              start.time, 
-                                              units = "mins")), 
-                          digits = 1)
-    
-    print(paste0("Completed replicates ", m, " of ", max(sims$sim.rep), " - ", elapsed.time, " mins"))
-    
-  }
-  
   # return
   return(all.rast.m)
   
@@ -175,9 +163,6 @@ akde_count <- function(sims) {
 # 3. Use function ----
 #_______________________________________________________________________
 
-akde.B1 <- akde_count(sims.B1)
-akde.B2 <- akde_count(sims.B2)
-akde.B3 <- akde_count(sims.B3)
-akde.A1 <- akde_count(sims.A1)
-akde.A2 <- akde_count(sims.A2)
-akde.A3 <- akde_count(sims.A3)
+ <- akde_count()
+
+# completed these in multiple sessions - completed 02-18-2025

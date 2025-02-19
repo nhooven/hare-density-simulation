@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 14 - Calculate REMs
+# Script: 15 - Calculate REMs
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 13 Dec 2024
 # Date completed: 
-# Date last modified: 09 Jan 2025
+# Date last modified: 18 Jan 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,57 +15,321 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 
 #_______________________________________________________________________
-# 2. Read in data ----
+# 2. Read in and clean data ----
 #_______________________________________________________________________
 
-passes <- read.csv(paste0(getwd(), "/Derived_data/Passes/final_passes.csv"))
+passes <- read.csv(paste0(getwd(), "/Derived_data/For REM/final_passes.csv"))
+
+# remove first column and duplicates - for some reason there are duplicates!
+passes.1 <- passes %>%
+  
+  dplyr::select(-X) %>%
+  
+  dplyr::distinct()
+  
+#_______________________________________________________________________
+# 3. Calculate REM density ----
+#_______________________________________________________________________
+
+# here we'll propagate uncertainty with a Monte Carlo resampling approach -
+# all REM inputs (except constants) will be a drawn from a Normal(mean, sd)
+# of that input
+
+# we'll first calculate by-camera REM estimates, then use each draw (n = n.samp)
+# to calculate a mean, SD, CV, and confidence intervals for each "combo"
 
 #_______________________________________________________________________
-# 3. Calculate REM density by camera ----
+# 3a. Define function ----
 #_______________________________________________________________________
 
-# define function
-calc_REM_bycam <- function(x) {
+calc_REM_bycam <- function(x,
+                           n.samp) {
   
-  # point estimates
-  # full naive REM
-  REM.1 <- (x$total.passes / x$days) *
-           (pi / ((x$dr.c.mean * 1000) * 3.5 * (2.0 + x$lens))) *
-           10000
+  # loop through cameras
+  all.cams <- data.frame()
   
-  # REM corrected with naive SSF prediction
-  REM.2 <- REM.1 * x$ssf.mean
-  
-  # REM corrected with iSSF UD prediction
-  REM.3 <- REM.1 * x$issf.mean
-  
-  # total variance with the delta method
-  var.REM.1 <- x$dr.c.sd^2
-  var.REM.2 <- x$dr.c.sd^2 + x$ssf.se^2
-  var.REM.3 <- x$dr.se^2 + x$issf.se^2
-  
-  # bind onto df
-  x.1 <- cbind(x, REM.1, REM.2, REM.3,
-               var.REM.1, var.REM.2, var.REM.3)
+  for (i in 1:nrow(x)) {
+    
+    # subset
+    focal.cam <- x[i, ]
+    
+    # determine if the count is zero
+    if (focal.cam$total.passes > 0) {
+      
+     # sample n.samp draws for each input value
+     focal.static.dr <- rnorm(n.samp, focal.cam$static.dr.mean, focal.cam$static.dr.se)
+     focal.dr <- rnorm(n.samp, focal.cam$dr.mean, focal.cam$dr.se)
+     focal.rsf <- rnorm(n.samp, focal.cam$rsf.mean, focal.cam$rsf.se)
+     focal.issf <- rnorm(n.samp, focal.cam$issf.mean, focal.cam$issf.se)
+     
+     # calculate mean, SD, and CV for each approach
+     # loop through all draws
+     focal.rem.calc <- data.frame()
+     
+     for (j in 1:n.samp) {
+       
+       # df of all inputs
+       focal.input <- data.frame(total.passes = focal.cam$total.passes,
+                                 static.dr = focal.static.dr[j],
+                                 dr = focal.dr[j],
+                                 rsf = focal.rsf[j],
+                                 issf = focal.issf[j],
+                                 lens = focal.cam$lens,
+                                 days = focal.cam$days)
+       
+       # and df to store outputs
+       focal.output <- data.frame(M1 = NA,
+                                  M2 = NA,
+                                  M3 = NA,
+                                  M4 = NA,
+                                  M5 = NA)
+       
+       # M1 - full naive
+       focal.output$M1 <- (focal.input$total.passes / focal.input$days) *
+                          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                          10000
+       
+       # M2 - RSF correction
+       focal.output$M2 <- ((focal.input$total.passes / focal.input$days) *
+                          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                          10000) * focal.input$rsf
+       
+       # M3 - iSSF correction, no movement
+       focal.output$M3 <- ((focal.input$total.passes / focal.input$days) *
+                          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                          10000) * focal.input$issf
+       
+       # M4 - No correction, movement
+       focal.output$M4 <- ((focal.input$total.passes / focal.input$days) *
+                          (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                          10000)
+       
+       # M5 - iSSF correction, movement
+       focal.output$M5 <- ((focal.input$total.passes / focal.input$days) *
+                          (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                          10000) * focal.input$issf
+       
+       # bind into df
+       focal.rem.calc <- rbind(focal.rem.calc, focal.output)
+      
+    }
+    
+    # calculate summary statistics
+    focal.rem.calc.summary <- data.frame(M1.mean = mean(focal.rem.calc$M1),
+                                         M1.sd = sd(focal.rem.calc$M1),
+                                         M1.cv = sd(focal.rem.calc$M1) / mean(focal.rem.calc$M1),
+                                         M2.mean = mean(focal.rem.calc$M2),
+                                         M2.sd = sd(focal.rem.calc$M2),
+                                         M2.cv = sd(focal.rem.calc$M2) / mean(focal.rem.calc$M2),
+                                         M3.mean = mean(focal.rem.calc$M3),
+                                         M3.sd = sd(focal.rem.calc$M3),
+                                         M3.cv = sd(focal.rem.calc$M3) / mean(focal.rem.calc$M3),
+                                         M4.mean = mean(focal.rem.calc$M4),
+                                         M4.sd = sd(focal.rem.calc$M4),
+                                         M4.cv = sd(focal.rem.calc$M4) / mean(focal.rem.calc$M4),
+                                         M5.mean = mean(focal.rem.calc$M5),
+                                         M5.sd = sd(focal.rem.calc$M5),
+                                         M5.cv = sd(focal.rem.calc$M5) / mean(focal.rem.calc$M5))
+    
+    # bind into original df
+    focal.cam <- cbind(focal.cam, focal.rem.calc.summary)
+    
+    # and bind into all.cams
+    all.cams <- rbind(all.cams, focal.cam)
+      
+    } else {     # condition if n.passes = 0
+      
+      focal.rem.calc.summary <- data.frame(M1.mean = 0,
+                                           M1.sd = 0,
+                                           M1.cv = NaN,
+                                           M2.mean = 0,
+                                           M2.sd = 0,
+                                           M2.cv = NaN,
+                                           M3.mean = 0,
+                                           M3.sd = 0,
+                                           M3.cv = NaN,
+                                           M4.mean = 0,
+                                           M4.sd = 0,
+                                           M4.cv = NaN,
+                                           M5.mean = 0,
+                                           M5.sd = 0,
+                                           M5.cv = NaN)
+      
+      # bind into original df
+      focal.cam <- cbind(focal.cam, focal.rem.calc.summary)
+      
+      # and bind into all.cams
+      all.cams <- rbind(all.cams, focal.cam)
+      
+    }
+    
+  }
   
   # return
-  return(x.1)
+  return(all.cams)
   
 }
+  
+#_______________________________________________________________________
+# 3b. Use function ----
+#_______________________________________________________________________
 
-# apply function
-passes.1 <- calc_REM_bycam(passes)
+all.rem <- calc_REM_bycam(passes.1, n.samp = 500)
 
 #_______________________________________________________________________
-# 4. Bootstrap within each landscape-var-rep-n.cams-n.indiv combinations ----
+# 4. Calculate mean, CV, and confidence intervals by combination ----
 #_______________________________________________________________________
 
 # expand grid
-all.combos <- expand.grid(landscape = c("simple", "complex"),
-                          variability = c("low", "high"),
+all.combos <- expand.grid(trt = c("before", "after"),
                           rep = 1:3,
                           n.cams = c(4, 9, 16),
-                          n.indiv = unique(passes.1$n.indiv))
+                          n.indiv = unique(passes$n.indiv))
+
+#_______________________________________________________________________
+# 4a. Define function ----
+#_______________________________________________________________________
+
+mean_rem <- function(x,
+                     combos = all.combos,
+                     n.samp) {
+  
+  # loop through all combos
+  # start time
+  start.time <- Sys.time()
+  
+  for (i in 1:nrow(combos)) {
+    
+    focal.combo <- combos[i, ]
+    
+    # subset passes
+    focal.passes <- x %>%
+      
+      filter(trt == focal.combo$trt,
+             rep == focal.combo$rep,
+             n.cams == focal.combo$n.cams,
+             n.indiv == focal.combo$n.indiv)
+    
+    # take draws
+    # sample n.samp draws for each input value
+    focal.M1 <- rnorm(n.samp, focal.passes$M1.mean, focal.passes$M1.sd)
+    focal.M2 <- rnorm(n.samp, focal.passes$M2.mean, focal.passes$M2.sd)
+    focal.M3 <- rnorm(n.samp, focal.passes$M3.mean, focal.passes$M3.sd)
+    focal.M4 <- rnorm(n.samp, focal.passes$M4.mean, focal.passes$M4.sd)
+    focal.M5 <- rnorm(n.samp, focal.passes$M5.mean, focal.passes$M5.sd)
+    
+    for (j in 1:n.samp) {
+      
+      # df of all REM draws
+      focal.draws <- data.frame(total.passes = focal.cam$total.passes,
+                                static.dr = focal.static.dr[j],
+                                dr = focal.dr[j],
+                                rsf = focal.rsf[j],
+                                issf = focal.issf[j],
+                                lens = focal.cam$lens,
+                                days = focal.cam$days)
+      
+      # and df to store outputs
+      focal.output <- data.frame(M1 = NA,
+                                 M2 = NA,
+                                 M3 = NA,
+                                 M4 = NA,
+                                 M5 = NA)
+      
+    }
+    
+  }
+  
+  
+  
+}
+
+
+  
+  
+  
+  
+  # initialize a new data.frame to hold everything, starting with weighted means
+  focal.REM <- data.frame(REM.1.mean = weighted.mean(focal.passes$REM.1, 1 / focal.passes$var.REM.1),
+                          REM.2.mean = weighted.mean(focal.passes$REM.2, 1 / focal.passes$var.REM.2),
+                          REM.3.mean = weighted.mean(focal.passes$REM.3, 1 / focal.passes$var.REM.3))
+  
+  # weighted bootstrap for each REM estimate
+  boot.means <- data.frame(matrix(data = NA,
+                                  nrow = 5000,
+                                  ncol = 3))
+  
+  # loop
+  for (j in 1:5000) {
+    
+    # naive REM
+    REM.1.sample <- sample(1:nrow(focal.passes), size = nrow(focal.passes), replace = TRUE, prob = 1 / focal.passes$var.REM.1)
+    
+    REM.1.sampled.rows <- focal.passes[REM.1.sample, ]
+    
+    boot.means[j, 1] <- mean(REM.1.sampled.rows$REM.1)
+    
+    # REM with SSF CF
+    REM.2.sample <- sample(1:nrow(focal.passes), size = nrow(focal.passes), replace = TRUE, prob = 1 / focal.passes$var.REM.2)
+    
+    REM.2.sampled.rows <- focal.passes[REM.2.sample, ]
+    
+    boot.means[j, 2] <- mean(REM.2.sampled.rows$REM.2)
+    
+    # REM with iSSF CF and adjusted day range
+    REM.3.sample <- sample(1:nrow(focal.passes), size = nrow(focal.passes), replace = TRUE, prob = 1 / focal.passes$var.REM.3)
+    
+    REM.3.sampled.rows <- focal.passes[REM.3.sample, ]
+    
+    boot.means[j, 3] <- mean(REM.3.sampled.rows$REM.3)
+    
+  }
+  
+  # add variance measures to df
+  # sampling error
+  focal.REM$REM.1.se <- sd(boot.means$X1)
+  focal.REM$REM.2.se <- sd(boot.means$X2)
+  focal.REM$REM.3.se <- sd(boot.means$X3)
+  
+  # coefficients of variation
+  focal.REM$REM.1.cv <- focal.REM$REM.1.se / focal.REM$REM.1.mean
+  focal.REM$REM.2.cv <- focal.REM$REM.2.se / focal.REM$REM.2.mean
+  focal.REM$REM.3.cv <- focal.REM$REM.3.se / focal.REM$REM.3.mean
+  
+  # percentile confidence intervals
+  focal.REM$REM.1.l95 <- quantile(boot.means$X1, prob = 0.025)
+  focal.REM$REM.2.l95 <- quantile(boot.means$X2, prob = 0.025)
+  focal.REM$REM.3.l95 <- quantile(boot.means$X3, prob = 0.025)
+  
+  focal.REM$REM.1.u95 <- quantile(boot.means$X1, prob = 0.975)
+  focal.REM$REM.2.u95 <- quantile(boot.means$X2, prob = 0.975)
+  focal.REM$REM.3.u95 <- quantile(boot.means$X3, prob = 0.975)
+  
+  # bind in identifier information
+  focal.passes.info <- focal.passes %>%
+    
+    dplyr::select(landscape, variability, rep, n.cams, n.indiv)
+  
+  focal.all <- cbind(focal.passes.info, focal.REM)
+  
+  # bind into master df
+  all.REM <- rbind(all.REM, focal.all)
+  
+  # status message
+  time.elapsed <- round(as.numeric(difftime(Sys.time(), start.time, units = "mins")), digits = 2)
+  
+  print(paste0("Completed combo ", i, " of ", nrow(all.combos), " - ", time.elapsed, " mins"))
+  
+}
+
+# keep distinct rows only
+all.REM.1 <- all.REM %>% dplyr::distinct()
+
+
+#_______________________________________________________________________
+# 4. Bootstrap within each trt-rep-n.cams-n.indiv combinations ----
+#_______________________________________________________________________
+
 
 # loop through all combos
 all.REM <- data.frame()
