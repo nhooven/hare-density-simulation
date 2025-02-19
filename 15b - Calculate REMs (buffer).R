@@ -1,6 +1,6 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 15 - Calculate REMs
+# Script: 15b - Calculate REMs (buffer)
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 13 Dec 2024
@@ -18,7 +18,7 @@ library(tidyverse)       # tidy data cleaning and manipulation
 # 2. Read in and clean data ----
 #_______________________________________________________________________
 
-passes <- read.csv(paste0(getwd(), "/Derived_data/For REM/final_passes.csv"))
+passes <- read.csv(paste0(getwd(), "/Derived_data/For REM/final_passes_buff.csv"))
 
 # remove first column and duplicates - for some reason there are duplicates!
 passes.1 <- passes %>%
@@ -26,7 +26,7 @@ passes.1 <- passes %>%
   dplyr::select(-X) %>%
   
   dplyr::distinct()
-  
+
 #_______________________________________________________________________
 # 3. Calculate REM density by camera ----
 #_______________________________________________________________________
@@ -56,81 +56,81 @@ calc_REM_bycam <- function(x,
     # determine if the count is zero
     if (focal.cam$total.passes > 0) {
       
-     # sample n.samp draws for each input value
-     focal.static.dr <- rnorm(n.samp, focal.cam$static.dr.mean, focal.cam$static.dr.se)
-     focal.dr <- rnorm(n.samp, focal.cam$dr.mean, focal.cam$dr.se)
-     focal.rsf <- rnorm(n.samp, focal.cam$rsf.mean, focal.cam$rsf.se)
-     focal.issf <- rnorm(n.samp, focal.cam$issf.mean, focal.cam$issf.se)
-     
-     # calculate mean, SD, and CV for each approach
-     # loop through all draws
-     focal.rem.calc <- data.frame()
-     
-     for (j in 1:n.samp) {
-       
-       # df of all inputs
-       focal.input <- data.frame(total.passes = focal.cam$total.passes,
-                                 static.dr = focal.static.dr[j],
-                                 dr = focal.dr[j],
-                                 rsf = focal.rsf[j],
-                                 issf = focal.issf[j],
-                                 lens = focal.cam$lens,
-                                 days = focal.cam$days)
-       
-       # and df to store outputs
-       focal.output <- data.frame(M1 = NA,
-                                  M2 = NA,
-                                  M3 = NA,
-                                  M4 = NA,
-                                  M5 = NA)
-       
-       # M1 - full naive
-       focal.output$M1 <- (focal.input$total.passes / focal.input$days) *
-                          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                          10000
-       
-       # M2 - RSF correction
-       focal.output$M2 <- ((focal.input$total.passes / focal.input$days) *
-                          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                          10000) * focal.input$rsf
-       
-       # M3 - iSSF correction, no movement
-       focal.output$M3 <- ((focal.input$total.passes / focal.input$days) *
-                          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                          10000) * focal.input$issf
-       
-       # M4 - No correction, movement
-       focal.output$M4 <- ((focal.input$total.passes / focal.input$days) *
-                          (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                          10000)
-       
-       # M5 - iSSF correction, movement
-       focal.output$M5 <- ((focal.input$total.passes / focal.input$days) *
-                          (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                          10000) * focal.input$issf
-       
-       # bind into df
-       focal.rem.calc <- rbind(focal.rem.calc, focal.output)
+      # sample n.samp draws for each input value
+      focal.static.dr <- rnorm(n.samp, focal.cam$static.dr.mean, focal.cam$static.dr.se)
+      focal.dr <- rnorm(n.samp, focal.cam$dr.mean, focal.cam$dr.se)
+      focal.rsf <- rnorm(n.samp, focal.cam$rsf.mean, focal.cam$rsf.se)
+      focal.issf <- rnorm(n.samp, focal.cam$issf.mean, focal.cam$issf.se)
       
-    }
-    
-    # calculate summary statistics
-    focal.rem.calc.summary <- data.frame(M1.mean = mean(focal.rem.calc$M1),
-                                         M1.sd = sd(focal.rem.calc$M1),
-                                         M2.mean = mean(focal.rem.calc$M2),
-                                         M2.sd = sd(focal.rem.calc$M2),
-                                         M3.mean = mean(focal.rem.calc$M3),
-                                         M3.sd = sd(focal.rem.calc$M3),
-                                         M4.mean = mean(focal.rem.calc$M4),
-                                         M4.sd = sd(focal.rem.calc$M4),
-                                         M5.mean = mean(focal.rem.calc$M5),
-                                         M5.sd = sd(focal.rem.calc$M5))
-    
-    # bind into original df
-    focal.cam <- cbind(focal.cam, focal.rem.calc.summary)
-    
-    # and bind into all.cams
-    all.cams <- rbind(all.cams, focal.cam)
+      # calculate mean, SD, and CV for each approach
+      # loop through all draws
+      focal.rem.calc <- data.frame()
+      
+      for (j in 1:n.samp) {
+        
+        # df of all inputs
+        focal.input <- data.frame(total.passes = focal.cam$total.passes,
+                                  static.dr = focal.static.dr[j],
+                                  dr = focal.dr[j],
+                                  rsf = focal.rsf[j],
+                                  issf = focal.issf[j],
+                                  lens = focal.cam$lens,
+                                  days = focal.cam$days)
+        
+        # and df to store outputs
+        focal.output <- data.frame(M1 = NA,
+                                   M2 = NA,
+                                   M3 = NA,
+                                   M4 = NA,
+                                   M5 = NA)
+        
+        # M1 - full naive
+        focal.output$M1 <- (focal.input$total.passes / focal.input$days) *
+          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+          10000
+        
+        # M2 - RSF correction
+        focal.output$M2 <- ((focal.input$total.passes / focal.input$days) *
+                              (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000) * focal.input$rsf
+        
+        # M3 - iSSF correction, no movement
+        focal.output$M3 <- ((focal.input$total.passes / focal.input$days) *
+                              (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000) * focal.input$issf
+        
+        # M4 - No correction, movement
+        focal.output$M4 <- ((focal.input$total.passes / focal.input$days) *
+                              (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000)
+        
+        # M5 - iSSF correction, movement
+        focal.output$M5 <- ((focal.input$total.passes / focal.input$days) *
+                              (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000) * focal.input$issf
+        
+        # bind into df
+        focal.rem.calc <- rbind(focal.rem.calc, focal.output)
+        
+      }
+      
+      # calculate summary statistics
+      focal.rem.calc.summary <- data.frame(M1.mean = mean(focal.rem.calc$M1),
+                                           M1.sd = sd(focal.rem.calc$M1),
+                                           M2.mean = mean(focal.rem.calc$M2),
+                                           M2.sd = sd(focal.rem.calc$M2),
+                                           M3.mean = mean(focal.rem.calc$M3),
+                                           M3.sd = sd(focal.rem.calc$M3),
+                                           M4.mean = mean(focal.rem.calc$M4),
+                                           M4.sd = sd(focal.rem.calc$M4),
+                                           M5.mean = mean(focal.rem.calc$M5),
+                                           M5.sd = sd(focal.rem.calc$M5))
+      
+      # bind into original df
+      focal.cam <- cbind(focal.cam, focal.rem.calc.summary)
+      
+      # and bind into all.cams
+      all.cams <- rbind(all.cams, focal.cam)
       
     } else {     # condition if n.passes = 0
       
@@ -159,7 +159,7 @@ calc_REM_bycam <- function(x,
   return(all.cams)
   
 }
-  
+
 #_______________________________________________________________________
 # 3b. Use function ----
 #_______________________________________________________________________
@@ -207,11 +207,11 @@ boot_rem <- function(x,
       
     } else {
       
-    focal.passes <- x %>%
-      
-      filter(rep == focal.combo$rep,
-             n.cams == focal.combo$n.cams,
-             n.indiv == focal.combo$n.indiv)  
+      focal.passes <- x %>%
+        
+        filter(rep == focal.combo$rep,
+               n.cams == focal.combo$n.cams,
+               n.indiv == focal.combo$n.indiv)  
       
     }
     
@@ -398,7 +398,7 @@ all.rem.boot.l <- all.rem.boot.1 %>%
 # 7. Write to.csv ----
 #_______________________________________________________________________
 
-write.csv(all.rem.boot.l, paste0(getwd(), "/Derived_data/REM results/all_rem_boot.csv"))
+write.csv(all.rem.boot.l, paste0(getwd(), "/Derived_data/REM results/all_rem_boot_buff.csv"))
 
 #_______________________________________________________________________
 # 8. Calculate REM density by camera BA ----
@@ -459,28 +459,28 @@ calc_REM_BA <- function(x,
         
         # M1 - full naive
         focal.output$M1 <- (focal.input$total.passes / focal.input$days) *
-                           (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                           10000
+          (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+          10000
         
         # M2 - RSF correction
         focal.output$M2 <- ((focal.input$total.passes / focal.input$days) *
-                           (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                           10000) * focal.input$rsf
+                              (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000) * focal.input$rsf
         
         # M3 - iSSF correction, no movement
         focal.output$M3 <- ((focal.input$total.passes / focal.input$days) *
-                           (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                           10000) * focal.input$issf
+                              (pi / ((focal.input$static.dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000) * focal.input$issf
         
         # M4 - No correction, movement
         focal.output$M4 <- ((focal.input$total.passes / focal.input$days) *
-                           (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                           10000)
+                              (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000)
         
         # M5 - iSSF correction, movement
         focal.output$M5 <- ((focal.input$total.passes / focal.input$days) *
-                           (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
-                           10000) * focal.input$issf
+                              (pi / ((focal.input$dr * 1000) * 3.5 * (2.0 + focal.input$lens))) *
+                              10000) * focal.input$issf
         
         # bind into df
         focal.rem.calc <- rbind(focal.rem.calc, focal.output)

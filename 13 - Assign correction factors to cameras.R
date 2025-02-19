@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 12 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 18 Feb 2025
+# Date last modified: 19 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -72,7 +72,8 @@ issf.A3 <- rast(paste0(getwd(), "/Rasters/UD predictions/A3.tif"))
 # 4a. Define function ----
 #_______________________________________________________________________
 
-extract_vs_vals <- function(n.cams,
+extract_vs_vals <- function(buffer = 0,
+                            n.cams,
                             id.trt,
                             id.rep,
                             dr,
@@ -98,17 +99,40 @@ extract_vs_vals <- function(n.cams,
     
   }
   
-  # initialize a data.frame (make sure the names are correct!)
-  cam.values <- data.frame(cam.id = vs$cam.id,
-                           n.cams = n.cams,
-                           trt = id.trt,
-                           rep = id.rep,
-                           dr.mean = extract(dr$mean, vs, fun = "mean")[ , 2],
-                           dr.se = extract(dr$se, vs, fun = "mean")[ , 2],
-                           rsf.mean = extract(rsf$cf, vs, fun = "mean")[ , 2],       
-                           rsf.se = extract(rsf$se, vs, fun = "mean")[ , 2],
-                           issf.mean = extract(issf$mean, vs, fun = "mean")[ , 2],
-                           issf.se = extract(issf$std, vs, fun = "mean")[ , 2])
+  # determine if a buffer is used
+  if (buffer == 0) {
+    
+    # initialize a data.frame (make sure the names are correct!)
+    cam.values <- data.frame(cam.id = vs$cam.id,
+                             n.cams = n.cams,
+                             trt = id.trt,
+                             rep = id.rep,
+                             dr.mean = extract(dr$mean, vs, fun = "mean")[ , 2],
+                             dr.se = extract(dr$se, vs, fun = "mean")[ , 2],
+                             rsf.mean = extract(rsf$cf, vs, fun = "mean")[ , 2],       
+                             rsf.se = extract(rsf$se, vs, fun = "mean")[ , 2],
+                             issf.mean = extract(issf$mean, vs, fun = "mean")[ , 2],
+                             issf.se = extract(issf$std, vs, fun = "mean")[ , 2])
+    
+    # else case - use a buffer to do the extraction
+  } else {
+    
+    # buffer the viewsheds
+    vs.buffer <- st_buffer(vs, dist = buffer)
+    
+    # initialize a data.frame (make sure the names are correct!)
+    cam.values <- data.frame(cam.id = vs$cam.id,
+                             n.cams = n.cams,
+                             trt = id.trt,
+                             rep = id.rep,
+                             dr.mean = extract(dr$mean, vs.buffer, fun = "mean")[ , 2],
+                             dr.se = extract(dr$se, vs.buffer, fun = "mean")[ , 2],
+                             rsf.mean = extract(rsf$cf, vs.buffer, fun = "mean")[ , 2],       
+                             rsf.se = extract(rsf$se, vs.buffer, fun = "mean")[ , 2],
+                             issf.mean = extract(issf$mean, vs.buffer, fun = "mean")[ , 2],
+                             issf.se = extract(issf$std, vs.buffer, fun = "mean")[ , 2])
+    
+  }
   
   # return
   return(cam.values)
@@ -119,31 +143,50 @@ extract_vs_vals <- function(n.cams,
 # 4b. Use function (bind into df) ----
 #_______________________________________________________________________
 
-all.cam.values <- rbind(extract_vs_vals(4, "before", 1, dr.B1, rsf.B1, issf.B1),
-                        extract_vs_vals(4, "before", 2, dr.B2, rsf.B2, issf.B2),
-                        extract_vs_vals(4, "before", 3, dr.B3, rsf.B3, issf.B3),
-                        extract_vs_vals(4, "after", 1, dr.A1, rsf.A1, issf.A1),
-                        extract_vs_vals(4, "after", 2, dr.A2, rsf.A2, issf.A2),
-                        extract_vs_vals(4, "after", 3, dr.A3, rsf.A3, issf.A3),
-                        extract_vs_vals(9, "before", 1, dr.B1, rsf.B1, issf.B1),
-                        extract_vs_vals(9, "before", 2, dr.B2, rsf.B2, issf.B2),
-                        extract_vs_vals(9, "before", 3, dr.B3, rsf.B3, issf.B3),
-                        extract_vs_vals(9, "after", 1, dr.A1, rsf.A1, issf.A1),
-                        extract_vs_vals(9, "after", 2, dr.A2, rsf.A2, issf.A2),
-                        extract_vs_vals(9, "after", 3, dr.A3, rsf.A3, issf.A3),
-                        extract_vs_vals(16, "before", 1, dr.B1, rsf.B1, issf.B1),
-                        extract_vs_vals(16, "before", 2, dr.B2, rsf.B2, issf.B2),
-                        extract_vs_vals(16, "before", 3, dr.B3, rsf.B3, issf.B3),
-                        extract_vs_vals(16, "after", 1, dr.A1, rsf.A1, issf.A1),
-                        extract_vs_vals(16, "after", 2, dr.A2, rsf.A2, issf.A2),
-                        extract_vs_vals(16, "after", 3, dr.A3, rsf.A3, issf.A3))
+all.cam.values <- rbind(extract_vs_vals(buffer = 0, 4, "before", 1, dr.B1, rsf.B1, issf.B1),
+                        extract_vs_vals(buffer = 0, 4, "before", 2, dr.B2, rsf.B2, issf.B2),
+                        extract_vs_vals(buffer = 0, 4, "before", 3, dr.B3, rsf.B3, issf.B3),
+                        extract_vs_vals(buffer = 0, 4, "after", 1, dr.A1, rsf.A1, issf.A1),
+                        extract_vs_vals(buffer = 0, 4, "after", 2, dr.A2, rsf.A2, issf.A2),
+                        extract_vs_vals(buffer = 0, 4, "after", 3, dr.A3, rsf.A3, issf.A3),
+                        extract_vs_vals(buffer = 0, 9, "before", 1, dr.B1, rsf.B1, issf.B1),
+                        extract_vs_vals(buffer = 0, 9, "before", 2, dr.B2, rsf.B2, issf.B2),
+                        extract_vs_vals(buffer = 0, 9, "before", 3, dr.B3, rsf.B3, issf.B3),
+                        extract_vs_vals(buffer = 0, 9, "after", 1, dr.A1, rsf.A1, issf.A1),
+                        extract_vs_vals(buffer = 0, 9, "after", 2, dr.A2, rsf.A2, issf.A2),
+                        extract_vs_vals(buffer = 0, 9, "after", 3, dr.A3, rsf.A3, issf.A3),
+                        extract_vs_vals(buffer = 0, 16, "before", 1, dr.B1, rsf.B1, issf.B1),
+                        extract_vs_vals(buffer = 0, 16, "before", 2, dr.B2, rsf.B2, issf.B2),
+                        extract_vs_vals(buffer = 0, 16, "before", 3, dr.B3, rsf.B3, issf.B3),
+                        extract_vs_vals(buffer = 0, 16, "after", 1, dr.A1, rsf.A1, issf.A1),
+                        extract_vs_vals(buffer = 0, 16, "after", 2, dr.A2, rsf.A2, issf.A2),
+                        extract_vs_vals(buffer = 0, 16, "after", 3, dr.A3, rsf.A3, issf.A3))
+
+all.cam.values.buff <- rbind(extract_vs_vals(buffer = 10, 4, "before", 1, dr.B1, rsf.B1, issf.B1),
+                             extract_vs_vals(buffer = 10, 4, "before", 2, dr.B2, rsf.B2, issf.B2),
+                             extract_vs_vals(buffer = 10, 4, "before", 3, dr.B3, rsf.B3, issf.B3),
+                             extract_vs_vals(buffer = 10, 4, "after", 1, dr.A1, rsf.A1, issf.A1),
+                             extract_vs_vals(buffer = 10, 4, "after", 2, dr.A2, rsf.A2, issf.A2),
+                             extract_vs_vals(buffer = 10, 4, "after", 3, dr.A3, rsf.A3, issf.A3),
+                             extract_vs_vals(buffer = 10, 9, "before", 1, dr.B1, rsf.B1, issf.B1),
+                             extract_vs_vals(buffer = 10, 9, "before", 2, dr.B2, rsf.B2, issf.B2),
+                             extract_vs_vals(buffer = 10, 9, "before", 3, dr.B3, rsf.B3, issf.B3),
+                             extract_vs_vals(buffer = 10, 9, "after", 1, dr.A1, rsf.A1, issf.A1),
+                             extract_vs_vals(buffer = 10, 9, "after", 2, dr.A2, rsf.A2, issf.A2),
+                             extract_vs_vals(buffer = 10, 9, "after", 3, dr.A3, rsf.A3, issf.A3),
+                             extract_vs_vals(buffer = 10, 16, "before", 1, dr.B1, rsf.B1, issf.B1),
+                             extract_vs_vals(buffer = 10, 16, "before", 2, dr.B2, rsf.B2, issf.B2),
+                             extract_vs_vals(buffer = 10, 16, "before", 3, dr.B3, rsf.B3, issf.B3),
+                             extract_vs_vals(buffer = 10, 16, "after", 1, dr.A1, rsf.A1, issf.A1),
+                             extract_vs_vals(buffer = 10, 16, "after", 2, dr.A2, rsf.A2, issf.A2),
+                             extract_vs_vals(buffer = 10, 16, "after", 3, dr.A3, rsf.A3, issf.A3))
 
 #_______________________________________________________________________
 # 5. Plot of CF predictions ----
 #_______________________________________________________________________
 
 # mean
-ggplot(data = all.cam.values,
+ggplot(data = all.cam.values.buff,
        aes(x = rsf.mean,
            y = issf.mean,
            color = trt,
@@ -175,3 +218,4 @@ ggplot(data = all.cam.values,
 #_______________________________________________________________________
 
 write.csv(all.cam.values, paste0(getwd(), "/Derived_data/For REM/cam_data.csv"))
+write.csv(all.cam.values.buff, paste0(getwd(), "/Derived_data/For REM/cam_data_buff.csv"))
