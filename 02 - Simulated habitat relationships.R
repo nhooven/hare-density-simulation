@@ -404,56 +404,83 @@ ggplot(open.sl.df,
 # randomly - this is akin to the movement-free habitat kernel
 
 #_______________________________________________________________________
-# 8a. Scale rasters within the buffered unit ----
-
-# (we'll say all of this is "available")
-# we only need to do this for the BEFORE landscapes since we'll use the same HRCs
-# for the same individuals for the AFTER landscapes
-
+# 8a. Scale rasters ----
 #_______________________________________________________________________
 
-# define extent (buffered unit)
-unit.buff <- st_buffer(st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp")), 
-                       dist = 100)
-# crop
-B1.crop <- crop(B1, unit.buff)
-B2.crop <- crop(B2, unit.buff)
-B3.crop <- crop(B3, unit.buff)
-
 # scale
-B1.scale <- scale(B1.crop)
-B2.scale <- scale(B2.crop)
-B3.scale <- scale(B3.crop)
+B1.scale <- scale(B1)
+B2.scale <- scale(B2)
+B3.scale <- scale(B3)
+
+A1.scale <- scale(A1)
+A2.scale <- scale(A2)
+A3.scale <- scale(A3)
+
+# define extent
+unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
+
+# crop
+B1.crop <- crop(B1.scale, unit.bound)
+B2.crop <- crop(B2.scale, unit.bound)
+B3.crop <- crop(B3.scale, unit.bound)
+
+A1.crop <- crop(A1.scale, unit.bound)
+A2.crop <- crop(A2.scale, unit.bound)
+A3.crop <- crop(A3.scale, unit.bound)
 
 #_______________________________________________________________________
 # 8b. Calculate "naive" RSF surfaces ----
 #_______________________________________________________________________
 
-B1.rsf <- exp(coef.fora * B1.scale$fora +
-              coef.elev * B1.scale$elev +
-              coef.elev2 * B1.scale$elev^2 +
-              coef.open * B1.scale$open)
+# BEFORE
+B1.rsf <- exp(coef.fora * B1.crop$fora +
+              coef.elev * B1.crop$elev +
+              coef.elev2 * B1.crop$elev^2 +
+              coef.open * B1.crop$open)
 
-B2.rsf <- exp(coef.fora * B2.scale$fora +
-                coef.elev * B2.scale$elev +
-                coef.elev2 * B2.scale$elev^2 +
-                coef.open * B2.scale$open)
+B2.rsf <- exp(coef.fora * B2.crop$fora +
+                coef.elev * B2.crop$elev +
+                coef.elev2 * B2.crop$elev^2 +
+                coef.open * B2.crop$open)
 
-B3.rsf <- exp(coef.fora * B3.scale$fora +
-                coef.elev * B3.scale$elev +
-                coef.elev2 * B3.scale$elev^2 +
-                coef.open * B3.scale$open)
+B3.rsf <- exp(coef.fora * B3.crop$fora +
+                coef.elev * B3.crop$elev +
+                coef.elev2 * B3.crop$elev^2 +
+                coef.open * B3.crop$open)
 
 # bind together and rename
 B.rsf <- c(B1.rsf, B2.rsf, B3.rsf)
 
 names(B.rsf) <- c("B1", "B2", "B3")
 
+# AFTER
+A1.rsf <- exp(coef.fora * A1.crop$fora +
+                coef.elev * A1.crop$elev +
+                coef.elev2 * A1.crop$elev^2 +
+                coef.open * A1.crop$open)
+
+A2.rsf <- exp(coef.fora * A2.crop$fora +
+                coef.elev * A2.crop$elev +
+                coef.elev2 * A2.crop$elev^2 +
+                coef.open * A2.crop$open)
+
+A3.rsf <- exp(coef.fora * A3.crop$fora +
+                coef.elev * A3.crop$elev +
+                coef.elev2 * A3.crop$elev^2 +
+                coef.open * A3.crop$open)
+
+# bind together and rename
+A.rsf <- c(A1.rsf, A2.rsf, A3.rsf)
+
+names(A.rsf) <- c("A1", "A2", "A3")
+
 # plot
 plot(B.rsf)
+plot(A.rsf)
 
 #_______________________________________________________________________
-# 8c. Write raster ----
+# 8c. Write rasters ----
 #_______________________________________________________________________
 
 writeRaster(B.rsf, filename = "Rasters/B_rsf.tif", overwrite = T)
+writeRaster(A.rsf, filename = "Rasters/A_rsf.tif", overwrite = T)
