@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 15 Nov 2024
-# Date last modified: 19 Feb 2025
+# Date last modified: 20 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -176,61 +176,114 @@ plot(B.cov2)
 # Start: Faster movements when starting in higher openness
 # End: Negative selection
 
-# Gaussian random field
-# parameters
-# autocorrelation range: maximum range of spatial autocorrelation
-B.cov3.autocorr <- 50
-
-# nug
-B.cov3.nug <- 5
+# midpoint landscape, classify, the calculate percent open within a buffer
 
 #_______________________________________________________________________
-# 5a. Before landscape ----
+# 5a. Define function to create discrete landscape ----
 #_______________________________________________________________________
 
-B1.cov3 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = B.cov3.autocorr,
-                             nug = B.cov3.nug,
-                             user_seed = 1284)
+create_discrete_ls <- function (seed = runif(1, 1, 1000),
+                                rough = 0.5) {
+  
+  
+  # set seed
+  set.seed(seed)
+  
+  # generate landscape
+  start.ls <- nlm_mpd(ncol = columns + 2, 
+                      nrow = rows + 2, 
+                      resolution = resol, 
+                      roughness = rough,
+                      rand_dev = 1.5)
+  
+  # classify into two discrete classes
+  ls.class <- util_classify(start.ls,
+                            weighting = c(0.5, 0.5))
+  
 
-B2.cov3 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = B.cov3.autocorr,
-                             nug = B.cov3.nug,
-                             user_seed = 667)
+  # reclassify
+  ls.class.1 <- ls.class - 1
+  
+  crs(ls.class.1) <- crs("EPSG:32611")
+  
+  # crop to be the same size as the other variables
+  ls.class.2 <- terra::crop(x = ls.class.1, 
+                            y = B1.cov1)
+  
+  
+  # return
+  return(ls.class.2)
 
-B3.cov3 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = B.cov3.autocorr,
-                             nug = B.cov3.nug,
-                             user_seed = 101)
+}
 
+#_______________________________________________________________________
+# 5a. Before landscape - discrete ----
+#_______________________________________________________________________
 
+B1.cov3.dis <- create_discrete_ls(1987, 0.9)
+B2.cov3.dis <- create_discrete_ls(78, 0.9)
+B3.cov3.dis <- create_discrete_ls(394, 0.9)
 
 # bind together
-B.cov3 <- c(rast(B1.cov3), rast(B2.cov3), rast(B3.cov3))
-names(B.cov3) <- c("B1", "B2", "B3")
+B.cov3.dis <- c(rast(B1.cov3.dis), rast(B2.cov3.dis), rast(B3.cov3.dis))
+names(B.cov3.dis) <- c("B1", "B2", "B3")
 
-# assign crs
-crs(B.cov3) <- crs("EPSG:32611")
+#_______________________________________________________________________
+# 5b. Define function to calculate percent open in a buffer ----
+#_______________________________________________________________________
+
+# define function
+perc_open <- function (landscape,
+                       buffer) {
+  
+  # define focal matrix
+  focal.mat <- focalMat(x = landscape,
+                        d = buffer,
+                        type = "circle")
+  
+  # replace all weights with 1
+  focal.mat[focal.mat > 0] <- 1
+  
+  # sum these to determine how many cells we're dealing with
+  sum.focal.mat <- sum(focal.mat)
+  
+  # use focal to calculate percent 1
+  # define function 
+  # https://gis.stackexchange.com/a/410811
+  pclass <- function (x) {
+    
+    return(length(which(x == 1)) / length(x))
+    
+    }
+  
+  # run
+  focal.rast <- terra::focal(x = landscape,
+                             w = focal.mat,
+                             fun = pclass)
+  
+  # return
+  return(focal.rast)
+  
+}
+
+#_______________________________________________________________________
+# 5c. Before - calculate percent open ----
+#_______________________________________________________________________
+
+B.cov3 <- perc_open(B.cov3.dis, 50)
+
+B.cov3.crop <- crop(B.cov3, unit.bound.sf)
+
+plot(B.cov3.crop)
 
 #_______________________________________________________________________
 # 5b. After landscape ----
 #_______________________________________________________________________
 
-# first, we'll crop each one by the unit boundary to examine what we'll change
-B.cov3.crop <- crop(B.cov3, unit.bound.sf)
-
-plot(B.cov3.crop)
-
 # now we'll simulate alteration by:
 # (1) splitting each landscape into four quadrants
 # (2) choosing two diagonal quadrants at random
-# (3) flipping all pixels < 0.50 openness to 0.50
+# (3) flipping 30% of non-open pixels to open
 
 # create quadrants - BL, BR, TR, TL
 # initialize coordinates
@@ -316,8 +369,11 @@ plot(st_geometry(quad.sf.list[[4]]), add = T)
 to.treat <- data.frame(rep = 1:3,
                        first.quad = sample(1:4, size = 3)) 
 
-to.treat$second.quad <- c(2, 3, 1)
-
+to.treat$second.quad <- case_when(to.treat$first.quad == 1 ~ 4,
+                                  to.treat$first.quad == 2 ~ 3,
+                                  to.treat$first.quad == 3 ~ 2,
+                                  to.treat$first.quad == 4 ~ 1)
+  
 # write a function that does it
 alter_cover <- function(landscape,
                         rep,
@@ -333,9 +389,17 @@ alter_cover <- function(landscape,
   first.quad.crop <- crop(landscape.1, quad.sf.list[[first.quad]])
   second.quad.crop <- crop(landscape.1, quad.sf.list[[second.quad]])
   
-  # assign percent to everything below it
-  values(first.quad.crop)[values(first.quad.crop) < percent] <- percent
-  values(second.quad.crop)[values(second.quad.crop) < percent] <- percent
+  # how many can we flip?
+  n.0.first <- length(values(first.quad.crop)[values(first.quad.crop) == 0])
+  n.0.second <- length(values(second.quad.crop)[values(second.quad.crop) == 0])
+  
+  # randomly sample a percentage of them to flip
+  to.flip.first <- sample(which(values(first.quad.crop) == 0), size = round(n.0.first * percent))
+  to.flip.second <- sample(which(values(second.quad.crop) == 0), size = round(n.0.second * percent))
+  
+  # flip them
+  values(first.quad.crop)[to.flip.first] <- 1
+  values(second.quad.crop)[to.flip.second] <- 1
   
   # merge back in
   merge.1 <- merge(first.quad.crop, landscape.1)
@@ -350,18 +414,24 @@ alter_cover <- function(landscape,
 }
 
 # use function
-A.cov3.crop <- c(alter_cover(B.cov3.crop$B1, 1, 0.50),
-                 alter_cover(B.cov3.crop$B2, 2, 0.50),
-                 alter_cover(B.cov3.crop$B3, 3, 0.50))
+A.cov3.dis.crop <- c(alter_cover(B.cov3.dis.crop$B1, 1, 0.50),
+                     alter_cover(B.cov3.dis.crop$B2, 2, 0.50),
+                     alter_cover(B.cov3.dis.crop$B3, 3, 0.50))
 
+plot(B.cov3.dis.crop)
+plot(A.cov3.dis.crop)
+
+# now to calculate percent open
+# merge into landscape
+A.cov3.dis <- merge(A.cov3.dis.crop, B.cov3.dis)
+
+A.cov3 <- perc_open(A.cov3.dis, 50)
+
+A.cov3.crop <- crop(A.cov3, unit.bound.sf)
+
+# compare
 plot(B.cov3.crop)
 plot(A.cov3.crop)
-
-# looks decent!
-# now just to mosaic into the landscape
-A1.cov3 <- merge(A.cov3.crop$B1, B.cov3$B1)
-A2.cov3 <- merge(A.cov3.crop$B2, B.cov3$B2)
-A3.cov3 <- merge(A.cov3.crop$B3, B.cov3$B3)
 
 #_______________________________________________________________________
 # 6. Bind each landscape / replicate together ----
