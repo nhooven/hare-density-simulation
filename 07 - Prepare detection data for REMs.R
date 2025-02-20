@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 10 Feb 2025
+# Date last modified: 20 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -137,7 +137,7 @@ group_passes <- function (df,
       filter(rep == focal.combo$id.rep &
              n.indiv == focal.combo$n)
     
-    # split by trt and group by camand sum all passes
+    # split by trt and group by cam and sum all passes
     focal.passes.1.B <- focal.passes %>% 
       
       filter(trt == "before") %>%
@@ -205,8 +205,12 @@ group_passes <- function (df,
     
   }
   
-  # return
-  return(all.passes.grouped)
+  # remove duplicates and return
+  all.passes.grouped.1 <- all.passes.grouped %>%
+    
+    dplyr::distinct()
+  
+  return(all.passes.grouped.1)
   
 }
 
@@ -222,61 +226,35 @@ passes.gp.16 <- group_passes(passes.extracted.16, 16)
 # 5. Look at NAs in the 4 cam set ----
 #_______________________________________________________________________
 
-# UNUSED 
 passes.na <- passes.gp.4 %>% 
   
-  filter(n.indiv == 2 &
-         landscape == "complex" & 
-         variability == "high") %>%
+  filter(rep == 3 & n.indiv == 2) %>%
   
-  group_by(rep) %>%
+  group_by(trt, n.indiv) %>%
   
   summarize(n())
 
+passes.na
+
 # looks like these are all from:
 # nindiv = 2
-# landscape = "complex"
-# variability = "high"
-# rep = 2
+# rep == 3
 
 # guessing that none of these cameras got any detections
 # let's add this so we don't have any issues later
+na.obs.df <- data.frame(cam.id = c(1:4, 1:4),
+                        total.passes = 0,
+                        trt = c("before", "before", "before", "before",
+                                "after", "after", "after", "after"),
+                        n.indiv = 2,
+                        rep = 3,
+                        cams = 4)
 
 passes.gp.4 <- passes.gp.4 %>%
   
   drop_na() %>%
   
-  add_row(cam.id = 1,
-          total.passes = 0,
-          n.indiv = 2,
-          landscape = "complex",
-          variability = "high",
-          rep = 2,
-          cams = 4) %>%
-  
-  add_row(cam.id = 2,
-          total.passes = 0,
-          n.indiv = 2,
-          landscape = "complex",
-          variability = "high",
-          rep = 2,
-          cams = 4) %>%
-  
-  add_row(cam.id = 3,
-          total.passes = 0,
-          n.indiv = 2,
-          landscape = "complex",
-          variability = "high",
-          rep = 2,
-          cams = 4) %>%
-  
-  add_row(cam.id = 4,
-          total.passes = 0,
-          n.indiv = 2,
-          landscape = "complex",
-          variability = "high",
-          rep = 2,
-          cams = 4)
+  bind_rows(na.obs.df)
 
 #_______________________________________________________________________
 # 6. Bind together ----
@@ -295,7 +273,7 @@ ggplot(passes.gp.all) +
   facet_wrap(~ trt) +
   
   geom_point(aes(x = as.factor(n.indiv),
-                 y = total.passes,
+                 y = log(total.passes + 1),
                  shape = as.factor(rep),
                  color = as.factor(rep)),
              alpha = 0.5) +
