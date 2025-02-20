@@ -228,6 +228,9 @@ B3.cov3.dis <- create_discrete_ls(394, 0.9)
 B.cov3.dis <- c(rast(B1.cov3.dis), rast(B2.cov3.dis), rast(B3.cov3.dis))
 names(B.cov3.dis) <- c("B1", "B2", "B3")
 
+# crop for alteration
+B.cov3.dis.crop <- crop(B.cov3.dis, unit.bound.sf)
+
 #_______________________________________________________________________
 # 5b. Define function to calculate percent open in a buffer ----
 #_______________________________________________________________________
@@ -283,7 +286,7 @@ plot(B.cov3.crop)
 # now we'll simulate alteration by:
 # (1) splitting each landscape into four quadrants
 # (2) choosing two diagonal quadrants at random
-# (3) flipping 30% of non-open pixels to open
+# (3) flipping 70% of non-open pixels to open
 
 # create quadrants - BL, BR, TR, TL
 # initialize coordinates
@@ -414,9 +417,9 @@ alter_cover <- function(landscape,
 }
 
 # use function
-A.cov3.dis.crop <- c(alter_cover(B.cov3.dis.crop$B1, 1, 0.50),
-                     alter_cover(B.cov3.dis.crop$B2, 2, 0.50),
-                     alter_cover(B.cov3.dis.crop$B3, 3, 0.50))
+A.cov3.dis.crop <- c(alter_cover(B.cov3.dis.crop$B1, 1, 0.70),
+                     alter_cover(B.cov3.dis.crop$B2, 2, 0.70),
+                     alter_cover(B.cov3.dis.crop$B3, 3, 0.70))
 
 plot(B.cov3.dis.crop)
 plot(A.cov3.dis.crop)
@@ -425,7 +428,9 @@ plot(A.cov3.dis.crop)
 # merge into landscape
 A.cov3.dis <- merge(A.cov3.dis.crop, B.cov3.dis)
 
-A.cov3 <- perc_open(A.cov3.dis, 50)
+A.cov3 <- perc_open(A.cov3.dis, 50)      # calculate percent open since that's our covariate
+
+names(A.cov3) <- c("A1" ,"A2", "A3")
 
 A.cov3.crop <- crop(A.cov3, unit.bound.sf)
 
@@ -454,9 +459,9 @@ names(B3.ls) <- c("fora", "elev", "open")
 #_______________________________________________________________________
 
 # bind
-A1.ls <- c(B.cov1$B1, B.cov2$B1, A1.cov3)
-A2.ls <- c(B.cov1$B2, B.cov2$B2, A2.cov3)
-A3.ls <- c(B.cov1$B3, B.cov2$B3, A3.cov3)
+A1.ls <- c(B.cov1$B1, B.cov2$B1, A.cov3$A1)
+A2.ls <- c(B.cov1$B2, B.cov2$B2, A.cov3$A2)
+A3.ls <- c(B.cov1$B3, B.cov2$B3, A.cov3$A3)
 
 # rename
 names(A1.ls) <- c("fora", "elev", "open")
@@ -583,7 +588,7 @@ plot_grid(A1.plot, A2.plot, A3.plot, nrow = 3)
 # 8. Save and write rasters ----
 #_______________________________________________________________________
 
-save.image("Progress/rasters_02_19_2025.RData")
+save.image("Progress/rasters_02_20_2025.RData")
 
 writeRaster(B1.ls, filename = "Rasters/B1.tif", overwrite = T)
 writeRaster(B2.ls, filename = "Rasters/B2.tif", overwrite = T)
