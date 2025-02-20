@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 02 Dec 2024
-# Date last modified: 10 Feb 2025
+# Date last modified: 20 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,6 +15,7 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 library(terra)           # rasters
 library(amt)             # distributions
+library(circular)
 
 #_______________________________________________________________________
 # 2. Read in rasters ----
@@ -30,25 +31,69 @@ A3 <- rast(paste0(getwd(), "/Rasters/A3.tif"))
 
 #_______________________________________________________________________
 # 3. Movement parameter distributions ----
-
-# here we'll just approximate hare movement from preliminary data
-
+#_______________________________________________________________________
+# 3a. Step lengths ----
 #_______________________________________________________________________
 
-# step lengths (gamma)
+# step lengths (gamma) - mean will be 50 m in 2 hours
+# the mean of a gamma is shape * scale
 # make distribution
-sl.dist <- make_gamma_distr(shape = 1.2,
-                            scale = 70)
+sl.dist <- make_gamma_distr(shape = 1,
+                            scale = 50)
 
-# turning angles (uniform)
+# plot
+sl.dist.df <- data.frame(x = seq(0, 70, length.out = 1000),
+                         y = dgamma(x = seq(0, 200, length.out = 1000),
+                                    shape = sl.dist$params$shape,
+                                    scale = sl.dist$params$scale))
+
+ggplot(data = sl.dist.df,
+       aes(x = x,
+           y = y)) +
+  
+  theme_bw() +
+  
+  geom_line(linewidth = 1,
+            color = "blue") +
+  
+  theme(panel.grid = element_blank()) +
+  
+  xlab("Step length (m)") +
+  
+  ylab("")
+
+#_______________________________________________________________________
+# 3b. Turning angles ----
+#_______________________________________________________________________
+
+# turning angles (von Mises) - small concentration parameter, vague directional persistence
 # make distribution
-ta.dist <- make_unif_distr(min = -pi,
-                           max = pi)
+ta.dist <- make_vonmises_distr(kappa = 1.5)
 
-# log(sl) quantiles
-lsl.med <- log(qgamma(p = 0.50, shape = sl.dist$params$shape, scale = sl.dist$params$scale))
-lsl.low <- log(qgamma(p = 0.025, shape = sl.dist$params$shape, scale = sl.dist$params$scale))
-lsl.hig <- log(qgamma(p = 0.975, shape = sl.dist$params$shape, scale = sl.dist$params$scale))
+# plot
+ta.dist.df <- data.frame(x = circular(seq(-pi, pi, length.out = 1000)),
+                         y = dvonmises(x = circular(seq(-pi, pi, length.out = 1000)),
+                                       kappa = ta.dist$params$kappa,
+                                       mu = circular(0)))
+
+ggplot() +
+  
+  theme_bw() +
+  
+  geom_line(data = ta.dist.df ,
+            aes(x = x,
+                y = y),
+            linewidth = 1,
+            color = "red") +
+  
+  xlab("Turn angle (rad)") +
+  
+  ylab("") +
+  
+  theme(panel.grid = element_blank()) +
+  
+  scale_x_continuous(breaks = c(-pi, -pi/2, 0, pi/2, pi),
+                     labels = c(expression(-pi, -pi/2, 0, pi/2, pi)))
 
 #_______________________________________________________________________
 # 4. Base iSSF coefficients ----
@@ -56,18 +101,13 @@ lsl.hig <- log(qgamma(p = 0.975, shape = sl.dist$params$shape, scale = sl.dist$p
 
 # importantly, these are *standardized* coefficients
 
-coef.forage <- 1.5          # selection for forage
-coef.forage.sl <- -0.3      # shorter sl with higher forage       
-coef.edge <- -0.5           # avoidance of edge distance
-coef.open <- -2.5           # base avoidance of open (start of step)
-coef.open.sl <- 0.5         # interaction with log(sl) (longer movements when starting in open)
-
-#_______________________________________________________________________
-# 5. Random slope standard deviations  ----
-#_______________________________________________________________________
-
-# we'll just simulate everything off the same betas, assuming that home ranging will
-# introduce any individual variability for our purposes
+coef.fora.sl <- -0.05       # β1 - (start) fora and speed interaction = negative
+coef.fora <- 1.5            # β2 = (end) fora selection = positive
+coef.fora.ta <- -0.5       # β3 = (end) fora and concentration interaction = negative       
+coef.elev <- 0.75           # β4 = (end) linear elev selection = positive
+coef.elev2 <- -0.75         # β5 = (end) squared elev selection = negative
+coef.open.sl <- 0.25        # β6 = (start) open and speed interaction = positive
+coef.open <- -1.0           # β7 = (end) open selection = negative
 
 #_______________________________________________________________________
 # 5. Parameter expectation plot ----
@@ -76,20 +116,33 @@ coef.open.sl <- 0.5         # interaction with log(sl) (longer movements when st
 #_______________________________________________________________________
 
 # bind together
-coef.all <- data.frame(coef = c("forage",
-                                "forage:log(sl)",
-                                "edge",
-                                "open",
-                                "open:log(sl)"),
-                     estimate = c(coef.forage,
-                                  coef.forage.sl,
-                                  coef.edge,
-                                  coef.open,
-                                  coef.open.sl))
+coef.all <- data.frame(coef = c("fora:log(sl)",
+                                "fora",
+                                "fora:cos(ta)",
+                                "elev",
+                                "elev2",
+                                "open:log(sl)",
+                                "open"),
+                     estimate = c(coef.fora.sl,
+                                  coef.fora,
+                                  coef.fora.ta,
+                                  coef.elev,
+                                  coef.elev2,
+                                  coef.open.sl,
+                                  coef.open))
 
 # reorder factor levels
 coef.all$coef <- factor(coef.all$coef,
-                        levels = rev(c("forage", "forage:log(sl)", "edge", "open", "open:log(sl)")))
+                        levels = rev(c("fora:log(sl)",
+                                       "fora",
+                                       "fora:cos(ta)",
+                                       "elev",
+                                       "elev2",
+                                       "open:log(sl)",
+                                       "open")))
+
+# add indicator for base vs. movement interaction
+coef.all$type <- c("movement", "base", "movement", "base", "base", "movement", "base")
 
 #_______________________________________________________________________
 # 5b. Plot ----
@@ -98,194 +151,309 @@ coef.all$coef <- factor(coef.all$coef,
 ggplot(data = coef.all,
        aes(x = estimate,
            y = coef,
-           group = coef)) +
+           fill = type,
+           shape = type)) +
   
   theme_bw() +
   
   geom_vline(xintercept = 0,
              linetype = "dashed") +
   
-  geom_point(size = 2,
-             shape = 21,
-             fill = "white",
+  geom_point(size = 3,
              color = "black") +
+  
+  scale_fill_manual(values = c("purple", "orange")) +
+  scale_shape_manual(values = c(21, 24)) +
   
   # labels
   ylab("") +
   xlab("Standardized coefficient") +
   
   # theme
-  theme(panel.grid = element_blank())
+  theme(panel.grid = element_blank(),
+        legend.position = "top")
 
 #_______________________________________________________________________
-# 6. Density plots ----
+# 6. Implied selection relationships ----
 
-# unusued for now - in the future it might be nice to show implied relationships
-# and density plots for the step length adjustments
+# these are all the calculations at the "end" of the step
+
+# movement parameter quantiles
+# step length
+sl.high <- qgamma(p = 0.90, shape = sl.dist$params$shape, scale = sl.dist$params$scale)
+sl.low <- qgamma(p = 0.10, shape = sl.dist$params$shape, scale = sl.dist$params$scale)
+
+# turning angle
+# this is trickier - we actually just want to see what this would be at pi
+ta.max <- pi
 
 #_______________________________________________________________________
-# 6a. Stem ----
+# 6a. Forage ----
 #_______________________________________________________________________
 
-ggplot(iv.forage,
+# df
+fora.df <- tibble(x = seq(-2, 2, length.out = 1000)) %>%
+  
+  mutate(y.mean = x * coef.fora,      # at the mean ta
+         y.high = x * coef.fora + x * coef.fora.ta * cos(ta.max)) %>%
+  
+  pivot_longer(cols = c(y.mean, y.high)) %>%
+  
+  mutate(ta = factor(name,
+                     levels = c("y.mean",
+                                "y.high"),
+                     labels = c("zero",
+                                "maximum")))
+
+ggplot(fora.df,
        aes(x = x,
-           y = d)) +
+           y = value,
+           color = ta)) +
   
   theme_bw() +
   
-  geom_vline(xintercept = 0,
+  geom_hline(yintercept = 0,
              linetype = "dashed") +
   
-  geom_vline(xintercept = coef.forage) +
+  geom_line(linewidth = 1.5) +
   
-  geom_line(color = "darkblue",
-            linewidth = 1.5) +
+  scale_color_manual(values = c("gray", "orange")) +
   
-  theme(panel.grid = element_blank()) +
+  theme(panel.grid = element_blank(),
+        legend.position = c(0.2, 0.8)) +
   
-  xlab("Stem selection coefficient") +
-  ylab("")
+  xlab("Forage (standardized)") +
+  ylab("ln(RSS)")
 
 #_______________________________________________________________________
-# 6c. Mature ----
+# 6b. Elevation ----
 #_______________________________________________________________________
 
-# adjustment to the sl distribution
-sl.dist.mature <- update_gamma(sl.dist, beta_sl = 0, beta_log_sl = 0.5)
+# df
+elev.df <- tibble(x = seq(-2, 2, length.out = 1000)) %>%
+  
+  mutate(y.mean = x * coef.elev + x^2 * coef.elev2)
 
-sl.dist.df <- rbind(data.frame(x = seq(0, 350, length.out = 1000),
-                               y = dgamma(seq(0, 350, length.out = 1000), 
-                                          shape = sl.dist$params$shape,
-                                          scale = sl.dist$params$scale),
-                               type = "other"),
-                    data.frame(x = seq(0, 350, length.out = 1000),
-                               y = dgamma(seq(0, 350, length.out = 1000), 
-                                          shape = sl.dist.mature$params$shape,
-                                          scale = sl.dist.mature$params$scale),
-                               type = "mature"))
-
-# plot
-ggplot(sl.dist.df,
+ggplot(elev.df,
        aes(x = x,
-           y = y,
-           color = type)) +
+           y = y.mean)) +
   
   theme_bw() +
   
-  geom_line(linewidth = 1.15) +
+  geom_hline(yintercept = 0,
+             linetype = "dashed") +
+  
+  geom_line(linewidth = 1.5,
+            color = "gray") +
   
   theme(panel.grid = element_blank(),
-        legend.position = "inside",
-        legend.position.inside = c(0.75, 0.75)) +
+        legend.position = c(0.2, 0.8)) +
+  
+  xlab("Elevation (standardized)") +
+  ylab("ln(RSS)")
+
+#_______________________________________________________________________
+# 6c. Openness ----
+#_______________________________________________________________________
+
+# df
+open.df <- tibble(x = seq(-2, 2, length.out = 1000)) %>%
+  
+  mutate(y.mean = x * coef.open)
+
+ggplot(open.df,
+       aes(x = x,
+           y = y.mean)) +
+  
+  theme_bw() +
+  
+  geom_hline(yintercept = 0,
+             linetype = "dashed") +
+  
+  geom_line(linewidth = 1.5,
+            color = "gray") +
+  
+  theme(panel.grid = element_blank(),
+        legend.position = c(0.2, 0.8)) +
+  
+  xlab("Openness (standardized)") +
+  ylab("ln(RSS)")
+
+#_______________________________________________________________________
+# 7. Implied movement parameter distribution adjustments ----
+
+# https://conservancy.umn.edu/server/api/core/bitstreams/63727072-87b1-4b35-b81c-8fd31b8f1e57/content
+
+# these are all the calculations at the "start" of the step
+
+# habitat covariate quantiles
+cov.high <- quantile(seq(-2, 2, length.out = 1000), prob = 0.90)
+cov.low <- quantile(seq(-2, 2, length.out = 1000), prob = 0.10)
+
+#_______________________________________________________________________
+# 7a. Forage:log(sl) ----
+#_______________________________________________________________________
+
+# new sl distributions
+sl.dist.fora.high <- update_gamma(dist = sl.dist,
+                                  beta_sl = 0,
+                                  beta_log_sl = cov.high * coef.fora.sl)
+
+sl.dist.fora.low <- update_gamma(dist = sl.dist,
+                                 beta_sl = 0,
+                                 beta_log_sl = cov.low * coef.fora.sl)
+
+# df
+fora.sl.df <- tibble(x = seq(0.1, 70, length.out = 1000)) %>%   # normal step length
+  
+  mutate(y.mean = dgamma(x, 
+                         shape = sl.dist$params$shape,
+                         scale = sl.dist$params$scale),
+         y.high = dgamma(x, 
+                         shape = sl.dist.fora.high$params$shape,
+                         scale = sl.dist.fora.high$params$scale),
+         y.low = dgamma(x, 
+                        shape = sl.dist.fora.low$params$shape,
+                        scale = sl.dist.fora.low$params$scale)) %>%
+  
+  pivot_longer(cols = c(y.mean, y.high, y.low)) %>%
+  
+  mutate(fora = factor(name,
+                     levels = c("y.low",
+                                "y.mean",
+                                "y.high"),
+                     labels = c("low",
+                                "mean",
+                                "high")))
+
+ggplot(fora.sl.df,
+       aes(x = x,
+           y = value,
+           color = fora)) +
+  
+  theme_bw() +
+  
+  geom_line(linewidth = 1.5) +
+  
+  scale_color_manual(values = c("lightblue", "gray", "orange")) +
+  
+  theme(panel.grid = element_blank(),
+        legend.position = c(0.75, 0.75)) +
   
   xlab("Step length (m)") +
   ylab("")
 
 #_______________________________________________________________________
-# 7. Response curves ----
-#_______________________________________________________________________
-# 7a. Stem ----
+# 7b. Open:log(sl) ----
 #_______________________________________________________________________
 
-# make dfs
-stem.seq <- seq(stem.range[1], stem.range[2], length.out = 100)
+# new sl distributions
+sl.dist.open.high <- update_gamma(dist = sl.dist,
+                                  beta_sl = 0,
+                                  beta_log_sl = cov.high * coef.open.sl)
 
-stem.response.med <- data.frame(x = stem.seq,
-                                y = stem.seq * coef.stem + stem.seq * lsl.med * coef.stem.sl,
-                                sl = "med")
+sl.dist.open.low <- update_gamma(dist = sl.dist,
+                                 beta_sl = 0,
+                                 beta_log_sl = cov.low * coef.open.sl)
 
-stem.response.low <- data.frame(x = stem.seq,
-                                y = stem.seq * coef.stem + stem.seq * lsl.low * coef.stem.sl,
-                                sl = "low")
-
-stem.response.hig <- data.frame(x = stem.seq,
-                                y = stem.seq * coef.stem + stem.seq * lsl.hig * coef.stem.sl,
-                                sl = "hig")
-
-# bind together
-stem.response <- rbind(stem.response.med, stem.response.low, stem.response.hig)
-
-# plot
-ggplot(data = stem.response) +
+# df
+open.sl.df <- tibble(x = seq(0.1, 70, length.out = 1000)) %>%   # normal step length
   
-  theme_bw() +
+  mutate(y.mean = dgamma(x, 
+                         shape = sl.dist$params$shape,
+                         scale = sl.dist$params$scale),
+         y.high = dgamma(x, 
+                         shape = sl.dist.open.high$params$shape,
+                         scale = sl.dist.open.high$params$scale),
+         y.low = dgamma(x, 
+                        shape = sl.dist.open.low$params$shape,
+                        scale = sl.dist.open.low$params$scale)) %>%
   
-  geom_hline(yintercept = 0,
-             linetype = "dashed") +
+  pivot_longer(cols = c(y.mean, y.high, y.low)) %>%
   
-  geom_line(aes(x = x,
-                y = y,
-                color = sl),
-            linewidth = 1.5) +
-  
-  theme(panel.grid = element_blank()) +
-  
-  xlab("Stem (standardized)") +
-  ylab("log-RSS")
+  mutate(open = factor(name,
+                       levels = c("y.low",
+                                  "y.mean",
+                                  "y.high"),
+                       labels = c("low",
+                                  "mean",
+                                  "high")))
 
-#_______________________________________________________________________
-# 7b. Edge ----
-#_______________________________________________________________________
-
-# make df
-edge.response <- data.frame(x = seq(edge.range[1], edge.range[2], length.out = 100),
-                            y = seq(edge.range[1], edge.range[2], length.out = 100) * coef.edge,
-                            ylow = seq(edge.range[1], edge.range[2], length.out = 100) * 
-                              qnorm(p = 0.025, mean = coef.edge, sd = 1.5),
-                            yhigh = seq(edge.range[1], edge.range[2], length.out = 100) * 
-                              qnorm(p = 0.975, mean = coef.edge, sd = 1.5))
-
-# plot
-ggplot(edge.response,
+ggplot(open.sl.df,
        aes(x = x,
-           y = y)) +
+           y = value,
+           color = open)) +
   
   theme_bw() +
   
-  geom_hline(yintercept = 0,
-             linetype = "dashed") +
+  geom_line(linewidth = 1.5) +
   
-  geom_ribbon(aes(x = x,
-                  y = y,
-                  ymin = ylow,
-                  ymax = yhigh),
-              color = NA,
-              fill = "darkgreen",
-              alpha = 0.15) +
+  scale_color_manual(values = c("lightblue", "gray", "orange")) +
   
-  geom_line(color = "darkgreen",
-            linewidth = 1.5) +
+  theme(panel.grid = element_blank(),
+        legend.position = c(0.75, 0.75)) +
   
-  theme(panel.grid = element_blank()) +
-  
-  xlab("Distance to edge (standardized)") +
-  ylab("log-RSS")
+  xlab("Step length (m)") +
+  ylab("")
 
 #_______________________________________________________________________
-# 7c. Mature ----
+# 8. Base RSFs for generating home range centers ----
+
+# the approach here will be to use all the base (i.e., non-interactive coefs)
+# defined above to create a naive RSF surface so we aren't placing virtual HRs
+# randomly - this is akin to the movement-free habitat kernel
+
+#_______________________________________________________________________
+# 8a. Scale rasters within the buffered unit ----
+
+# (we'll say all of this is "available")
+# we only need to do this for the BEFORE landscapes since we'll use the same HRCs
+# for the same individuals for the AFTER landscapes
+
 #_______________________________________________________________________
 
-# make dfs
-mature.response <- data.frame(x = c("low", "med", "hig"),
-                              y = c(coef.mature + coef.mature.sl * lsl.low,
-                                    coef.mature + coef.mature.sl * lsl.med,
-                                    coef.mature + coef.mature.sl * lsl.hig))
+# define extent (buffered unit)
+unit.buff <- st_buffer(st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp")), 
+                       dist = 100)
+# crop
+B1.crop <- crop(B1, unit.buff)
+B2.crop <- crop(B2, unit.buff)
+B3.crop <- crop(B3, unit.buff)
+
+# scale
+B1.scale <- scale(B1.crop)
+B2.scale <- scale(B2.crop)
+B3.scale <- scale(B3.crop)
+
+#_______________________________________________________________________
+# 8b. Calculate "naive" RSF surfaces ----
+#_______________________________________________________________________
+
+B1.rsf <- exp(coef.fora * B1.scale$fora +
+              coef.elev * B1.scale$elev +
+              coef.elev2 * B1.scale$elev^2 +
+              coef.open * B1.scale$open)
+
+B2.rsf <- exp(coef.fora * B2.scale$fora +
+                coef.elev * B2.scale$elev +
+                coef.elev2 * B2.scale$elev^2 +
+                coef.open * B2.scale$open)
+
+B3.rsf <- exp(coef.fora * B3.scale$fora +
+                coef.elev * B3.scale$elev +
+                coef.elev2 * B3.scale$elev^2 +
+                coef.open * B3.scale$open)
+
+# bind together and rename
+B.rsf <- c(B1.rsf, B2.rsf, B3.rsf)
+
+names(B.rsf) <- c("B1", "B2", "B3")
 
 # plot
-ggplot(data = mature.response) +
-  
-  theme_bw() +
-  
-  geom_hline(yintercept = 0,
-             linetype = "dashed") +
-  
-  geom_point(aes(x = x,
-                 y = y,
-                color = x),
-             size = 4) +
-  
-  theme(panel.grid = element_blank()) +
-  
-  xlab("Step length") +
-  ylab("log-RSS")
+plot(B.rsf)
 
+#_______________________________________________________________________
+# 8c. Write raster ----
+#_______________________________________________________________________
+
+writeRaster(B.rsf, filename = "Rasters/B_rsf.tif", overwrite = T)
