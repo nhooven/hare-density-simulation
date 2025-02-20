@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 15 Nov 2024
-# Date last modified: 10 Feb 2025
+# Date last modified: 19 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -42,10 +42,10 @@ columns <- as.integer(ceiling(sqrt(n.sqm / resol)))
 rows <- as.integer(ceiling(sqrt(n.sqm / resol)))
 
 #_______________________________________________________________________
-# 3. Covariate 1 - "forage" ----
+# 3. Covariate 1 - "forage" - fora ----
 
-# strong selection
-# decreased speed with higher forage ("foraging behavior")
+# Start: Faster movements when starting in in low forage
+# End: More likely to switch direction to get to high forage
 # we'll use the Gaussian random field function here
 
 #_______________________________________________________________________
@@ -97,12 +97,7 @@ crs(B.cov1) <- crs("EPSG:32611")
 plot(B.cov1)
 
 #_______________________________________________________________________
-# 4. Covariate 2 - "edge distance" ----
-
-# weak avoidance (weak selection for proximity)
-
-#_______________________________________________________________________
-# 4a. Create a unit boundary polygon ----
+# 4. Create a unit boundary polygon ----
 #_______________________________________________________________________
 
 # extract coordinates - find centroid of raster
@@ -139,89 +134,89 @@ st_write(unit.bound.sf,
          append = FALSE)
 
 #_______________________________________________________________________
-# 4b. Define an edge variable ----
+# 5. Covariate 2 - "elevation" - elev ----
+
+# intermediate (i.e., quadratic) selection
+# we'll use a planar gradient
+
 #_______________________________________________________________________
 
-# convert unit boundary to SpatialLines
-unit.bound.lines <- as(as_Spatial(st_sfc(unit.bound)), "SpatialLines")
+# B1
+set.seed(558)
+B1.cov2 <- nlm_planargradient(ncol = columns,
+                              nrow = rows,
+                              resolution = resol)
 
-# rasterize the unit boundary
-boundary.rast <- rasterize(x = unit.bound.lines, 
-                           y = B1.cov1, 
-                           mask = TRUE)
+# C2
+set.seed(1072)
+B2.cov2 <- nlm_planargradient(ncol = columns,
+                              nrow = rows,
+                              resolution = resol)
 
-# create distance to edge of unit raster
-cov2 <- distance(boundary.rast)
+# C3
+set.seed(223)
+B3.cov2 <- nlm_planargradient(ncol = columns,
+                              nrow = rows,
+                              resolution = resol)
 
-# promote to SpatRaster
-cov2 <- rast(cov2)
+# bind together
+B.cov2 <- c(rast(B1.cov2), rast(B2.cov2), rast(B3.cov2))
+names(B.cov2) <- c("B1", "B2", "B3")
 
-# scale between 0 and 1 for easy comparison
-cov2 <- cov2 / max(values(cov2))
-
-# att UTM crs
-crs(cov2) <- crs("EPSG:32611")
+# add UTM CRS so spatial layers work together
+crs(B.cov2) <- crs("EPSG:32611")
 
 # plot
-plot(cov2)
+plot(B.cov2)
 
- #_______________________________________________________________________
-# 5. Covariate 3 - "cover type" ----
+#_______________________________________________________________________
+# 5. Covariate 3 - "openness" - open ----
 
 # this is what we'll manipulate
-# strong base avoidance of cover type 1 ( we can think of it as open cover)
-# longer steps that start in it
+# Start: Faster movements when starting in higher openness
+# End: Negative selection
 
-# to do this, we'll classify a midpoint landscape
+# Gaussian random field
+# parameters
+# autocorrelation range: maximum range of spatial autocorrelation
+B.cov3.autocorr <- 50
 
-# define function
-create_discrete_ls <- function (seed = runif(1, 1, 1000),
-                                rough = 0.5) {
-  
-  # set seed
-  set.seed(seed)
-  
-  # generate landscape
-  start.ls <- nlm_mpd(ncol = columns + 2, 
-                      nrow = rows + 2, 
-                      resolution = resol, 
-                      roughness = rough,
-                      rand_dev = 1.5)
-  
-  # classify into two discrete classes
-  ls.class <- util_classify(start.ls,
-                            weighting = c(0.5, 0.5))
-  
-  # reclassify
-  ls.class.1 <- ls.class - 1
-  
-  # add crs
-  crs(ls.class.1) <- crs("EPSG:32611")
-  
-  # crop to be the same size as the other variables
-  ls.class.2 <- terra::crop(x = ls.class.1, 
-                            y = B1.cov1)
-  
-  # return
-  return(ls.class.2)
-  
-}
+# nug
+B.cov3.nug <- 5
 
 #_______________________________________________________________________
 # 5a. Before landscape ----
-
-# high "roughness" = 0.9
-
 #_______________________________________________________________________
 
-# run function 
-B1.cov3 <- create_discrete_ls(1284, 0.9)
-B2.cov3 <- create_discrete_ls(78, 0.9)
-B3.cov3 <- create_discrete_ls(394, 0.9)
+B1.cov3 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = B.cov3.autocorr,
+                             nug = B.cov3.nug,
+                             user_seed = 1284)
+
+B2.cov3 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = B.cov3.autocorr,
+                             nug = B.cov3.nug,
+                             user_seed = 667)
+
+B3.cov3 <- nlm_gaussianfield(ncol = columns,
+                             nrow = rows,
+                             resolution = resol,
+                             autocorr_range = B.cov3.autocorr,
+                             nug = B.cov3.nug,
+                             user_seed = 101)
+
+
 
 # bind together
 B.cov3 <- c(rast(B1.cov3), rast(B2.cov3), rast(B3.cov3))
 names(B.cov3) <- c("B1", "B2", "B3")
+
+# assign crs
+crs(B.cov3) <- crs("EPSG:32611")
 
 #_______________________________________________________________________
 # 5b. After landscape ----
@@ -232,33 +227,132 @@ B.cov3.crop <- crop(B.cov3, unit.bound.sf)
 
 plot(B.cov3.crop)
 
-# now we'll simulate alteration by flipping zeroes ("closed") to ones ("open")
-# each landscape has a different proportion of 0s and 1s, this will be good!
+# now we'll simulate alteration by:
+# (1) splitting each landscape into four quadrants
+# (2) choosing two diagonal quadrants at random
+# (3) flipping all pixels < 0.50 openness to 0.50
+
+# create quadrants - BL, BR, TR, TL
+# initialize coordinates
+quad.1.df <- data.frame(x = c(st_bbox(unit.bound.sf)[1],
+                              st_bbox(unit.bound.sf)[1] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[1] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[1]),
+                        y = c(st_bbox(unit.bound.sf)[4] - sqrt(25000),
+                              st_bbox(unit.bound.sf)[4] - sqrt(25000),
+                              st_bbox(unit.bound.sf)[4],
+                              st_bbox(unit.bound.sf)[4]))
+
+quad.2.df <- data.frame(x = c(st_bbox(unit.bound.sf)[1] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[3],
+                              st_bbox(unit.bound.sf)[3],
+                              st_bbox(unit.bound.sf)[1] + sqrt(25000)),
+                        y = c(st_bbox(unit.bound.sf)[4] - sqrt(25000),
+                              st_bbox(unit.bound.sf)[4] - sqrt(25000),
+                              st_bbox(unit.bound.sf)[4],
+                              st_bbox(unit.bound.sf)[4]))
+
+quad.3.df <- data.frame(x = c(st_bbox(unit.bound.sf)[1],
+                              st_bbox(unit.bound.sf)[1] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[1] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[1]),
+                        y = c(st_bbox(unit.bound.sf)[2],
+                              st_bbox(unit.bound.sf)[2],
+                              st_bbox(unit.bound.sf)[2] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[2] + sqrt(25000)))
+
+quad.4.df <- data.frame(x = c(st_bbox(unit.bound.sf)[1] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[3],
+                              st_bbox(unit.bound.sf)[3],
+                              st_bbox(unit.bound.sf)[1] + sqrt(25000)),
+                        y = c(st_bbox(unit.bound.sf)[2],
+                              st_bbox(unit.bound.sf)[2],
+                              st_bbox(unit.bound.sf)[2] + sqrt(25000),
+                              st_bbox(unit.bound.sf)[2] + sqrt(25000)))
+
+# convert to polygons
+quad.sf.list <- list()
+
+quad.sf.list[[1]] <- quad.1.df %>% 
+  
+  st_as_sf(coords = c("x", "y"), crs = 32611) %>% 
+  
+  summarise(geometry = st_combine(geometry)) %>%
+  
+  st_cast("POLYGON")
+
+quad.sf.list[[2]] <- quad.2.df %>% 
+  
+  st_as_sf(coords = c("x", "y"), crs = 32611) %>% 
+  
+  summarise(geometry = st_combine(geometry)) %>%
+  
+  st_cast("POLYGON")
+
+quad.sf.list[[3]] <- quad.3.df %>% 
+  
+  st_as_sf(coords = c("x", "y"), crs = 32611) %>% 
+  
+  summarise(geometry = st_combine(geometry)) %>%
+  
+  st_cast("POLYGON")
+
+quad.sf.list[[4]] <- quad.4.df %>% 
+  
+  st_as_sf(coords = c("x", "y"), crs = 32611) %>% 
+  
+  summarise(geometry = st_combine(geometry)) %>%
+  
+  st_cast("POLYGON")
+
+# plot
+plot(st_geometry(unit.bound.sf))
+plot(st_geometry(quad.sf.list[[1]]), add = T)
+plot(st_geometry(quad.sf.list[[2]]), add = T)
+plot(st_geometry(quad.sf.list[[3]]), add = T)
+plot(st_geometry(quad.sf.list[[4]]), add = T)
+
+# determine which quadrants to treat
+to.treat <- data.frame(rep = 1:3,
+                       first.quad = sample(1:4, size = 3)) 
+
+to.treat$second.quad <- c(2, 3, 1)
+
 # write a function that does it
 alter_cover <- function(landscape,
+                        rep,
                         percent) {
   
   # focal landscape
   landscape.1 <- landscape
   
-  # how many can we flip?
-  n.0 <- length(values(landscape.1)[values(landscape.1) == 0])
+  # crop correct quadrants
+  first.quad <- to.treat$first.quad[to.treat$rep == rep]
+  second.quad <- to.treat$second.quad[to.treat$rep == rep]
   
-  # randomly sample a percentage of them to flip
-  to.flip <- sample(which(values(landscape.1) == 0), size = round(n.0 * percent))
+  first.quad.crop <- crop(landscape.1, quad.sf.list[[first.quad]])
+  second.quad.crop <- crop(landscape.1, quad.sf.list[[second.quad]])
   
-  # flip them
-  values(landscape.1)[to.flip] <- 1
+  # assign percent to everything below it
+  values(first.quad.crop)[values(first.quad.crop) < percent] <- percent
+  values(second.quad.crop)[values(second.quad.crop) < percent] <- percent
+  
+  # merge back in
+  merge.1 <- merge(first.quad.crop, landscape.1)
+  merge.2 <- merge(second.quad.crop, merge.1)
+  
+  # ensure that crs is correct
+  crs(merge.2) <- crs("EPSG:32611")
   
   # return
-  return(landscape.1)
+  return(merge.2)
   
 }
 
 # use function
-A.cov3.crop <- c(alter_cover(B.cov3.crop$B1, 0.30),
-                 alter_cover(B.cov3.crop$B2, 0.30),
-                 alter_cover(B.cov3.crop$B3, 0.30))
+A.cov3.crop <- c(alter_cover(B.cov3.crop$B1, 1, 0.50),
+                 alter_cover(B.cov3.crop$B2, 2, 0.50),
+                 alter_cover(B.cov3.crop$B3, 3, 0.50))
 
 plot(B.cov3.crop)
 plot(A.cov3.crop)
@@ -276,28 +370,28 @@ A3.cov3 <- merge(A.cov3.crop$B3, B.cov3$B3)
 #_______________________________________________________________________
 
 # bind
-B1.ls <- c(B.cov1$B1, cov2, B.cov3$B1)
-B2.ls <- c(B.cov1$B2, cov2, B.cov3$B2)
-B3.ls <- c(B.cov1$B3, cov2, B.cov3$B3)
+B1.ls <- c(B.cov1$B1, B.cov2$B1, B.cov3$B1)
+B2.ls <- c(B.cov1$B2, B.cov2$B2, B.cov3$B2)
+B3.ls <- c(B.cov1$B3, B.cov2$B3, B.cov3$B3)
 
 # rename
-names(B1.ls) <- c("forage", "edge", "open")
-names(B2.ls) <- c("forage", "edge", "open")
-names(B3.ls) <- c("forage", "edge", "open")
+names(B1.ls) <- c("fora", "elev", "open")
+names(B2.ls) <- c("fora", "elev", "open")
+names(B3.ls) <- c("fora", "elev", "open")
 
 #_______________________________________________________________________
 # 6b. After ----
 #_______________________________________________________________________
 
 # bind
-A1.ls <- c(B.cov1$B1, cov2, A1.cov3)
-A2.ls <- c(B.cov1$B2, cov2, A2.cov3)
-A3.ls <- c(B.cov1$B3, cov2, A3.cov3)
+A1.ls <- c(B.cov1$B1, B.cov2$B1, A1.cov3)
+A2.ls <- c(B.cov1$B2, B.cov2$B2, A2.cov3)
+A3.ls <- c(B.cov1$B3, B.cov2$B3, A3.cov3)
 
 # rename
-names(A1.ls) <- c("forage", "edge", "open")
-names(A2.ls) <- c("forage", "edge", "open")
-names(A3.ls) <- c("forage", "edge", "open")
+names(A1.ls) <- c("fora", "elev", "open")
+names(A2.ls) <- c("fora", "elev", "open")
+names(A3.ls) <- c("fora", "elev", "open")
 
 #_______________________________________________________________________
 # 7. Plot ----
@@ -329,7 +423,7 @@ plot_group_rast <- function (ls) {
     theme_bw() +
     
     # add in raster
-    geom_spatraster(data = ls$forage) +
+    geom_spatraster(data = ls$fora) +
     
     # viridis colors
     scale_fill_viridis_c() +
@@ -341,7 +435,7 @@ plot_group_rast <- function (ls) {
     
     # remove axis text
     theme(axis.text = element_blank(),
-          legend.position = "none") -> forage
+          legend.position = "none") -> fora
   
   # edge
   ggplot() +
@@ -349,7 +443,7 @@ plot_group_rast <- function (ls) {
     theme_bw() +
     
     # add in raster
-    geom_spatraster(data = ls$edge) +
+    geom_spatraster(data = ls$elev) +
     
     # viridis colors
     scale_fill_viridis_c() +
@@ -361,7 +455,7 @@ plot_group_rast <- function (ls) {
     
     # remove axis text
     theme(axis.text = element_blank(),
-          legend.position = "none") -> edge
+          legend.position = "none") -> elev
   
   # mature
   ggplot() +
@@ -384,7 +478,7 @@ plot_group_rast <- function (ls) {
           legend.position = "none") -> open
   
   # plot together
-  focal.plot <- plot_grid(forage, edge, open, nrow = 1)
+  focal.plot <- plot_grid(fora, elev, open, nrow = 1)
   
   # return
   return(focal.plot)
@@ -409,17 +503,17 @@ A3.plot <- plot_group_rast(A3.ls.crop)
 # 7d. Plot together ----
 #_______________________________________________________________________
 
-# simple
+# BEFORE
 plot_grid(B1.plot, B2.plot, B3.plot, nrow = 3)
 
-# complex
+# AFTER
 plot_grid(A1.plot, A2.plot, A3.plot, nrow = 3)
 
 #_______________________________________________________________________
 # 8. Save and write rasters ----
 #_______________________________________________________________________
 
-save.image("Progress/rasters_02_10_2025.RData")
+save.image("Progress/rasters_02_19_2025.RData")
 
 writeRaster(B1.ls, filename = "Rasters/B1.tif", overwrite = T)
 writeRaster(B2.ls, filename = "Rasters/B2.tif", overwrite = T)
