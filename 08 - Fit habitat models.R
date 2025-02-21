@@ -507,8 +507,8 @@ iSSF.model.B1 <- issf_fit_1(SSF.B1)
 iSSF.model.B2 <- issf_fit(SSF.B2)
 iSSF.model.B3 <- issf_fit_1(SSF.B3)
 iSSF.model.A1 <- issf_fit_1(SSF.A1)
-iSSF.model.A2 <- issf_fit(SSF.A2)
-iSSF.model.A3 <- issf_fit(SSF.A3)
+iSSF.model.A2 <- issf_fit_1(SSF.A2)
+iSSF.model.A3 <- issf_fit_1(SSF.A3)
 
 #_______________________________________________________________________
 # 10. Extract and bind HS coefficients together ----
@@ -731,45 +731,6 @@ ggplot(all.tidy.beta,
   theme(panel.grid = element_blank())
 
 # this looks terrible but it helps me figure things out
-
-#_______________________________________________________________________
-# 10d. Plot RE SDs ----
-#_______________________________________________________________________
-
-# subset for plotting
-all.tidy.sd <- all.tidy %>% 
-  
-  filter(term %in% unique(all.tidy$term)[c(4:6, 10:12)]) %>%
-  
-  # reorder and label factor
-  mutate(term = factor(term,
-                       levels = c("sd__forage.s", "sd__forage.s:log(sl_)", "sd__edge.s",
-                                  "sd__open", "sd__open_start:log(sl_)", "sd__log(sl_)"),
-                       labels = c("forage", "forage:log(sl)", "edge",
-                                  "open", "open:log(sl)", "log(sl)")))
-
-# plot
-ggplot(all.tidy.sd,
-       aes(y = trt,
-           x = estimate,
-           fill = type,
-           group = rep)) +
-  
-  facet_grid(type ~ term,
-             scales = "free_x") +
-  
-  geom_vline(xintercept = 0) +
-  
-  theme_bw() +
-  
-  # error
-  geom_col(position = position_dodge(width = 1.0),
-           color = "black") +
-  
-  theme(panel.grid = element_blank())
-
-# seems like the models struggled to recover variance on all parameters
-# makes sense since we simulated without individual variability!
 
 #_______________________________________________________________________
 # 11. Extract and store variance-covariance matrices ----
