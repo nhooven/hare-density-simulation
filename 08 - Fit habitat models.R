@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 20 Feb 2025
+# Date last modified: 21 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -613,6 +613,70 @@ all.tidy.beta <- all.tidy %>%
                        "fora.end.s" = "fora.s",
                        "open.end.s" = "open.s")) %>%
   
+  # add original betas from simulation
+  add_row(term = "fora.s",
+          estimate = 1.5,
+          std.error = 0,
+          statistic = 0,
+          p.value = 0,
+          trt = c("before"),
+          rep = NA,
+          type = "sim") %>%
+  
+  add_row(term = "fora.end.s:cos(ta_)",
+          estimate = -0.5,
+          std.error = 0,
+          statistic = 0,
+          p.value = 0,
+          trt = c("before"),
+          rep = NA,
+          type = "sim") %>%
+  
+  add_row(term = "log(sl_):fora.start.s",
+          estimate = -0.05,
+          std.error = 0,
+          statistic = 0,
+          p.value = 0,
+          trt = c("before"),
+          rep = NA,
+          type = "sim") %>%
+  
+  add_row(term = "elev.s",
+          estimate = 0.75,
+          std.error = 0,
+          statistic = 0,
+          p.value = 0,
+          trt = c("before"),
+          rep = NA,
+          type = "sim") %>%
+  
+  add_row(term = "I(elev.s^2)",
+          estimate = -0.75,
+          std.error = 0,
+          statistic = 0,
+          p.value = 0,
+          trt = c("before"),
+          rep = NA,
+          type = "sim") %>%
+  
+  add_row(term = "log(sl_):open.start.s",
+          estimate = 0.25,
+          std.error = 0,
+          statistic = 0,
+          p.value = 0,
+          trt = c("before"),
+          rep = NA,
+          type = "sim") %>%
+  
+  add_row(term = "open.s",
+          estimate = -1.0,
+          std.error = 0,
+          statistic = 0,
+          p.value = 0,
+          trt = c("before"),
+          rep = NA,
+          type = "sim") %>%
+  
   # reorder and label factor
   mutate(term = factor(term,
                        levels = rev(c("fora.s", 
@@ -624,46 +688,49 @@ all.tidy.beta <- all.tidy %>%
                                   "log(sl_):open.start.s", 
                                   "log(sl_)",
                                   "cos(ta_)")),
-                       labels = rev(c("fora", 
-                                  "fora:cos(ta)",
-                                  "fora:log(sl)", 
-                                  "elev",
-                                  "elev^2", 
-                                  "open", 
-                                  "open:log(sl)", 
-                                  "log(sl)",
-                                  "cos(ta)"))))
+         
+                        labels = rev(c("fora", 
+                                       "fora:cos(ta)",
+                                       "fora:log(sl)", 
+                                       "elev",
+                                       "elev^2", 
+                                       "open", 
+                                       "open:log(sl)", 
+                                       "log(sl)",
+                                       "cos(ta)"))))
 
 # plot
 ggplot(all.tidy.beta,
-       aes(y = term,
+       aes(y = type,
            x = estimate,
            fill = type,
-           group = rep)) +
+           group = rep,
+           shape = trt)) +
   
-  facet_grid(type ~ trt,
-             scales = "free_y") +
+  facet_wrap(~ term,
+             scales = "free") +
   
   geom_vline(xintercept = 0) +
   
   theme_bw() +
   
   # error
-  geom_errorbarh(aes(y = term,
+  geom_errorbarh(aes(y = type,
                      xmin = estimate - (std.error * 1.96),
                      xmax = estimate + (std.error * 1.96),
                      color = type,
                      group = rep),
                  height = 0,
-                 position = position_dodge(width = 0.75)) +
+                 position = position_dodge(width = 1.0)) +
   
   geom_point(size = 2,
-             position = position_dodge(width = 0.75),
-             shape = 21) +
+             position = position_dodge(width = 1.0)) +
   
-  theme(panel.grid = element_blank()) +
+  scale_shape_manual(values = c(21, 23)) +
   
-  coord_cartesian(xlim = c(-5, 2.5))
+  theme(panel.grid = element_blank())
+
+# this looks terrible but it helps me figure things out
 
 #_______________________________________________________________________
 # 10d. Plot RE SDs ----
@@ -763,6 +830,3 @@ write.csv(vcov.lookup, paste0(getwd(), "/Derived_data/Lookup/vcov.csv"))
 write.csv(all.tidy, paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
 write.csv(mean.sd.rsf, paste0(getwd(), "/Derived_data/Model parameters/mean_sd_rsf.csv"))
 write.csv(mean.sd.ssf, paste0(getwd(), "/Derived_data/Model parameters/mean_sd_ssf.csv"))
-
-# save image
-save.image("Progress/modeling_02_20_2025.RData")

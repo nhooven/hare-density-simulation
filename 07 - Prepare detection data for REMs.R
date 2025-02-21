@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 20 Feb 2025
+# Date last modified: 21 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -228,7 +228,7 @@ passes.gp.16 <- group_passes(passes.extracted.16, 16)
 
 passes.na <- passes.gp.4 %>% 
   
-  filter(rep == 3 & n.indiv == 2) %>%
+  filter(rep == 2 & n.indiv == 2) %>%
   
   group_by(trt, n.indiv) %>%
   
@@ -238,7 +238,7 @@ passes.na
 
 # looks like these are all from:
 # nindiv = 2
-# rep == 3
+# rep == 1
 
 # guessing that none of these cameras got any detections
 # let's add this so we don't have any issues later
@@ -247,7 +247,7 @@ na.obs.df <- data.frame(cam.id = c(1:4, 1:4),
                         trt = c("before", "before", "before", "before",
                                 "after", "after", "after", "after"),
                         n.indiv = 2,
-                        rep = 3,
+                        rep = 1,
                         cams = 4)
 
 passes.gp.4 <- passes.gp.4 %>%
@@ -263,7 +263,7 @@ passes.gp.4 <- passes.gp.4 %>%
 passes.gp.all <- rbind(passes.gp.4, passes.gp.9, passes.gp.16)
 
 #_______________________________________________________________________
-# 7. Plot Passes by n.indiv ----
+# 7. Plot log(passes) by n.indiv ----
 #_______________________________________________________________________
 
 ggplot(passes.gp.all) +
