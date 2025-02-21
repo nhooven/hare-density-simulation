@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 20 Feb 2025
+# Date last modified: 21 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -261,6 +261,7 @@ init_sim <- function(id.rep) {
     # here the terms are important to get right so redistribution_kernel() works okay
     issf.model <- make_issf_model(coefs = c("fora_start:log(sl_)" = coef.fora.sl, 
                                             "fora_end" = coef.fora,
+                                            "fora_end:cos(ta_)" = coef.fora.ta,
                                             "elev_end" = coef.elev,
                                             "I(elev_end^2)" = coef.elev2,
                                             "log(sl_):open_start" = coef.open.sl,
@@ -329,6 +330,7 @@ init_sim <- function(id.rep) {
     # here the terms are important to get right so redistribution_kernel() works okay
     issf.model.A <- make_issf_model(coefs = c("fora_start:log(sl_)" = coef.fora.sl, 
                                               "fora_end" = coef.fora,
+                                              "fora_end:cos(ta_)" = coef.fora.ta,
                                               "elev_end" = coef.elev,
                                               "I(elev_end^2)" = coef.elev2,
                                               "log(sl_):open_start" = coef.open.sl,
