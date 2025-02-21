@@ -151,9 +151,9 @@ ta.dist.A3 <- fit_distr(steps.A3$ta_, dist_name = "vonmises")
 # 4b. Extract parameters ----
 #_______________________________________________________________________
 
-sl.dist.params <- data.frame(trt = c("before", "before", "before", "before", "before", "before",
-                                     "after", "after", "after", "after", "after", "after"),
-                             rep = c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3),
+sl.dist.params <- data.frame(trt = c("before", "before", "before",
+                                     "after", "after", "after"),
+                             rep = c(1, 2, 3, 1, 2, 3),
                              shape = c(sl.dist.B1$params$shape,
                                        sl.dist.B2$params$shape,
                                        sl.dist.B3$params$shape,
@@ -167,9 +167,9 @@ sl.dist.params <- data.frame(trt = c("before", "before", "before", "before", "be
                                        sl.dist.A2$params$scale,
                                        sl.dist.A3$params$scale))
 
-ta.dist.params <- data.frame(trt = c("before", "before", "before", "before", "before", "before",
-                                     "after", "after", "after", "after", "after", "after"),
-                             rep = c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3),
+ta.dist.params <- data.frame(trt = c("before", "before", "before",
+                                     "after", "after", "after"),
+                             rep = c(1, 2, 3, 1, 2, 3),
                              kappa = c(ta.dist.B1$params$kappa,
                                        ta.dist.B2$params$kappa,
                                        ta.dist.B3$params$kappa,
