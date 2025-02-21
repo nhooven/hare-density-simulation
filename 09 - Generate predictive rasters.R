@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 24 Dec 2024
 # Date completed: 27 Dec 2024
-# Date last modified: 10 Feb 2025
+# Date last modified: 20 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -26,10 +26,12 @@ library(matrixStats)     # rowwise SDs
 all.params <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
 
 # scaling factors (mean and sd)
-all.scale <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/mean_sd_covs.csv"))
+rsf.scale <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/mean_sd_rsf.csv"))
+ssf.scale <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/mean_sd_ssf.csv"))
 
 # add in trt because I forgot it
-all.scale$trt <- rep(c("before", "after", "before", "after"), each = 3)
+rsf.scale$trt <- rep(c("before", "after"), each = 3)
+ssf.scale$trt <- rep(c("before", "after"), each = 3)
 
 # variance-covariance matrices
 load(paste0(getwd(), "/Derived_data/Model parameters/vcov.RData"))
@@ -48,14 +50,13 @@ landscape.covs.A1 <- rast("Rasters/A1.tif")
 landscape.covs.A2 <- rast("Rasters/A2.tif")
 landscape.covs.A3 <- rast("Rasters/A3.tif")
 
-# sl/ta distributions
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B1.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B2.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B3.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A1.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A2.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A3.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
+# sl/ta parameters
+sl.params <- read.csv(paste0(getwd(), "/Derived_data/Lookup/sl_params.csv"))
+ta.params <- read.csv(paste0(getwd(), "/Derived_data/Lookup/ta_params.csv"))
+
+# fix them
+sl.params <- sl.params %>% slice(1:3, 10:12)
+ta.params <- ta.params %>% slice(1:3, 10:12)
 
 #_______________________________________________________________________
 # 3. Sample draws from the multivariate normal ----
@@ -89,13 +90,13 @@ sample_mvn <- function (n.samples,
   if (id.type == "RSF") {
     
     mvn.samples <- as.data.frame(rmvnorm(n = n.samples, 
-                                         mean = focal.params$estimate[c(1:3)], 
+                                         mean = focal.params$estimate[c(1:4)], 
                                          sigma = vcov.focal))
     
   } else {
     
     mvn.samples <- as.data.frame(rmvnorm(n = n.samples, 
-                                         mean = focal.params$estimate[c(1:6)], 
+                                         mean = focal.params$estimate[c(1:9)], 
                                          sigma = vcov.focal))
     
   }
@@ -143,11 +144,10 @@ RSF_pred <- function (landscape.covs,     # raster
            type == "RSF")
   
   # subset scaling factors
-  focal.scale <- all.scale %>%
+  focal.scale <- rsf.scale %>%
     
     filter(trt == id.trt,
-           rep == id.rep,
-           model == "RSF")
+           rep == id.rep)
   
   # subset variance-covariance matrix
   vcov.lookup.1 <- vcov.lookup %>% 
@@ -160,16 +160,17 @@ RSF_pred <- function (landscape.covs,     # raster
   mvn.samples <- mvn.sampled.RSF[[vcov.lookup.1$index]]
   
   # scale raster correctly
-  landscape.covs.1 <- c((landscape.covs$forage - focal.scale$mean.forage) / focal.scale$sd.forage,
-                        (landscape.covs$edge - focal.scale$mean.edge) / focal.scale$sd.edge,
-                        landscape.covs$open)
+  landscape.covs.1 <- c((landscape.covs$fora - focal.scale$mean.fora) / focal.scale$sd.fora,
+                        (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
+                        (landscape.covs$open - focal.scale$mean.open) / focal.scale$sd.open)
   
   # calculate mean prediction
   # NOTE: These will not be exponentiated yet
   # mean
-  pred.mean <- landscape.covs.1$forage * focal.params$estimate[focal.params$term == "forage.s"] +
-               landscape.covs.1$edge * focal.params$estimate[focal.params$term == "edge.s"] +
-               landscape.covs.1$open * focal.params$estimate[focal.params$term == "open"]
+  pred.mean <- landscape.covs.1$fora * focal.params$estimate[focal.params$term == "fora.s"] +
+               landscape.covs.1$elev * focal.params$estimate[focal.params$term == "elev.s"] +
+               landscape.covs.1$elev^2 * focal.params$estimate[focal.params$term == "I(elev.s^2)"] +
+               landscape.covs.1$open * focal.params$estimate[focal.params$term == "open.s"]
   
   # crop and exponentiate
   pred.mean.crop <- exp(crop(pred.mean, unit.bound))
@@ -189,9 +190,10 @@ RSF_pred <- function (landscape.covs,     # raster
     mvn.samples.focal <- mvn.samples[i, ]
     
     # calculate raster
-    pred.sample <- landscape.covs.1$forage * mvn.samples.focal$V1 +
-                   landscape.covs.1$edge * mvn.samples.focal$V2 +
-                   landscape.covs.1$open * mvn.samples.focal$V3
+    pred.sample <- landscape.covs.1$fora * mvn.samples.focal$V1 +
+                   landscape.covs.1$elev * mvn.samples.focal$V2 +
+                   landscape.covs.1$elev^2 * mvn.samples.focal$V3 +
+                   landscape.covs.1$open * mvn.samples.focal$V4
     
     # crop and exponentiate
     pred.sample.crop <- exp(crop(pred.sample, unit.bound))
@@ -254,11 +256,15 @@ writeRaster(RSF.pred.A3, paste0(getwd(), "/Rasters/RSF predictions/A3.tif"), ove
 # the entire camera array. Each day range corresponds to a certain
 # gamma SL distribution with E(x) = mean step length * 12
 
-# first, we'll calculate distributions of day range for each scenario,
-# then generate spatially-explicit expectation rasters
+# first, we'll calculate by-individual means of day range for each scenario and
+# then compute SDs
 
 #_______________________________________________________________________
-# 5a. Hyperdistribution of step lengths ----
+# 5a. "Static" day range ----
+
+# this is a naive approach in which we just take all empirical step lengths,
+# total them (by individual), and determine what day range they imply 
+
 #_______________________________________________________________________
 
 # simulated data
@@ -325,20 +331,15 @@ static_dr <- function (id.trt,
     # steps
     focal.steps <- steps(focal.track, keep_cols = "start")
     
-    # fit SL distribution
-    sl.dist.focal <- fit_distr(focal.steps$sl_, dist_name = "gamma")
-    
-    # calculate expected SL and multiply by 12
-    mean.sl.focal <- sl.dist.focal$params$shape * sl.dist.focal$params$scale
-    
-    dr.focal <- mean.sl.focal * 12
+    # calculate mean step length and multiply by 12
+    mean.dr.focal <- (sum(focal.steps$sl_) / nrow(focal.steps)) * 12 
     
     # create df and bind together
     all.static.dr <- rbind(all.static.dr, 
                            data.frame(trt = id.trt,
                                       rep = id.rep,
                                       indiv = i,
-                                      mean.dr = dr.focal))
+                                      mean.dr = mean.dr.focal))
     
   }
   
@@ -355,13 +356,13 @@ static.dr.all <- rbind(static_dr("before", 1),
                        static_dr("after", 2),
                        static_dr("after", 3))
 
-# calculate means and SDs (and divide by 1000 since we really want this to be in km)
+# calculate means and SDs
 static.dr.summary <- static.dr.all %>%
   
   group_by(trt, rep) %>%
   
-  summarize(dr.mean = mean(mean.dr) / 1000,
-            dr.sd = sd(mean.dr) / 1000)
+  summarize(dr.mean = mean(mean.dr),
+            dr.sd = sd(mean.dr))
 
 static.dr.summary
 
@@ -369,24 +370,19 @@ static.dr.summary
 write.csv(static.dr.summary, "Derived_data/Model parameters/static_dr.csv")
 
 #_______________________________________________________________________
-# 5b. Define function ----
+# 5b. "Dynamic" day range ----
+
+# here we'll calculate spatially-explicit day range estimates using
+# tentative sl distributions, adjustments, and habitat interactions
+
 #_______________________________________________________________________
 
+# define function
 sl_raster <- function(landscape.covs,     # raster
-                      sl.dist,
                       id.trt,
                       id.rep) {
   
-  # calculate expectation (shape * scale)
-  mean.sl <- sl.dist$params$shape * sl.dist$params$scale
-  
-  # create raster
-  base.sl.rast <- rast(landscape.covs$forage)
-  
-  # assign value
-  values(base.sl.rast) <- mean.sl
-  
-  # extract iSSF parameters
+  # subset model parameters
   focal.params <- all.params %>%
     
     filter(trt == id.trt,
@@ -394,11 +390,10 @@ sl_raster <- function(landscape.covs,     # raster
            type == "iSSF")
   
   # subset scaling factors
-  focal.scale <- all.scale %>%
+  focal.scale <- ssf.scale %>%
     
     filter(trt == id.trt,
-           rep == id.rep,
-           model == "SSF")
+           rep == id.rep)
   
   # subset variance-covariance matrix
   vcov.lookup.1 <- vcov.lookup %>% 
@@ -407,35 +402,44 @@ sl_raster <- function(landscape.covs,     # raster
            rep == id.rep,
            type == "iSSF")
   
+  # subset tentative SL parameters
+  sl.params.focal <- sl.params %>%
+    
+    filter(trt == id.trt,
+           rep == id.rep)
+  
+  # create raster and assign tentative shape to it
+  tentative.shape.rast <- rast(landscape.covs$fora)
+  
+  values(tentative.shape.rast) <- sl.params.focal$shape
+  
   # subset MVN samples
   mvn.samples <- mvn.sampled.iSSF[[vcov.lookup.1$index - 6]]
   
   # scale raster correctly
-  landscape.covs.1 <- c((landscape.covs$forage - focal.scale$mean.forage) / focal.scale$sd.forage,
-                        (landscape.covs$edge - focal.scale$mean.edge) / focal.scale$sd.edge,
-                        landscape.covs$open)
+  landscape.covs.1 <- c((landscape.covs$fora - focal.scale$mean.fora.start) / focal.scale$sd.fora.start,
+                        (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
+                        (landscape.covs$open - focal.scale$mean.open.start) / focal.scale$sd.open.start)
   
   # calculate spatially-explicit SL shape parameter adjustments
   # this is a bit weird since one adjustment is on the start location and one is on the end location
   # we'll just roll with it
-  pred.mean <- focal.params$estimate[focal.params$term == "log(sl_)"] +
-               landscape.covs.1$forage * focal.params$estimate[focal.params$term == "forage.s:log(sl_)"] +
-               landscape.covs.1$open * focal.params$estimate[focal.params$term == "open_start:log(sl_)"]
+  pred.mean <- focal.params$estimate[focal.params$term == "log(sl_)"] *
+               landscape.covs.1$fora * focal.params$estimate[focal.params$term == "log(sl_):fora.start.s"] +
+               focal.params$estimate[focal.params$term == "log(sl_)"] *
+               landscape.covs.1$open * focal.params$estimate[focal.params$term == "log(sl_):open.start.s"]
   
-  # adjust the gamma distributions with the new shape parameters (in a raster)
-  shape.adjust <- sl.dist$params$shape + pred.mean
+  # adjust the gamma distributions with the new shape parameters (in a raster), and crop
+  shape.adjust.crop <- crop((tentative.shape.rast + pred.mean), unit.bound)
   
   # and calculate the new expectation
-  adjusted.mean.sl <- shape.adjust * sl.dist$params$scale 
+  mean.sl.adjust <- shape.adjust.crop * sl.params.focal$scale 
   
-  # crop
-  adjusted.mean.sl.crop <- crop(adjusted.mean.sl, unit.bound)
-  
-  # transform to day range (in km)
-  adjusted.day.range <- (adjusted.mean.sl.crop * 12) / 1000
+  # transform to day range (in mm)
+  dr.adjust <- (mean.sl.adjust * 12)
   
   # bootstrap for SE raster
-  pred.boot <- matrix(data = NA, nrow = nrow(values(adjusted.day.range)), ncol = 100)
+  pred.boot <- matrix(data = NA, nrow = nrow(values(dr.adjust)), ncol = 100)
   
   for (i in 1:100) {
     
@@ -443,24 +447,21 @@ sl_raster <- function(landscape.covs,     # raster
     mvn.samples.focal <- mvn.samples[i, ]
     
     # calculate spatially-explicit SL shape parameter adjustments
-    pred.sample <- mvn.samples.focal$V4 +
-                   landscape.covs.1$forage * mvn.samples.focal$V5 +
-                   landscape.covs.1$open * mvn.samples.focal$V6
+    pred.sample <- mvn.samples.focal$V5 *
+                   landscape.covs.1$fora * mvn.samples.focal$V7 +
+                   landscape.covs.1$open * mvn.samples.focal$V9
     
-    # adjust the gamma distributions with the new shape parameters (in a raster)
-    shape.adjust.sample <- sl.dist$params$shape + pred.sample
+    # adjust the gamma distributions with the new shape parameters (in a raster), and crop
+    shape.adjust.crop.sample <- crop((tentative.shape.rast + pred.sample), unit.bound)
     
     # and calculate the new expectation
-    adjusted.mean.sl.sample <- shape.adjust.sample * sl.dist$params$scale 
+    mean.sl.adjust.sample <- shape.adjust.crop.sample * sl.params.focal$scale 
     
-    # crop
-    adjusted.mean.sl.crop.sample <- crop(adjusted.mean.sl.sample, unit.bound)
-    
-    # transform to day range (in km)
-    adjusted.day.range.sample <- (adjusted.mean.sl.crop.sample * 12) / 1000
+    # transform to day range (in mm)
+    dr.adjust.sample <- (mean.sl.adjust.sample * 12)
     
     # extract values
-    pred.values <- values(adjusted.day.range.sample)
+    pred.values <- values(dr.adjust.sample)
     
     # bind into matrix
     pred.boot[ , i] <- pred.values
@@ -468,10 +469,10 @@ sl_raster <- function(landscape.covs,     # raster
   }
   
   # add rowwise SDs to a new raster
-  se.rast <- rast(adjusted.day.range, vals = rowSds(pred.boot))
+  se.rast <- rast(mean.sl.adjust, vals = rowSds(pred.boot))
   
   # bind together
-  pred.all <- c(adjusted.day.range, se.rast)
+  pred.all <- c(dr.adjust, se.rast)
   names(pred.all) <- c("mean", "se")
   
   # return predictive raster
@@ -483,12 +484,12 @@ sl_raster <- function(landscape.covs,     # raster
 # 5b. Use function ----
 #_______________________________________________________________________
 
-adj.dr.B1 <- sl_raster(landscape.covs.B1, sl.dist.B1, "before", 1)
-adj.dr.B2 <- sl_raster(landscape.covs.B2, sl.dist.B2, "before", 2)
-adj.dr.B3 <- sl_raster(landscape.covs.B3, sl.dist.B3, "before", 3)
-adj.dr.A1 <- sl_raster(landscape.covs.A1, sl.dist.A1, "after", 1)
-adj.dr.A2 <- sl_raster(landscape.covs.A2, sl.dist.A2, "after", 2)
-adj.dr.A3 <- sl_raster(landscape.covs.A3, sl.dist.A3, "after", 3)
+adj.dr.B1 <- sl_raster(landscape.covs.B1, "before", 1)
+adj.dr.B2 <- sl_raster(landscape.covs.B2, "before", 2)
+adj.dr.B3 <- sl_raster(landscape.covs.B3, "before", 3)
+adj.dr.A1 <- sl_raster(landscape.covs.A1, "after", 1)
+adj.dr.A2 <- sl_raster(landscape.covs.A2, "after", 2)
+adj.dr.A3 <- sl_raster(landscape.covs.A3, "after", 3)
 
 #_______________________________________________________________________
 # 5c. Write rasters ----
@@ -512,16 +513,15 @@ scaled_covs <- function(landscape.covs,     # raster
                         id.rep) {
   
   # subset scaling factors
-  focal.scale <- all.scale %>%
+  focal.scale <- ssf.scale %>%
     
     filter(trt == id.trt,
-           rep == id.rep,
-           model == "SSF")
+           rep == id.rep)
   
-  # scale raster correctly
-  landscape.covs.1 <- c((landscape.covs$forage - focal.scale$mean.forage) / focal.scale$sd.forage,
-                        (landscape.covs$edge - focal.scale$mean.edge) / focal.scale$sd.edge,
-                        landscape.covs$open)
+  # scale raster correctly (use the end points because why not)
+  landscape.covs.1 <- c((landscape.covs$fora - focal.scale$mean.fora.end) / focal.scale$sd.fora.end,
+                        (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
+                        (landscape.covs$open - focal.scale$mean.open.end) / focal.scale$sd.open.end)
   
   # return
   return(landscape.covs.1)
