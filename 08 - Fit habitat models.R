@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 10 Feb 2025
+# Date last modified: 20 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,6 +15,7 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 library(terra)           # rasters
 library(amt)
+library(sf)
 library(sp)              # mcps
 library(glmmTMB)         # modeling
 library(broom.mixed)     # tidy model outputs
@@ -138,20 +139,50 @@ sl.dist.A2 <- fit_distr(steps.A2$sl_, dist_name = "gamma")
 sl.dist.A3 <- fit_distr(steps.A3$sl_, dist_name = "gamma")
 
 # ta
-ta.dist <- make_unif_distr(min = -pi, max = pi)
+ta.dist.B1 <- fit_distr(steps.B1$ta_, dist_name = "vonmises")
+ta.dist.B2 <- fit_distr(steps.B2$ta_, dist_name = "vonmises")
+ta.dist.B3 <- fit_distr(steps.B3$ta_, dist_name = "vonmises")
+
+ta.dist.A1 <- fit_distr(steps.A1$ta_, dist_name = "vonmises")
+ta.dist.A2 <- fit_distr(steps.A2$ta_, dist_name = "vonmises")
+ta.dist.A3 <- fit_distr(steps.A3$ta_, dist_name = "vonmises")
 
 #_______________________________________________________________________
-# 4b. Save distributions ----
+# 4b. Extract parameters ----
 #_______________________________________________________________________
 
-save(sl.dist.B1, file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B1.RData"))
-save(sl.dist.B2, file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B2.RData"))
-save(sl.dist.B3, file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B3.RData"))
-save(sl.dist.A1, file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A1.RData"))
-save(sl.dist.A2, file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A2.RData"))
-save(sl.dist.A3, file = paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A3.RData"))
+sl.dist.params <- data.frame(trt = c("before", "before", "before", "before", "before", "before",
+                                     "after", "after", "after", "after", "after", "after"),
+                             rep = c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3),
+                             shape = c(sl.dist.B1$params$shape,
+                                       sl.dist.B2$params$shape,
+                                       sl.dist.B3$params$shape,
+                                       sl.dist.A1$params$shape,
+                                       sl.dist.A2$params$shape,
+                                       sl.dist.A3$params$shape),
+                             scale = c(sl.dist.B1$params$scale,
+                                       sl.dist.B2$params$scale,
+                                       sl.dist.B3$params$scale,
+                                       sl.dist.A1$params$scale,
+                                       sl.dist.A2$params$scale,
+                                       sl.dist.A3$params$scale))
 
-save(ta.dist, file = paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
+ta.dist.params <- data.frame(trt = c("before", "before", "before", "before", "before", "before",
+                                     "after", "after", "after", "after", "after", "after"),
+                             rep = c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3),
+                             kappa = c(ta.dist.B1$params$kappa,
+                                       ta.dist.B2$params$kappa,
+                                       ta.dist.B3$params$kappa,
+                                       ta.dist.A1$params$kappa,
+                                       ta.dist.A2$params$kappa,
+                                       ta.dist.A3$params$kappa))
+
+#_______________________________________________________________________
+# 4c. Save to lookup ----
+#_______________________________________________________________________
+
+write.csv(sl.dist.params, paste0(getwd(), "/Derived_data/Lookup/sl_params.csv"))
+write.csv(ta.dist.params, paste0(getwd(), "/Derived_data/Lookup/ta_params.csv"))
 
 #_______________________________________________________________________
 # 5. RSF - Sample random locations and extract covariates ----
@@ -207,12 +238,12 @@ sample_extract_RSF <- function (steps.df,
     all.sf <- st_as_sf(rbind(used.spdf, random.spdf))
     
     # extract values from rasters
-    focal.forage <- terra::extract(landscape$forage, all.sf, ID = FALSE)
-    focal.edge <- terra::extract(landscape$edge, all.sf, ID = FALSE)
+    focal.fora <- terra::extract(landscape$fora, all.sf, ID = FALSE)
+    focal.elev <- terra::extract(landscape$elev, all.sf, ID = FALSE)
     focal.open <- terra::extract(landscape$open, all.sf, ID = FALSE)
     
     # and bind in
-    all.sf.1 <- cbind(all.sf, focal.forage, focal.edge, focal.open)
+    all.sf.1 <- cbind(all.sf, focal.fora, focal.elev, focal.open)
 
     # bind together
     RSF.samples <- as.data.frame(rbind(RSF.samples, all.sf.1))
@@ -222,8 +253,9 @@ sample_extract_RSF <- function (steps.df,
   # scale all continuous covariates and add weights for RSF
   RSF.samples <- RSF.samples %>%
     
-    mutate(forage.s = as.numeric(scale(forage)),
-           edge.s = as.numeric(scale(edge)),
+    mutate(fora.s = as.numeric(scale(fora)),
+           elev.s = as.numeric(scale(elev)),
+           open.s = as.numeric(scale(open)),
            weight = ifelse(case == 0,
                            5000,
                            1),
@@ -246,13 +278,14 @@ RSF.A2 <- sample_extract_RSF(steps.A2, landscape.covs.A2)
 RSF.A3 <- sample_extract_RSF(steps.A3, landscape.covs.A3)
 
 #_______________________________________________________________________
-# 6. SSF - Sample random steps and extract covariates ----
+# 6. iSSF - Sample random steps and extract covariates ----
 #_______________________________________________________________________
 # 6a. Define function ----
 #_______________________________________________________________________
 
 sample_extract_SSF <- function (steps.df,
                                 sl.dist,
+                                ta.dist,
                                 landscape) {
   
   # loop through all individuals
@@ -281,8 +314,14 @@ sample_extract_SSF <- function (steps.df,
   # scale all continuous covariates
   all.steps <- all.steps %>%
     
-    mutate(forage.s = as.numeric(scale(forage_end)),
-           edge.s = as.numeric(scale(edge_end)))
+    mutate(fora.end.s = as.numeric(scale(fora_end)),
+           fora.start.s = as.numeric(scale(fora_start)),
+           elev.s = as.numeric(scale(elev_end)),
+           open.start.s = as.numeric(scale(open_start)),
+           open.end.s = as.numeric(scale(open_end))) %>%
+    
+    # create unique stratum
+    mutate(stratum = paste0(indiv, step_id_))
   
   # return
   return(all.steps)
@@ -293,12 +332,12 @@ sample_extract_SSF <- function (steps.df,
 # 6b. Use function ----
 #_______________________________________________________________________
 
-SSF.B1 <- sample_extract_SSF(steps.B1, sl.dist.B1, landscape.covs.B1)
-SSF.B2 <- sample_extract_SSF(steps.B2, sl.dist.B2, landscape.covs.B2)
-SSF.B3 <- sample_extract_SSF(steps.B3, sl.dist.B3, landscape.covs.B3)
-SSF.A1 <- sample_extract_SSF(steps.A1, sl.dist.A1, landscape.covs.A1)
-SSF.A2 <- sample_extract_SSF(steps.A2, sl.dist.A2, landscape.covs.A2)
-SSF.A3 <- sample_extract_SSF(steps.A3, sl.dist.A3, landscape.covs.A3)
+SSF.B1 <- sample_extract_SSF(steps.B1, sl.dist.B1, ta.dist.B1, landscape.covs.B1)
+SSF.B2 <- sample_extract_SSF(steps.B2, sl.dist.B2, ta.dist.B2, landscape.covs.B2)
+SSF.B3 <- sample_extract_SSF(steps.B3, sl.dist.B3, ta.dist.B3, landscape.covs.B3)
+SSF.A1 <- sample_extract_SSF(steps.A1, sl.dist.A1, ta.dist.A1, landscape.covs.A1)
+SSF.A2 <- sample_extract_SSF(steps.A2, sl.dist.A2, ta.dist.A2, landscape.covs.A2)
+SSF.A3 <- sample_extract_SSF(steps.A3, sl.dist.A3, ta.dist.A3, landscape.covs.A3)
 
 #_______________________________________________________________________
 # 7. Means and SDs of continuous variables ----
@@ -313,19 +352,27 @@ extract_mean_sd <- function(sampled.steps,
   
   if (id.model == "RSF") {
     
-    return(data.frame(mean.forage = mean(sampled.steps$forage),
-                    sd.forage = sd(sampled.steps$forage),
-                    mean.edge = mean(sampled.steps$edge),
-                    sd.edge = sd(sampled.steps$edge),
-                    rep = id.rep,
-                    model = id.model))
+    return(data.frame(mean.fora = mean(sampled.steps$fora),
+                      sd.fora = sd(sampled.steps$fora),
+                      mean.elev = mean(sampled.steps$elev),
+                      sd.elev = sd(sampled.steps$elev),
+                      mean.open = mean(sampled.steps$open),
+                      sd.open = sd(sampled.steps$open),
+                      rep = id.rep,
+                      model = id.model))
     
   } else {
     
-    return(data.frame(mean.forage = mean(sampled.steps$forage_end),
-                      sd.forage = sd(sampled.steps$forage_end),
-                      mean.edge = mean(sampled.steps$edge_end),
-                      sd.edge = sd(sampled.steps$edge_end),
+    return(data.frame(mean.fora.start = mean(sampled.steps$fora_start),
+                      sd.fora.start = sd(sampled.steps$fora_start),
+                      mean.fora.end = mean(sampled.steps$fora_end),
+                      sd.fora.end = sd(sampled.steps$fora_end),
+                      mean.elev = mean(sampled.steps$elev_end),
+                      sd.elev = sd(sampled.steps$elev_end),
+                      mean.open.start = mean(sampled.steps$open_start),
+                      sd.open.start = sd(sampled.steps$open_start),
+                      mean.open.end = mean(sampled.steps$open_end),
+                      sd.open.end = sd(sampled.steps$open_end),
                       rep = id.rep,
                       model = id.model))
     
@@ -337,16 +384,14 @@ extract_mean_sd <- function(sampled.steps,
 # 7b. Use function ----
 #_______________________________________________________________________
 
-mean.sd.all <- rbind(#RSF
-                     extract_mean_sd(RSF.B1, "before", 1, "RSF"),
+mean.sd.rsf <- rbind(extract_mean_sd(RSF.B1, "before", 1, "RSF"),
                      extract_mean_sd(RSF.B2, "before", 2, "RSF"),
                      extract_mean_sd(RSF.B3, "before", 3, "RSF"),
                      extract_mean_sd(RSF.A1, "after", 1, "RSF"),
                      extract_mean_sd(RSF.A2, "after", 2, "RSF"),
-                     extract_mean_sd(RSF.A3, "after", 3, "RSF"),
+                     extract_mean_sd(RSF.A3, "after", 3, "RSF"))
                      
-                     # SSF
-                     extract_mean_sd(SSF.B1, "before", 1, "SSF"),
+mean.sd.ssf <- rbind(extract_mean_sd(SSF.B1, "before", 1, "SSF"),
                      extract_mean_sd(SSF.B2, "before", 2, "SSF"),
                      extract_mean_sd(SSF.B3, "before", 3, "SSF"),
                      extract_mean_sd(SSF.A1, "after", 1, "SSF"),
@@ -362,20 +407,22 @@ mean.sd.all <- rbind(#RSF
 # full random slopes
 fit_RSF <- function (sampled.points) {
   
-  RSF.struc <- glmmTMB(case ~ forage.s +
-                              edge.s +
-                              open +
-                              (0 + forage.s | indiv) +
-                              (0 + edge.s | indiv) +
-                              (0 + open | indiv) +
-                              (1 | indiv),
+  RSF.struc <- glmmTMB(case ~ fora.s +
+                              elev.s +
+                              I(elev.s^2) +
+                              open.s +
+                              (1 | indiv) +
+                              (0 + fora.s | indiv) +
+                              (0 + elev.s | indiv) +
+                              (0 + I(elev.s^2) | indiv) +
+                              (0 + open.s | indiv),
                              weights = weight,
                              family = binomial,
                              data = sampled.points,
                              doFit = FALSE) 
   
-  RSF.struc$parameters$theta[4] <- log(1e3)
-  RSF.struc$mapArg <- list(theta = factor(c(1:3, NA)))
+  RSF.struc$parameters$theta[1] <- log(1e3)
+  RSF.struc$mapArg <- list(theta = factor(c(NA, 1:4)))     # account for two slopes for elevation
   
   RSF.model <- fitTMB(RSF.struc)
   
@@ -402,27 +449,28 @@ RSF.model.A3 <- fit_RSF(RSF.A3)
 #_______________________________________________________________________
 
 # full random slopes
-fit_issf <- function(sampled.steps) {
+issf_fit <- function(sampled.steps) {
   
-  iSSF.struc <- glmmTMB(case_ ~ forage.s +
-                                forage.s:log(sl_) +
-                                edge.s +
-                                open_start +
-                                open_start:log(sl_) +
+  iSSF.struc <- glmmTMB(case_ ~ fora.start.s:log(sl_) +
+                                fora.end.s +
+                                fora.end.s:cos(ta_) +
+                                elev.s +
+                                I(elev.s^2) +
+                                open.start.s:log(sl_)  +
+                                open.end.s +
                                 log(sl_) +
-                                (0 + forage.s | indiv) +
-                                (0 + forage.s:log(sl_) | indiv) +
-                                (0 + edge.s | indiv) +
-                                (0 + open_start | indiv) +
-                                (0 + open_start:log(sl_) | indiv) +
-                                (0 + log(sl_) | indiv) +
-                                (1 | step_id_),
+                                cos(ta_) +
+                                (1 | stratum) +                 # in the interest of convergence
+                                (0 + fora.end.s | indiv) +      # we'll only include RS for base coefs
+                                (0 + elev.s | indiv) +
+                                (0 + I(elev.s^2) | indiv) +
+                                (0 + open.end.s | indiv),
                               family = poisson,
                               data = sampled.steps,
                               doFit = FALSE) 
   
-  iSSF.struc$parameters$theta[4] <- log(1e3)
-  iSSF.struc$mapArg <- list(theta = factor(c(1:6, NA)))
+  iSSF.struc$parameters$theta[1] <- log(1e3)
+  iSSF.struc$mapArg <- list(theta = factor(c(NA, 1:4)))
   
   iSSF.model <- fitTMB(iSSF.struc)
   
@@ -432,16 +480,19 @@ fit_issf <- function(sampled.steps) {
 }
 
 # no random slopes to fix convergence issues
-fit_issf_1 <- function(sampled.steps) {
+issf_fit_1 <- function(sampled.steps) {
   
   iSSF.model <- amt::fit_issf(data = sampled.steps,
-                              formula = case_ ~ forage.s +
-                                                forage.s:log(sl_) +
-                                                edge.s +
-                                                open +
-                                                open:log(sl_) +
+                              formula = case_ ~ fora.start.s:log(sl_) +
+                                                fora.end.s +
+                                                fora.end.s:cos(ta_) +
+                                                elev.s +
+                                                I(elev.s^2) +
+                                                open.start.s:log(sl_)  +
+                                                open.end.s +
                                                 log(sl_) +
-                                strata(step_id_))
+                                                cos(ta_) +
+                                                strata(stratum))
   
   # return
   return(iSSF.model)
@@ -452,12 +503,12 @@ fit_issf_1 <- function(sampled.steps) {
 # 9b. Fit models ----
 #_______________________________________________________________________
 
-iSSF.model.B1 <- fit_issf(SSF.B1)
-iSSF.model.B2 <- fit_issf(SSF.B2)
-iSSF.model.B3 <- fit_issf(SSF.B3)
-iSSF.model.A1 <- fit_issf(SSF.A1)
-iSSF.model.A2 <- fit_issf(SSF.A2)
-iSSF.model.A3 <- fit_issf(SSF.A3)
+iSSF.model.B1 <- issf_fit_1(SSF.B1)
+iSSF.model.B2 <- issf_fit(SSF.B2)
+iSSF.model.B3 <- issf_fit_1(SSF.B3)
+iSSF.model.A1 <- issf_fit_1(SSF.A1)
+iSSF.model.A2 <- issf_fit(SSF.A2)
+iSSF.model.A3 <- issf_fit(SSF.A3)
 
 #_______________________________________________________________________
 # 10. Extract and bind HS coefficients together ----
@@ -491,8 +542,10 @@ extract_coefs <- function(model,
   # iSSF
   } else {
     
-    # use tidy function
-    tidy.model <- broom.mixed::tidy(model) %>%
+    if ("glmmTMB" %in% class(model)) {
+      
+      # use tidy function
+      tidy.model <- broom.mixed::tidy(model) %>%
       
       # add id columns
       mutate(trt = id.trt,
@@ -504,6 +557,18 @@ extract_coefs <- function(model,
       
       # drop sd__(Intercept) term
       filter(term != "sd__(Intercept)")
+      
+    } else {
+      
+      # use tidy function
+      tidy.model <- broom.mixed::tidy(model$model) %>%
+        
+        # add id columns
+        mutate(trt = id.trt,
+               rep = id.rep,
+               type = id.type)
+      
+    }
   
   }
   
@@ -532,31 +597,48 @@ all.tidy <- rbind(extract_coefs(RSF.model.B1, "RSF", "before", 1),
 # drop intercept term
 all.tidy <- all.tidy %>% filter(term != "(Intercept)")
 
-# change open_start to open
-all.tidy$term[all.tidy$term == "open_start"] <- "open"
-all.tidy$term[all.tidy$term == "sd__open_start"] <- "sd__open"
-
 #_______________________________________________________________________
 # 10c. Plot betas ----
 #_______________________________________________________________________
 
+# I SHOULD ADD IN THE SIMULATION VALUES
+
 # subset for plotting
 all.tidy.beta <- all.tidy %>% 
   
-  filter(term %in% unique(all.tidy$term)[c(1:3, 7:9)]) %>%
+  filter(term %in% unique(all.tidy$term)[c(1:4, 9:15)]) %>%
+  
+  # replace names
+  mutate(term = recode(term, 
+                       "fora.end.s" = "fora.s",
+                       "open.end.s" = "open.s")) %>%
   
   # reorder and label factor
   mutate(term = factor(term,
-                       levels = c("forage.s", "forage.s:log(sl_)", "edge.s",
-                                  "open", "open_start:log(sl_)", "log(sl_)"),
-                       labels = c("forage", "forage:log(sl)", "edge",
-                                  "open", "open:log(sl)", "log(sl)")))
+                       levels = rev(c("fora.s", 
+                                  "fora.end.s:cos(ta_)",
+                                  "log(sl_):fora.start.s", 
+                                  "elev.s",
+                                  "I(elev.s^2)", 
+                                  "open.s", 
+                                  "log(sl_):open.start.s", 
+                                  "log(sl_)",
+                                  "cos(ta_)")),
+                       labels = rev(c("fora", 
+                                  "fora:cos(ta)",
+                                  "fora:log(sl)", 
+                                  "elev",
+                                  "elev^2", 
+                                  "open", 
+                                  "open:log(sl)", 
+                                  "log(sl)",
+                                  "cos(ta)"))))
 
 # plot
 ggplot(all.tidy.beta,
        aes(y = term,
            x = estimate,
-           color = type,
+           fill = type,
            group = rep)) +
   
   facet_grid(type ~ trt,
@@ -573,12 +655,15 @@ ggplot(all.tidy.beta,
                      color = type,
                      group = rep),
                  height = 0,
-                 position = position_dodge(width = 0.5)) +
+                 position = position_dodge(width = 0.75)) +
   
   geom_point(size = 2,
-             position = position_dodge(width = 0.5)) +
+             position = position_dodge(width = 0.75),
+             shape = 21) +
   
-  theme(panel.grid = element_blank())
+  theme(panel.grid = element_blank()) +
+  
+  coord_cartesian(xlim = c(-5, 2.5))
 
 #_______________________________________________________________________
 # 10d. Plot RE SDs ----
@@ -676,4 +761,8 @@ write.csv(vcov.lookup, paste0(getwd(), "/Derived_data/Lookup/vcov.csv"))
 #_______________________________________________________________________
 
 write.csv(all.tidy, paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
-write.csv(mean.sd.all, paste0(getwd(), "/Derived_data/Model parameters/mean_sd_covs.csv"))
+write.csv(mean.sd.rsf, paste0(getwd(), "/Derived_data/Model parameters/mean_sd_rsf.csv"))
+write.csv(mean.sd.ssf, paste0(getwd(), "/Derived_data/Model parameters/mean_sd_ssf.csv"))
+
+# save image
+save.image("Progress/modeling_02_20_2025.RData")
