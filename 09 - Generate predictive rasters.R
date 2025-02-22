@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 24 Dec 2024
 # Date completed: 27 Dec 2024
-# Date last modified: 20 Feb 2025
+# Date last modified: 22 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -14,6 +14,7 @@
 
 library(tidyverse)       # tidy data cleaning and manipulation
 library(terra)           # rasters
+library(amt)
 library(sf)
 library(mvtnorm)         # multivariate normal distribution
 library(matrixStats)     # rowwise SDs
@@ -408,7 +409,7 @@ sl_raster <- function(landscape.covs,     # raster
     filter(trt == id.trt,
            rep == id.rep)
   
-  # create raster and assign tentative shape to it
+  # create raster and assign tentative shape to it (from the tentative SL distribution)
   tentative.shape.rast <- rast(landscape.covs$fora)
   
   values(tentative.shape.rast) <- sl.params.focal$shape
@@ -422,11 +423,11 @@ sl_raster <- function(landscape.covs,     # raster
                         (landscape.covs$open - focal.scale$mean.open.start) / focal.scale$sd.open.start)
   
   # calculate spatially-explicit SL shape parameter adjustments
-  # this is a bit weird since one adjustment is on the start location and one is on the end location
-  # we'll just roll with it
-  pred.mean <- focal.params$estimate[focal.params$term == "log(sl_)"] *
+  # this is the:
+  # base adjustment from the log(sl) parameter + 
+  # the interaction terms for both fora and open
+  pred.mean <- focal.params$estimate[focal.params$term == "log(sl_)"] +
                landscape.covs.1$fora * focal.params$estimate[focal.params$term == "log(sl_):fora.start.s"] +
-               focal.params$estimate[focal.params$term == "log(sl_)"] *
                landscape.covs.1$open * focal.params$estimate[focal.params$term == "log(sl_):open.start.s"]
   
   # adjust the gamma distributions with the new shape parameters (in a raster), and crop
@@ -447,9 +448,9 @@ sl_raster <- function(landscape.covs,     # raster
     mvn.samples.focal <- mvn.samples[i, ]
     
     # calculate spatially-explicit SL shape parameter adjustments
-    pred.sample <- mvn.samples.focal$V5 *
-                   landscape.covs.1$fora * mvn.samples.focal$V7 +
-                   landscape.covs.1$open * mvn.samples.focal$V9
+    pred.sample <- mvn.samples.focal$V5 +                            # log(sl)
+                   landscape.covs.1$fora * mvn.samples.focal$V7 +    # fora:log(sl)
+                   landscape.covs.1$open * mvn.samples.focal$V9      # open:log(sl)
     
     # adjust the gamma distributions with the new shape parameters (in a raster), and crop
     shape.adjust.crop.sample <- crop((tentative.shape.rast + pred.sample), unit.bound)
