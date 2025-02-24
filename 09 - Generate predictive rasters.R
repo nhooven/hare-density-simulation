@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 24 Dec 2024
 # Date completed: 27 Dec 2024
-# Date last modified: 22 Feb 2025
+# Date last modified: 24 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -55,10 +55,6 @@ landscape.covs.A3 <- rast("Rasters/A3.tif")
 sl.params <- read.csv(paste0(getwd(), "/Derived_data/Lookup/sl_params.csv"))
 ta.params <- read.csv(paste0(getwd(), "/Derived_data/Lookup/ta_params.csv"))
 
-# fix them
-sl.params <- sl.params %>% slice(1:3, 10:12)
-ta.params <- ta.params %>% slice(1:3, 10:12)
-
 #_______________________________________________________________________
 # 3. Sample draws from the multivariate normal ----
 #_______________________________________________________________________
@@ -97,7 +93,7 @@ sample_mvn <- function (n.samples,
   } else {
     
     mvn.samples <- as.data.frame(rmvnorm(n = n.samples, 
-                                         mean = focal.params$estimate[c(1:9)], 
+                                         mean = focal.params$estimate[c(1:10)], 
                                          sigma = vcov.focal))
     
   }
@@ -409,9 +405,11 @@ sl_raster <- function(landscape.covs,     # raster
     filter(trt == id.trt,
            rep == id.rep)
   
-  # create raster and assign tentative shape to it (from the tentative SL distribution)
+  # create raster and assign tentative scale/shape to it (from the tentative SL distribution)
+  tentative.scale.rast <- rast(landscape.covs$fora)
   tentative.shape.rast <- rast(landscape.covs$fora)
   
+  values(tentative.scale.rast) <- sl.params.focal$scale
   values(tentative.shape.rast) <- sl.params.focal$shape
   
   # subset MVN samples
@@ -422,19 +420,25 @@ sl_raster <- function(landscape.covs,     # raster
                         (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
                         (landscape.covs$open - focal.scale$mean.open.start) / focal.scale$sd.open.start)
   
-  # calculate spatially-explicit SL shape parameter adjustments
+  # calculate spatially-explicit SL scale parameter adjustments
+  # https://conservancy.umn.edu/server/api/core/bitstreams/a4a63c0b-bceb-45e1-bd05-2b81dc4575a9/content
   # this is the:
-  # base adjustment from the log(sl) parameter + 
+  # base adjustment from the sl parameter + 
   # the interaction terms for both fora and open
-  pred.mean <- focal.params$estimate[focal.params$term == "log(sl_)"] +
-               landscape.covs.1$fora * focal.params$estimate[focal.params$term == "log(sl_):fora.start.s"] +
-               landscape.covs.1$open * focal.params$estimate[focal.params$term == "log(sl_):open.start.s"]
+  pred.mean <- focal.params$estimate[focal.params$term == "sl_"] +
+               landscape.covs.1$fora * focal.params$estimate[focal.params$term == "sl_:fora.start.s"] +
+               landscape.covs.1$open * focal.params$estimate[focal.params$term == "sl_:open.start.s"]
   
-  # adjust the gamma distributions with the new shape parameters (in a raster), and crop
-  shape.adjust.crop <- crop((tentative.shape.rast + pred.mean), unit.bound)
+  # adjust the gamma distributions with the new parameters (in a raster)
+  scale.adjust <- 1 / ((1 / tentative.scale.rast) - pred.mean)
+  shape.adjust <- tentative.shape.rast + focal.params$estimate[focal.params$term == "log(sl_)"]
+  
+  # crop
+  scale.adjust.crop <- crop((scale.adjust), unit.bound)
+  shape.adjust.crop <- crop((shape.adjust), unit.bound)
   
   # and calculate the new expectation
-  mean.sl.adjust <- shape.adjust.crop * sl.params.focal$scale 
+  mean.sl.adjust <- shape.adjust.crop * scale.adjust.crop
   
   # transform to day range (in mm)
   dr.adjust <- (mean.sl.adjust * 12)
@@ -448,15 +452,20 @@ sl_raster <- function(landscape.covs,     # raster
     mvn.samples.focal <- mvn.samples[i, ]
     
     # calculate spatially-explicit SL shape parameter adjustments
-    pred.sample <- mvn.samples.focal$V5 +                            # log(sl)
-                   landscape.covs.1$fora * mvn.samples.focal$V7 +    # fora:log(sl)
-                   landscape.covs.1$open * mvn.samples.focal$V9      # open:log(sl)
+    pred.sample <- mvn.samples.focal$V5 +                            # sl
+                   landscape.covs.1$fora * mvn.samples.focal$V8 +    # fora:sl
+                   landscape.covs.1$open * mvn.samples.focal$V10      # open:sl
     
-    # adjust the gamma distributions with the new shape parameters (in a raster), and crop
-    shape.adjust.crop.sample <- crop((tentative.shape.rast + pred.sample), unit.bound)
+    # adjust the gamma distributions with the new parameters (in a raster), and crop
+    scale.adjust.sample <- 1 / ((1 / tentative.scale.rast) - pred.sample)
+    shape.adjust.sample <- tentative.shape.rast + mvn.samples.focal$V6
+    
+    # crop
+    scale.adjust.crop.sample <- crop(scale.adjust.sample, unit.bound)
+    shape.adjust.crop.sample <- crop(shape.adjust.sample, unit.bound)
     
     # and calculate the new expectation
-    mean.sl.adjust.sample <- shape.adjust.crop.sample * sl.params.focal$scale 
+    mean.sl.adjust.sample <- shape.adjust.crop.sample * scale.adjust.crop.sample
     
     # transform to day range (in mm)
     dr.adjust.sample <- (mean.sl.adjust.sample * 12)
@@ -550,4 +559,3 @@ writeRaster(scaled.covs.B3, paste0(getwd(), "/Rasters/Scaled covariates/B3.tif")
 writeRaster(scaled.covs.A1, paste0(getwd(), "/Rasters/Scaled covariates/A1.tif"), overwrite = TRUE)
 writeRaster(scaled.covs.A2, paste0(getwd(), "/Rasters/Scaled covariates/A2.tif"), overwrite = TRUE)
 writeRaster(scaled.covs.A3, paste0(getwd(), "/Rasters/Scaled covariates/A3.tif"), overwrite = TRUE)
-

@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 21 Feb 2025
+# Date last modified: 24 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -137,7 +137,10 @@ group_passes <- function (df,
       filter(rep == focal.combo$id.rep &
              n.indiv == focal.combo$n)
     
-    # split by trt and group by cam and sum all passes
+    # run through code as normal if at least one cam has a pass
+    if (length(focal.passes > 0)) {
+      
+      # split by trt and group by cam and sum all passes
     focal.passes.1.B <- focal.passes %>% 
       
       filter(trt == "before") %>%
@@ -177,6 +180,17 @@ group_passes <- function (df,
       
       focal.passes.1.A <- rbind(focal.passes.1.A, new.row.A)
 
+      # if no cameras have passes, make blanks
+    } 
+    
+    } else {
+      
+      focal.passes.1.B <- data.frame(cam.id = 1:n.cams,
+                                     total.passes = 0)
+      
+      focal.passes.1.A <- data.frame(cam.id = 1:n.cams,
+                                     total.passes = 0)
+      
     }
     
     # sort by cam.id and add in identifiers
@@ -185,18 +199,18 @@ group_passes <- function (df,
       arrange(cam.id) %>%
       
       mutate(trt = "before",
-             n.indiv = focal.passes$n.indiv[1],
-             rep = focal.passes$rep[1],
-             cams = focal.passes$cams[1])
+             n.indiv = focal.combo$n,
+             rep = focal.combo$id.rep,
+             cams = n.cams)
     
     focal.passes.2.A <- focal.passes.1.A %>% 
       
       arrange(cam.id) %>%
       
       mutate(trt = "after",
-             n.indiv = focal.passes$n.indiv[1],
-             rep = focal.passes$rep[1],
-             cams = focal.passes$cams[1])
+             n.indiv = focal.combo$n,
+             rep = focal.combo$id.rep,
+             cams = n.cams)
     
     focal.passes.2 <- rbind(focal.passes.2.B, focal.passes.2.A)
     
@@ -226,15 +240,16 @@ passes.gp.16 <- group_passes(passes.extracted.16, 16)
 # 5. Look at NAs in the 4 cam set ----
 #_______________________________________________________________________
 
+# UNUSED - 02-24-2025
 passes.na <- passes.gp.4 %>% 
   
-  filter(rep == 2 & n.indiv == 2) %>%
+  filter() %>%
   
-  group_by(trt, n.indiv) %>%
+  group_by(n.indiv, rep) %>%
   
   summarize(n())
 
-passes.na
+View(passes.na)
 
 # looks like these are all from:
 # nindiv = 2

@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 21 Feb 2025
+# Date last modified: 24 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -66,12 +66,12 @@ ta.dist <- make_vonmises_distr(kappa = 1.5)
 
 # standardized!!!
 
-coef.fora.sl <- -0.05       # β1 - (start) fora and speed interaction = negative
+coef.fora.sl <- -0.005      # β1 - (start) fora and speed interaction = negative
 coef.fora <- 1.5            # β2 = (end) fora selection = positive
 coef.fora.ta <- -0.5        # β3 = (end) fora and concentration interaction = negative       
 coef.elev <- 0.75           # β4 = (end) linear elev selection = positive
 coef.elev2 <- -0.75         # β5 = (end) squared elev selection = negative
-coef.open.sl <- 0.25        # β6 = (start) open and speed interaction = positive
+coef.open.sl <- 0.005       # β6 = (start) open and speed interaction = positive
 coef.open <- -1.0           # β7 = (end) open selection = negative
 
 #_______________________________________________________________________
@@ -259,12 +259,12 @@ init_sim <- function(id.rep) {
     
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
-    issf.model <- make_issf_model(coefs = c("fora_start:log(sl_)" = coef.fora.sl, 
+    issf.model <- make_issf_model(coefs = c("fora_start:sl_" = coef.fora.sl, 
                                             "fora_end" = coef.fora,
                                             "fora_end:cos(ta_)" = coef.fora.ta,
                                             "elev_end" = coef.elev,
                                             "I(elev_end^2)" = coef.elev2,
-                                            "log(sl_):open_start" = coef.open.sl,
+                                            "sl_:open_start" = coef.open.sl,
                                             "open_end" = coef.open,
                                             x2_ = hr.params[1],
                                             y2_ = hr.params[2], 
@@ -328,12 +328,12 @@ init_sim <- function(id.rep) {
     
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
-    issf.model.A <- make_issf_model(coefs = c("fora_start:log(sl_)" = coef.fora.sl, 
+    issf.model.A <- make_issf_model(coefs = c("fora_start:sl_" = coef.fora.sl, 
                                               "fora_end" = coef.fora,
                                               "fora_end:cos(ta_)" = coef.fora.ta,
                                               "elev_end" = coef.elev,
                                               "I(elev_end^2)" = coef.elev2,
-                                              "log(sl_):open_start" = coef.open.sl,
+                                              "sl_:open_start" = coef.open.sl,
                                               "open_end" = coef.open,
                                               x2_ = hr.params.A[1],
                                               y2_ = hr.params.A[2], 

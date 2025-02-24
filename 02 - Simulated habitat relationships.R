@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 02 Dec 2024
-# Date last modified: 20 Feb 2025
+# Date last modified: 24 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -101,12 +101,12 @@ ggplot() +
 
 # importantly, these are *standardized* coefficients
 
-coef.fora.sl <- -0.05       # β1 - (start) fora and speed interaction = negative
+coef.fora.sl <- -0.005      # β1 - (start) fora and speed interaction = negative
 coef.fora <- 1.5            # β2 = (end) fora selection = positive
-coef.fora.ta <- -0.5       # β3 = (end) fora and concentration interaction = negative       
+coef.fora.ta <- -0.5        # β3 = (end) fora and concentration interaction = negative       
 coef.elev <- 0.75           # β4 = (end) linear elev selection = positive
 coef.elev2 <- -0.75         # β5 = (end) squared elev selection = negative
-coef.open.sl <- 0.25        # β6 = (start) open and speed interaction = positive
+coef.open.sl <- 0.005       # β6 = (start) open and speed interaction = positive
 coef.open <- -1.0           # β7 = (end) open selection = negative
 
 #_______________________________________________________________________
@@ -116,12 +116,12 @@ coef.open <- -1.0           # β7 = (end) open selection = negative
 #_______________________________________________________________________
 
 # bind together
-coef.all <- data.frame(coef = c("fora:log(sl)",
+coef.all <- data.frame(coef = c("fora:sl",
                                 "fora",
                                 "fora:cos(ta)",
                                 "elev",
                                 "elev2",
-                                "open:log(sl)",
+                                "open:sl",
                                 "open"),
                      estimate = c(coef.fora.sl,
                                   coef.fora,
@@ -133,12 +133,12 @@ coef.all <- data.frame(coef = c("fora:log(sl)",
 
 # reorder factor levels
 coef.all$coef <- factor(coef.all$coef,
-                        levels = rev(c("fora:log(sl)",
+                        levels = rev(c("fora:sl",
                                        "fora",
                                        "fora:cos(ta)",
                                        "elev",
                                        "elev2",
-                                       "open:log(sl)",
+                                       "open:sl",
                                        "open")))
 
 # add indicator for base vs. movement interaction
@@ -156,6 +156,10 @@ ggplot(data = coef.all,
   
   theme_bw() +
   
+  facet_wrap(~ type,
+             scales = "free",
+             nrow = 2) +
+  
   geom_vline(xintercept = 0,
              linetype = "dashed") +
   
@@ -171,7 +175,7 @@ ggplot(data = coef.all,
   
   # theme
   theme(panel.grid = element_blank(),
-        legend.position = "top")
+        legend.position = "none")
 
 #_______________________________________________________________________
 # 6. Implied selection relationships ----
@@ -291,20 +295,18 @@ cov.high <- quantile(seq(-2, 2, length.out = 1000), prob = 0.90)
 cov.low <- quantile(seq(-2, 2, length.out = 1000), prob = 0.10)
 
 #_______________________________________________________________________
-# 7a. Forage:log(sl) ----
+# 7a. Forage:sl ----
 #_______________________________________________________________________
 
 # new sl distributions
-sl.dist.fora.high <- update_gamma(dist = sl.dist,
-                                  beta_sl = 0,
-                                  beta_log_sl = cov.high * coef.fora.sl)
+sl.dist.fora.high <- make_gamma_distr(shape = sl.dist$params$shape,
+                                      scale = 1 / ((1 / sl.dist$params$scale) - (cov.high * coef.fora.sl)))
 
-sl.dist.fora.low <- update_gamma(dist = sl.dist,
-                                 beta_sl = 0,
-                                 beta_log_sl = cov.low * coef.fora.sl)
+sl.dist.fora.low <- make_gamma_distr(shape = sl.dist$params$shape,
+                                     scale = 1 / ((1 / sl.dist$params$scale) - (cov.low * coef.fora.sl)))
 
 # df
-fora.sl.df <- tibble(x = seq(0.1, 70, length.out = 1000)) %>%   # normal step length
+fora.sl.df <- tibble(x = seq(0.1, 80, length.out = 1000)) %>%   # normal step length
   
   mutate(y.mean = dgamma(x, 
                          shape = sl.dist$params$shape,
@@ -344,20 +346,18 @@ ggplot(fora.sl.df,
   ylab("")
 
 #_______________________________________________________________________
-# 7b. Open:log(sl) ----
+# 7b. Open:sl ----
 #_______________________________________________________________________
 
 # new sl distributions
-sl.dist.open.high <- update_gamma(dist = sl.dist,
-                                  beta_sl = 0,
-                                  beta_log_sl = cov.high * coef.open.sl)
+sl.dist.open.high <- make_gamma_distr(shape = sl.dist$params$shape,
+                                      scale = 1 / ((1 / sl.dist$params$scale) - (cov.high * coef.open.sl)))
 
-sl.dist.open.low <- update_gamma(dist = sl.dist,
-                                 beta_sl = 0,
-                                 beta_log_sl = cov.low * coef.open.sl)
+sl.dist.open.low <- make_gamma_distr(shape = sl.dist$params$shape,
+                                     scale = 1 / ((1 / sl.dist$params$scale) - (cov.low * coef.open.sl)))
 
 # df
-open.sl.df <- tibble(x = seq(0.1, 70, length.out = 1000)) %>%   # normal step length
+open.sl.df <- tibble(x = seq(0.1, 80, length.out = 1000)) %>%   # normal step length
   
   mutate(y.mean = dgamma(x, 
                          shape = sl.dist$params$shape,

@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 21 Nov 2024
 # Date completed: 26 Nov 2024
-# Date last modified: 21 Feb 2025
+# Date last modified: 24 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -14,6 +14,7 @@
 
 library(tidyverse)       # tidy data cleaning and manipulation
 library(amt)             # work with tracks
+library(terra)
 library(sf)              # spatial data
 
 #_______________________________________________________________________
@@ -88,7 +89,7 @@ track_contacts <- function (id.trt,
     # coerce to sf and cast to lines
     interp.lines <- indiv.track %>%
       
-      as_sf() %>%
+      amt::as_sf() %>%
       
       # transform to UTM
       st_transform(crs = "epsg:32611") %>%

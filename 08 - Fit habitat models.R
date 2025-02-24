@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 21 Feb 2025
+# Date last modified: 24 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -432,7 +432,18 @@ fit_RSF <- function (sampled.points) {
 }
 
 #_______________________________________________________________________
-# 8b. Fit models ----
+# 8b. Examine correlation ----
+#_______________________________________________________________________
+
+cor(RSF.B1[ , c(4:6)])
+cor(RSF.B2[ , c(4:6)])
+cor(RSF.B3[ , c(4:6)])
+cor(RSF.A1[ , c(4:6)])
+cor(RSF.A2[ , c(4:6)])
+cor(RSF.A3[ , c(4:6)])
+
+#_______________________________________________________________________
+# 8c. Fit models ----
 #_______________________________________________________________________
 
 RSF.model.B1 <- fit_RSF(RSF.B1)
@@ -451,13 +462,14 @@ RSF.model.A3 <- fit_RSF(RSF.A3)
 # full random slopes
 issf_fit <- function(sampled.steps) {
   
-  iSSF.struc <- glmmTMB(case_ ~ fora.start.s:log(sl_) +
+  iSSF.struc <- glmmTMB(case_ ~ fora.start.s:sl_ +
                                 fora.end.s +
                                 fora.end.s:cos(ta_) +
                                 elev.s +
                                 I(elev.s^2) +
-                                open.start.s:log(sl_)  +
+                                open.start.s:sl_  +
                                 open.end.s +
+                                sl_ +
                                 log(sl_) +
                                 cos(ta_) +
                                 (1 | stratum) +                 # in the interest of convergence
@@ -483,13 +495,14 @@ issf_fit <- function(sampled.steps) {
 issf_fit_1 <- function(sampled.steps) {
   
   iSSF.model <- amt::fit_issf(data = sampled.steps,
-                              formula = case_ ~ fora.start.s:log(sl_) +
+                              formula = case_ ~ fora.start.s:sl_ +
                                                 fora.end.s +
                                                 fora.end.s:cos(ta_) +
                                                 elev.s +
                                                 I(elev.s^2) +
-                                                open.start.s:log(sl_)  +
+                                                open.start.s:sl_  +
                                                 open.end.s +
+                                                sl_ +
                                                 log(sl_) +
                                                 cos(ta_) +
                                                 strata(stratum))
@@ -500,11 +513,22 @@ issf_fit_1 <- function(sampled.steps) {
 }
 
 #_______________________________________________________________________
-# 9b. Fit models ----
+# 9b. Examine correlation ----
+#_______________________________________________________________________
+
+cor(SSF.B1[ , c(16:18)])
+cor(SSF.B2[ , c(16:18)])
+cor(SSF.B3[ , c(16:18)])
+cor(SSF.A1[ , c(16:18)])
+cor(SSF.A2[ , c(16:18)])
+cor(SSF.A3[ , c(16:18)])
+
+#_______________________________________________________________________
+# 9c. Fit models ----
 #_______________________________________________________________________
 
 iSSF.model.B1 <- issf_fit_1(SSF.B1)
-iSSF.model.B2 <- issf_fit(SSF.B2)
+iSSF.model.B2 <- issf_fit_1(SSF.B2)
 iSSF.model.B3 <- issf_fit_1(SSF.B3)
 iSSF.model.A1 <- issf_fit_1(SSF.A1)
 iSSF.model.A2 <- issf_fit_1(SSF.A2)
@@ -606,7 +630,7 @@ all.tidy <- all.tidy %>% filter(term != "(Intercept)")
 # subset for plotting
 all.tidy.beta <- all.tidy %>% 
   
-  filter(term %in% unique(all.tidy$term)[c(1:4, 9:15)]) %>%
+  filter(term %in% unique(all.tidy$term)[c(1:4, 9:16)]) %>%
   
   # replace names
   mutate(term = recode(term, 
@@ -632,7 +656,7 @@ all.tidy.beta <- all.tidy %>%
           rep = NA,
           type = "sim") %>%
   
-  add_row(term = "log(sl_):fora.start.s",
+  add_row(term = "sl_:fora.start.s",
           estimate = -0.05,
           std.error = 0,
           statistic = 0,
@@ -659,7 +683,7 @@ all.tidy.beta <- all.tidy %>%
           rep = NA,
           type = "sim") %>%
   
-  add_row(term = "log(sl_):open.start.s",
+  add_row(term = "sl_:open.start.s",
           estimate = 0.25,
           std.error = 0,
           statistic = 0,
@@ -680,22 +704,24 @@ all.tidy.beta <- all.tidy %>%
   # reorder and label factor
   mutate(term = factor(term,
                        levels = rev(c("fora.s", 
-                                  "fora.end.s:cos(ta_)",
-                                  "log(sl_):fora.start.s", 
-                                  "elev.s",
-                                  "I(elev.s^2)", 
-                                  "open.s", 
-                                  "log(sl_):open.start.s", 
-                                  "log(sl_)",
-                                  "cos(ta_)")),
+                                      "fora.end.s:cos(ta_)",
+                                      "sl_:fora.start.s", 
+                                      "elev.s",
+                                      "I(elev.s^2)", 
+                                      "open.s", 
+                                      "sl_:open.start.s", 
+                                      "sl_",
+                                      "log(sl_)",
+                                      "cos(ta_)")),
          
                         labels = rev(c("fora", 
                                        "fora:cos(ta)",
-                                       "fora:log(sl)", 
+                                       "fora:sl", 
                                        "elev",
                                        "elev^2", 
                                        "open", 
-                                       "open:log(sl)", 
+                                       "open:sl",
+                                       "sl_",
                                        "log(sl)",
                                        "cos(ta)"))))
 
