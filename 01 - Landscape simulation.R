@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 15 Nov 2024
-# Date last modified: 20 Feb 2025
+# Date last modified: 25 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -15,14 +15,15 @@
 library(tidyverse)       # tidy data cleaning and manipulation
 library(terra)           # work with rasters
 library(NLMR)            # simulate landscapes
-library(spatialEco)      # Gaussian blur
 library(landscapetools)  # work with simulated landscapes
 library(sf)              # bounding polygons
 library(tidyterra)       # plot in ggplot
 library(cowplot)         # multiple plots
 
 #_______________________________________________________________________
-# 2. Define landscape size
+# 2. Define landscape size ----
+#_______________________________________________________________________
+# 2a. Total landscape -----
 #_______________________________________________________________________
 
 # here we want a landscape large enough so simulated tracks in our focal area (10 ha)
@@ -41,68 +42,27 @@ resol <- 10
 columns <- as.integer(ceiling(sqrt(n.sqm / resol)))
 rows <- as.integer(ceiling(sqrt(n.sqm / resol)))
 
-#_______________________________________________________________________
-# 3. Covariate 1 - "forage" - fora ----
-
-# Start: Faster movements when starting in in low forage
-# End: More likely to switch direction to get to high forage
-# we'll use the Gaussian random field function here
-
-#_______________________________________________________________________
-# 3a. Before landscape ----
-
-# high autocorrelation in this continuous variable
-
-# parameters
-# autocorrelation range: maximum range of spatial autocorrelation
-B.cov1.autocorr <- 50
-
-# magnitude of variation
-B.cov1.magvar <- 2
+# full landscape raster template
+full.ls <- rast(ncols = columns,
+                nrows = rows,
+                resolution = resol,
+                xmin = 0,
+                xmax = columns * resol,
+                ymin = 0,
+                ymax = rows * resol,
+                crs = "EPSG:32611",
+                vals = 1)
 
 #_______________________________________________________________________
+# 2b. Unit boundary ----
 
-# B1
-set.seed(89)
-B1.cov1 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = B.cov1.autocorr,
-                             mag_var = B.cov1.magvar)
+# this will be a 10-ha area in the middle of the full landscape
 
-# C2
-set.seed(923)
-B2.cov1 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = B.cov1.autocorr,
-                             mag_var = B.cov1.magvar)
-
-# C3
-set.seed(12)
-B3.cov1 <- nlm_gaussianfield(ncol = columns,
-                             nrow = rows,
-                             resolution = resol,
-                             autocorr_range = B.cov1.autocorr,
-                             mag_var = B.cov1.magvar)
-
-# bind together
-B.cov1 <- c(rast(B1.cov1), rast(B2.cov1), rast(B3.cov1))
-names(B.cov1) <- c("B1", "B2", "B3")
-
-# add UTM CRS so spatial layers work together
-crs(B.cov1) <- crs("EPSG:32611")
-
-# plot
-plot(B.cov1)
-
-#_______________________________________________________________________
-# 4. Create a unit boundary polygon ----
 #_______________________________________________________________________
 
 # extract coordinates - find centroid of raster
-rast.centroid <- c(B1.cov1@extent@xmax / 2,
-                   B1.cov1@extent@ymax / 2)
+rast.centroid <- c((columns * resol) / 2,
+                   (rows * resol) / 2)
 
 # how many meters per side? (let's make our unit 10 ha)
 m.side <- sqrt(10 * 10000)
@@ -127,6 +87,10 @@ unit.bound.sf <- st_as_sf(st_sfc(unit.bound))
 
 st_crs(unit.bound.sf) <- crs("EPSG:32611")
 
+# plot 
+plot(full.ls)
+plot(unit.bound.sf, add = T)
+
 # write to shapefile
 st_write(unit.bound.sf,
          dsn = paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"),
@@ -134,7 +98,113 @@ st_write(unit.bound.sf,
          append = FALSE)
 
 #_______________________________________________________________________
-# 5. Covariate 2 - "elevation" - elev ----
+# 2c. Landscape "stage" -----
+
+# this is where the action happens- no point in stretching any of 
+# covariate variability beyond this
+# we'll define it as a buffer around our unit boundary 
+
+#_______________________________________________________________________
+
+# buffer
+unit.bound.buff <- st_buffer(unit.bound.sf, 
+                             dist = 500,
+                             endCapStyle = "FLAT")
+
+# plot 
+plot(full.ls)
+plot(unit.bound.sf, add = T)
+plot(unit.bound.buff, add = T)
+
+# crop to create a raster template for covariate generation
+stage.ls <- crop(full.ls, unit.bound.buff)
+
+# add base value
+values(stage.ls) <- 999
+
+plot(merge(stage.ls, full.ls))
+plot(unit.bound.sf, add = T)
+
+#_______________________________________________________________________
+# 3. Covariate 1 - "forage" - fora ----
+
+# Start: Faster movements when starting in in low forage
+# End: More likely to switch direction to get to high forage
+# we'll use the Gaussian random field here
+
+#_______________________________________________________________________
+# 3a. Before landscape ----
+#_______________________________________________________________________
+
+# each replicate will get more and more complex
+# we'll vary p, the fragmentation parameter,
+# and keep A, the expected proportion of "habitat" to be constant
+
+# B1 - least complex
+B1.cov1.full <- rast(nlm_gaussianfield(ncol = columns,
+                                       nrow = rows,
+                                       resolution = resol,
+                                       autocorr_range = 200,
+                                       mag_var = 0.5,
+                                       user_seed = 89,
+                                       rescale = FALSE))
+
+
+# B2 - intermediate complexity
+B2.cov1.full <- rast(nlm_gaussianfield(ncol = columns,
+                                       nrow = rows,
+                                       resolution = resol,
+                                       autocorr_range = 100,
+                                       mag_var = 2.5,
+                                       user_seed = 1231,
+                                       rescale = FALSE))
+
+
+# B3 - high complexity
+B3.cov1.full <- rast(nlm_gaussianfield(ncol = columns,
+                                       nrow = rows,
+                                       resolution = resol,
+                                       autocorr_range = 50,
+                                       mag_var = 4.5,
+                                       user_seed = 6998,
+                                       rescale = FALSE))
+
+# crop
+B1.cov1.crop <- crop(B1.cov1.full, unit.bound.buff)
+B2.cov1.crop <- crop(B2.cov1.full, unit.bound.buff)
+B3.cov1.crop <- crop(B3.cov1.full, unit.bound.buff)
+
+# plot
+plot(c(B1.cov1.crop, B2.cov1.crop, B3.cov1.crop))
+
+# merge into full landscapes
+# set full ls value to the mean of the stages
+full.ls.B1.cov1 <- rast(full.ls,
+                        vals = mean(values(B1.cov1.crop)))
+
+full.ls.B2.cov1 <- rast(full.ls,
+                        vals = mean(values(B2.cov1.crop)))
+
+full.ls.B3.cov1 <- rast(full.ls,
+                        vals = mean(values(B3.cov1.crop)))
+
+# merge
+B1.cov1 <- merge(B1.cov1.crop, full.ls.B1.cov1)
+B2.cov1 <- merge(B2.cov1.crop, full.ls.B2.cov1)
+B3.cov1 <- merge(B3.cov1.crop, full.ls.B3.cov1)
+
+# bind together
+B.cov1 <- c(B1.cov1, B2.cov1, B3.cov1)
+names(B.cov1) <- c("B1", "B2", "B3")
+
+# add UTM CRS so spatial layers work together
+crs(B.cov1) <- crs("EPSG:32611")
+
+# plot
+plot(B.cov1)
+
+#_______________________________________________________________________
+# 4. Covariate 2 - "elevation" - elev ----
 
 # intermediate (i.e., quadratic) selection
 # we'll use a planar gradient
@@ -143,24 +213,51 @@ st_write(unit.bound.sf,
 
 # B1
 set.seed(558)
-B1.cov2 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
+B1.cov2.full <- rast(nlm_planargradient(ncol = columns,
+                                        nrow = rows,
+                                        resolution = resol,
+                                        rescale = FALSE))
 
-# C2
+# B2
 set.seed(1072)
-B2.cov2 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
+B2.cov2.full <- rast(nlm_planargradient(ncol = columns,
+                                        nrow = rows,
+                                        resolution = resol,
+                                        rescale = FALSE))
 
-# C3
+# B3
 set.seed(223)
-B3.cov2 <- nlm_planargradient(ncol = columns,
-                              nrow = rows,
-                              resolution = resol)
+B3.cov2.full <- rast(nlm_planargradient(ncol = columns,
+                                        nrow = rows,
+                                        resolution = resol,
+                                        rescale = FALSE))
+
+# crop
+B1.cov2.crop <- crop(B1.cov2.full, unit.bound.buff)
+B2.cov2.crop <- crop(B2.cov2.full, unit.bound.buff)
+B3.cov2.crop <- crop(B3.cov2.full, unit.bound.buff)
+
+# plot
+plot(c(B1.cov2.crop, B2.cov2.crop, B3.cov2.crop))
+
+# merge into full landscapes
+# set full ls value to the mean of the stages
+full.ls.B1.cov2 <- rast(full.ls,
+                        vals = mean(values(B1.cov2.crop)))
+
+full.ls.B2.cov2 <- rast(full.ls,
+                        vals = mean(values(B2.cov2.crop)))
+
+full.ls.B3.cov2 <- rast(full.ls,
+                        vals = mean(values(B3.cov2.crop)))
+
+# merge
+B1.cov2 <- merge(B1.cov2.crop, full.ls.B1.cov2)
+B2.cov2 <- merge(B2.cov2.crop, full.ls.B2.cov2)
+B3.cov2 <- merge(B3.cov2.crop, full.ls.B3.cov2)
 
 # bind together
-B.cov2 <- c(rast(B1.cov2), rast(B2.cov2), rast(B3.cov2))
+B.cov2 <- c(B1.cov2, B2.cov2, B3.cov2)
 names(B.cov2) <- c("B1", "B2", "B3")
 
 # add UTM CRS so spatial layers work together
@@ -200,36 +297,39 @@ create_discrete_ls <- function (seed = runif(1, 1, 1000),
   ls.class <- util_classify(start.ls,
                             weighting = c(0.5, 0.5))
   
-
+  
   # reclassify
   ls.class.1 <- ls.class - 1
   
   crs(ls.class.1) <- crs("EPSG:32611")
   
   # crop to be the same size as the other variables
-  ls.class.2 <- terra::crop(x = ls.class.1, 
-                            y = B1.cov1)
+  ls.class.2 <- terra::crop(x = rast(ls.class.1), 
+                            y = full.ls)
   
   
   # return
   return(ls.class.2)
-
+  
 }
 
 #_______________________________________________________________________
 # 5a. Before landscape - discrete ----
 #_______________________________________________________________________
 
-B1.cov3.dis <- create_discrete_ls(1987, 0.9)
-B2.cov3.dis <- create_discrete_ls(78, 0.9)
+B1.cov3.dis <- create_discrete_ls(1225, 0.7)
+B2.cov3.dis <- create_discrete_ls(78, 0.8)
 B3.cov3.dis <- create_discrete_ls(394, 0.9)
 
 # bind together
-B.cov3.dis <- c(rast(B1.cov3.dis), rast(B2.cov3.dis), rast(B3.cov3.dis))
+B.cov3.dis <- c(B1.cov3.dis, B2.cov3.dis, B3.cov3.dis)
 names(B.cov3.dis) <- c("B1", "B2", "B3")
 
-# crop for alteration
-B.cov3.dis.crop <- crop(B.cov3.dis, unit.bound.sf)
+# crop to stage
+B.cov3.dis.crop <- crop(B.cov3.dis, unit.bound.buff)
+
+# plot
+plot(B.cov3.dis.crop)
 
 #_______________________________________________________________________
 # 5b. Define function to calculate percent open in a buffer ----
@@ -257,7 +357,7 @@ perc_open <- function (landscape,
     
     return(length(which(x == 1)) / length(x))
     
-    }
+  }
   
   # run
   focal.rast <- terra::focal(x = landscape,
@@ -276,8 +376,10 @@ perc_open <- function (landscape,
 B.cov3 <- perc_open(B.cov3.dis, 50)
 
 B.cov3.crop <- crop(B.cov3, unit.bound.sf)
+B.cov3.crop.stage <- crop(B.cov3, unit.bound.buff)
 
 plot(B.cov3.crop)
+plot(B.cov3.crop.stage)
 
 #_______________________________________________________________________
 # 5b. After landscape ----
@@ -286,7 +388,10 @@ plot(B.cov3.crop)
 # now we'll simulate alteration by:
 # (1) splitting each landscape into four quadrants
 # (2) choosing two diagonal quadrants at random
-# (3) flipping 70% of non-open pixels to open
+# (3) changing all % open values to max(values) in the stage
+
+# ideally this will strengthen the trade-off between selection for forage/slow movements
+# and avoidance of open/fast movements
 
 # create quadrants - BL, BR, TR, TL
 # initialize coordinates
@@ -376,14 +481,14 @@ to.treat$second.quad <- case_when(to.treat$first.quad == 1 ~ 4,
                                   to.treat$first.quad == 2 ~ 3,
                                   to.treat$first.quad == 3 ~ 2,
                                   to.treat$first.quad == 4 ~ 1)
-  
+
 # write a function that does it
-alter_cover <- function(landscape,
-                        rep,
-                        percent) {
+alter_cover <- function(unit.ls,
+                        stage.ls,
+                        rep) {
   
   # focal landscape
-  landscape.1 <- landscape
+  landscape.1 <- unit.ls
   
   # crop correct quadrants
   first.quad <- to.treat$first.quad[to.treat$rep == rep]
@@ -393,16 +498,16 @@ alter_cover <- function(landscape,
   second.quad.crop <- crop(landscape.1, quad.sf.list[[second.quad]])
   
   # how many can we flip?
-  n.0.first <- length(values(first.quad.crop)[values(first.quad.crop) == 0])
-  n.0.second <- length(values(second.quad.crop)[values(second.quad.crop) == 0])
+  #n.0.first <- length(values(first.quad.crop)[values(first.quad.crop) == 0])
+  #n.0.second <- length(values(second.quad.crop)[values(second.quad.crop) == 0])
   
   # randomly sample a percentage of them to flip
-  to.flip.first <- sample(which(values(first.quad.crop) == 0), size = round(n.0.first * percent))
-  to.flip.second <- sample(which(values(second.quad.crop) == 0), size = round(n.0.second * percent))
+  #to.flip.first <- sample(which(values(first.quad.crop) == 0), size = round(n.0.first * percent))
+  #to.flip.second <- sample(which(values(second.quad.crop) == 0), size = round(n.0.second * percent))
   
-  # flip them
-  values(first.quad.crop)[to.flip.first] <- 1
-  values(second.quad.crop)[to.flip.second] <- 1
+  # flip them to the max value in the stage
+  values(first.quad.crop) <- max(values(stage.ls))
+  values(second.quad.crop) <- max(values(stage.ls))
   
   # merge back in
   merge.1 <- merge(first.quad.crop, landscape.1)
@@ -417,26 +522,18 @@ alter_cover <- function(landscape,
 }
 
 # use function
-A.cov3.dis.crop <- c(alter_cover(B.cov3.dis.crop$B1, 1, 0.70),
-                     alter_cover(B.cov3.dis.crop$B2, 2, 0.70),
-                     alter_cover(B.cov3.dis.crop$B3, 3, 0.70))
+A.cov3.crop <- c(alter_cover(B.cov3.crop$B1, B.cov3.crop.stage$B1, 1),
+                 alter_cover(B.cov3.crop$B2, B.cov3.crop.stage$B1, 2),
+                 alter_cover(B.cov3.crop$B3, B.cov3.crop.stage$B1, 3))
 
-plot(B.cov3.dis.crop)
-plot(A.cov3.dis.crop)
+plot(B.cov3.crop)
+plot(A.cov3.crop)
 
 # now to calculate percent open
 # merge into landscape
-A.cov3.dis <- merge(A.cov3.dis.crop, B.cov3.dis)
-
-A.cov3 <- perc_open(A.cov3.dis, 50)      # calculate percent open since that's our covariate
+A.cov3 <- merge(A.cov3.crop, B.cov3)
 
 names(A.cov3) <- c("A1" ,"A2", "A3")
-
-A.cov3.crop <- crop(A.cov3, unit.bound.sf)
-
-# compare
-plot(B.cov3.crop)
-plot(A.cov3.crop)
 
 #_______________________________________________________________________
 # 6. Bind each landscape / replicate together ----
@@ -474,17 +571,14 @@ names(A3.ls) <- c("fora", "elev", "open")
 # 7a. Crop for visualization ----
 #_______________________________________________________________________
 
-# define extent (buffered unit)
-unit.buff <- st_buffer(unit.bound.sf, dist = 100)
-
 # crop
-B1.ls.crop <- crop(B1.ls, unit.buff)
-B2.ls.crop <- crop(B2.ls, unit.buff)
-B3.ls.crop <- crop(B3.ls, unit.buff)
+B1.ls.crop <- crop(B1.ls, unit.bound.buff)
+B2.ls.crop <- crop(B2.ls, unit.bound.buff)
+B3.ls.crop <- crop(B3.ls, unit.bound.buff)
 
-A1.ls.crop <- crop(A1.ls, unit.buff)
-A2.ls.crop <- crop(A2.ls, unit.buff)
-A3.ls.crop <- crop(A3.ls, unit.buff)
+A1.ls.crop <- crop(A1.ls, unit.bound.buff)
+A2.ls.crop <- crop(A2.ls, unit.bound.buff)
+A3.ls.crop <- crop(A3.ls, unit.bound.buff)
 
 #_______________________________________________________________________
 # 7b. Define function ----
@@ -587,8 +681,6 @@ plot_grid(A1.plot, A2.plot, A3.plot, nrow = 3)
 #_______________________________________________________________________
 # 8. Save and write rasters ----
 #_______________________________________________________________________
-
-save.image("Progress/rasters_02_20_2025.RData")
 
 writeRaster(B1.ls, filename = "Rasters/B1.tif", overwrite = T)
 writeRaster(B2.ls, filename = "Rasters/B2.tif", overwrite = T)
