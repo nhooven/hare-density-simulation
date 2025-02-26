@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 15 Nov 2024
-# Date last modified: 25 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -51,7 +51,7 @@ full.ls <- rast(ncols = columns,
                 ymin = 0,
                 ymax = rows * resol,
                 crs = "EPSG:32611",
-                vals = 1)
+                vals = 0)                   # mean for all standardized rasters
 
 #_______________________________________________________________________
 # 2b. Unit boundary ----
@@ -166,32 +166,21 @@ B3.cov1.full <- rast(nlm_gaussianfield(ncol = columns,
                                        resolution = resol,
                                        autocorr_range = 50,
                                        mag_var = 4.5,
-                                       user_seed = 6998,
+                                       user_seed = 556,
                                        rescale = FALSE))
 
-# crop
-B1.cov1.crop <- crop(B1.cov1.full, unit.bound.buff)
-B2.cov1.crop <- crop(B2.cov1.full, unit.bound.buff)
-B3.cov1.crop <- crop(B3.cov1.full, unit.bound.buff)
+# scale and crop
+B1.cov1.crop <- crop(scale(B1.cov1.full), unit.bound.buff)
+B2.cov1.crop <- crop(scale(B2.cov1.full), unit.bound.buff)
+B3.cov1.crop <- crop(scale(B3.cov1.full), unit.bound.buff)
 
 # plot
 plot(c(B1.cov1.crop, B2.cov1.crop, B3.cov1.crop))
 
 # merge into full landscapes
-# set full ls value to the mean of the stages
-full.ls.B1.cov1 <- rast(full.ls,
-                        vals = mean(values(B1.cov1.crop)))
-
-full.ls.B2.cov1 <- rast(full.ls,
-                        vals = mean(values(B2.cov1.crop)))
-
-full.ls.B3.cov1 <- rast(full.ls,
-                        vals = mean(values(B3.cov1.crop)))
-
-# merge
-B1.cov1 <- merge(B1.cov1.crop, full.ls.B1.cov1)
-B2.cov1 <- merge(B2.cov1.crop, full.ls.B2.cov1)
-B3.cov1 <- merge(B3.cov1.crop, full.ls.B3.cov1)
+B1.cov1 <- merge(B1.cov1.crop, full.ls)
+B2.cov1 <- merge(B2.cov1.crop, full.ls)
+B3.cov1 <- merge(B3.cov1.crop, full.ls)
 
 # bind together
 B.cov1 <- c(B1.cov1, B2.cov1, B3.cov1)
@@ -207,54 +196,44 @@ plot(B.cov1)
 # 4. Covariate 2 - "elevation" - elev ----
 
 # intermediate (i.e., quadratic) selection
-# we'll use a planar gradient
+# we'll use a planar gradient for the linear term,
+# then square so we can easily incorporate standardization
+# these can be rescaled, that's fine
 
+#_______________________________________________________________________
+# 4a. Linear ----
 #_______________________________________________________________________
 
 # B1
 set.seed(558)
 B1.cov2.full <- rast(nlm_planargradient(ncol = columns,
                                         nrow = rows,
-                                        resolution = resol,
-                                        rescale = FALSE))
+                                        resolution = resol))
 
 # B2
 set.seed(1072)
 B2.cov2.full <- rast(nlm_planargradient(ncol = columns,
                                         nrow = rows,
-                                        resolution = resol,
-                                        rescale = FALSE))
+                                        resolution = resol))
 
 # B3
 set.seed(223)
 B3.cov2.full <- rast(nlm_planargradient(ncol = columns,
                                         nrow = rows,
-                                        resolution = resol,
-                                        rescale = FALSE))
+                                        resolution = resol))
 
-# crop
-B1.cov2.crop <- crop(B1.cov2.full, unit.bound.buff)
-B2.cov2.crop <- crop(B2.cov2.full, unit.bound.buff)
-B3.cov2.crop <- crop(B3.cov2.full, unit.bound.buff)
+# standardize and crop
+B1.cov2.crop <- crop(scale(B1.cov2.full), unit.bound.buff)
+B2.cov2.crop <- crop(scale(B2.cov2.full), unit.bound.buff)
+B3.cov2.crop <- crop(scale(B3.cov2.full), unit.bound.buff)
 
 # plot
 plot(c(B1.cov2.crop, B2.cov2.crop, B3.cov2.crop))
 
 # merge into full landscapes
-# set full ls value to the mean of the stages
-full.ls.B1.cov2 <- rast(full.ls,
-                        vals = mean(values(B1.cov2.crop)))
-
-full.ls.B2.cov2 <- rast(full.ls,
-                        vals = mean(values(B2.cov2.crop)))
-
-full.ls.B3.cov2 <- rast(full.ls,
-                        vals = mean(values(B3.cov2.crop)))
-
-# merge
-B1.cov2 <- merge(B1.cov2.crop, full.ls.B1.cov2)
-B2.cov2 <- merge(B2.cov2.crop, full.ls.B2.cov2)
-B3.cov2 <- merge(B3.cov2.crop, full.ls.B3.cov2)
+B1.cov2 <- merge(B1.cov2.crop, full.ls)
+B2.cov2 <- merge(B2.cov2.crop, full.ls)
+B3.cov2 <- merge(B3.cov2.crop, full.ls)
 
 # bind together
 B.cov2 <- c(B1.cov2, B2.cov2, B3.cov2)
@@ -265,6 +244,33 @@ crs(B.cov2) <- crs("EPSG:32611")
 
 # plot
 plot(B.cov2)
+
+#_______________________________________________________________________
+# 4b. Quadratic ----
+#_______________________________________________________________________
+
+# square each stage
+B1.cov2.2 <- crop(scale(B1.cov2.full^2), unit.bound.buff)
+B2.cov2.2 <- crop(scale(B2.cov2.full^2), unit.bound.buff)
+B3.cov2.2 <- crop(scale(B3.cov2.full^2), unit.bound.buff)
+
+# plot
+plot(c(B1.cov2.2, B2.cov2.2, B3.cov2.2))
+
+# merge into full landscapes
+B1.cov2q <- merge(B1.cov2.2, full.ls)
+B2.cov2q <- merge(B2.cov2.2, full.ls)
+B3.cov2q <- merge(B3.cov2.2, full.ls)
+
+# bind together
+B.cov2q <- c(B1.cov2q, B2.cov2q, B3.cov2q)
+names(B.cov2q) <- c("B1", "B2", "B3")
+
+# add UTM CRS so spatial layers work together
+crs(B.cov2q) <- crs("EPSG:32611")
+
+# plot
+plot(B.cov2q)
 
 #_______________________________________________________________________
 # 5. Covariate 3 - "openness" - open ----
@@ -317,7 +323,7 @@ create_discrete_ls <- function (seed = runif(1, 1, 1000),
 # 5a. Before landscape - discrete ----
 #_______________________________________________________________________
 
-B1.cov3.dis <- create_discrete_ls(1225, 0.7)
+B1.cov3.dis <- create_discrete_ls(1024, 0.7)
 B2.cov3.dis <- create_discrete_ls(78, 0.8)
 B3.cov3.dis <- create_discrete_ls(394, 0.9)
 
@@ -373,12 +379,12 @@ perc_open <- function (landscape,
 # 5c. Before - calculate percent open ----
 #_______________________________________________________________________
 
-B.cov3 <- perc_open(B.cov3.dis, 50)
+B.cov3.perc <- perc_open(B.cov3.dis, 50)
 
-B.cov3.crop <- crop(B.cov3, unit.bound.sf)
-B.cov3.crop.stage <- crop(B.cov3, unit.bound.buff)
+# crop
+B.cov3.crop.stage <- crop(B.cov3.perc, unit.bound.buff)
+B.cov3.crop <- crop(B.cov3.perc, unit.bound.sf)
 
-plot(B.cov3.crop)
 plot(B.cov3.crop.stage)
 
 #_______________________________________________________________________
@@ -529,11 +535,44 @@ A.cov3.crop <- c(alter_cover(B.cov3.crop$B1, B.cov3.crop.stage$B1, 1),
 plot(B.cov3.crop)
 plot(A.cov3.crop)
 
-# now to calculate percent open
+# standardize, crop, and merge into landscape
+# BEFORE
+B1.cov3.crop <- crop(scale(B.cov3.perc$B1), unit.bound.buff)
+B2.cov3.crop <- crop(scale(B.cov3.perc$B2), unit.bound.buff)
+B3.cov3.crop <- crop(scale(B.cov3.perc$B3), unit.bound.buff)
+
 # merge into landscape
-A.cov3 <- merge(A.cov3.crop, B.cov3)
+B1.cov3 <- merge(B1.cov3.crop, full.ls)
+B2.cov3 <- merge(B2.cov3.crop, full.ls)
+B3.cov3 <- merge(B3.cov3.crop, full.ls)
+
+B.cov3 <- c(B1.cov3, B2.cov3, B3.cov3)
+
+names(B.cov3) <- c("B1" ,"B2", "B3")
+
+# AFTER
+# merge into full
+A1.cov3.perc <- merge(A.cov3.crop$B1, B.cov3.perc$B1)
+A2.cov3.perc <- merge(A.cov3.crop$B2, B.cov3.perc$B2)
+A3.cov3.perc <- merge(A.cov3.crop$B3, B.cov3.perc$B3)
+
+# standardize and crop to stage
+A1.cov3.stage <- crop(scale(A1.cov3.perc), unit.bound.buff)
+A2.cov3.stage <- crop(scale(A2.cov3.perc), unit.bound.buff)
+A3.cov3.stage <- crop(scale(A3.cov3.perc), unit.bound.buff)
+
+# merge into landscape
+A1.cov3 <- merge(A1.cov3.stage, full.ls)
+A2.cov3 <- merge(A2.cov3.stage, full.ls)
+A3.cov3 <- merge(A3.cov3.stage, full.ls)
+
+# bind together
+A.cov3 <- c(A1.cov3, A2.cov3, A3.cov3)
 
 names(A.cov3) <- c("A1" ,"A2", "A3")
+
+plot(B.cov3)
+plot(A.cov3)
 
 #_______________________________________________________________________
 # 6. Bind each landscape / replicate together ----
@@ -542,28 +581,28 @@ names(A.cov3) <- c("A1" ,"A2", "A3")
 #_______________________________________________________________________
 
 # bind
-B1.ls <- c(B.cov1$B1, B.cov2$B1, B.cov3$B1)
-B2.ls <- c(B.cov1$B2, B.cov2$B2, B.cov3$B2)
-B3.ls <- c(B.cov1$B3, B.cov2$B3, B.cov3$B3)
+B1.ls <- c(B.cov1$B1, B.cov2$B1, B.cov2q$B1, B.cov3$B1)
+B2.ls <- c(B.cov1$B2, B.cov2$B2, B.cov2q$B2, B.cov3$B2)
+B3.ls <- c(B.cov1$B3, B.cov2$B3, B.cov2q$B3, B.cov3$B3)
 
 # rename
-names(B1.ls) <- c("fora", "elev", "open")
-names(B2.ls) <- c("fora", "elev", "open")
-names(B3.ls) <- c("fora", "elev", "open")
+names(B1.ls) <- c("fora", "elev", "elev2", "open")
+names(B2.ls) <- c("fora", "elev", "elev2", "open")
+names(B3.ls) <- c("fora", "elev", "elev2", "open")
 
 #_______________________________________________________________________
 # 6b. After ----
 #_______________________________________________________________________
 
 # bind
-A1.ls <- c(B.cov1$B1, B.cov2$B1, A.cov3$A1)
-A2.ls <- c(B.cov1$B2, B.cov2$B2, A.cov3$A2)
-A3.ls <- c(B.cov1$B3, B.cov2$B3, A.cov3$A3)
+A1.ls <- c(B.cov1$B1, B.cov2$B1, B.cov2q$B1, A.cov3$A1)
+A2.ls <- c(B.cov1$B2, B.cov2$B2, B.cov2q$B2, A.cov3$A2)
+A3.ls <- c(B.cov1$B3, B.cov2$B3, B.cov2q$B3, A.cov3$A3)
 
 # rename
-names(A1.ls) <- c("fora", "elev", "open")
-names(A2.ls) <- c("fora", "elev", "open")
-names(A3.ls) <- c("fora", "elev", "open")
+names(A1.ls) <- c("fora", "elev", "elev2", "open")
+names(A2.ls) <- c("fora", "elev", "elev2", "open")
+names(A3.ls) <- c("fora", "elev", "elev2", "open")
 
 #_______________________________________________________________________
 # 7. Plot ----
@@ -606,7 +645,7 @@ plot_group_rast <- function (ls) {
     theme(axis.text = element_blank(),
           legend.position = "none") -> fora
   
-  # edge
+  # elev
   ggplot() +
     
     theme_bw() +
@@ -626,7 +665,7 @@ plot_group_rast <- function (ls) {
     theme(axis.text = element_blank(),
           legend.position = "none") -> elev
   
-  # mature
+  # open
   ggplot() +
     
     theme_bw() +
@@ -682,6 +721,8 @@ plot_grid(A1.plot, A2.plot, A3.plot, nrow = 3)
 # 8. Save and write rasters ----
 #_______________________________________________________________________
 
+# these rasters are ALREADY standardized
+
 writeRaster(B1.ls, filename = "Rasters/B1.tif", overwrite = T)
 writeRaster(B2.ls, filename = "Rasters/B2.tif", overwrite = T)
 writeRaster(B3.ls, filename = "Rasters/B3.tif", overwrite = T)
@@ -689,4 +730,3 @@ writeRaster(B3.ls, filename = "Rasters/B3.tif", overwrite = T)
 writeRaster(A1.ls, filename = "Rasters/A1.tif", overwrite = T)
 writeRaster(A2.ls, filename = "Rasters/A2.tif", overwrite = T)
 writeRaster(A3.ls, filename = "Rasters/A3.tif", overwrite = T)
-
