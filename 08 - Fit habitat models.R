@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 24 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -32,7 +32,7 @@ load(paste0(getwd(), "/Derived_data/Lookup/collared_lookup_3.RData"))
 # simulated data
 sim.data.all <- read.csv(paste0(getwd(), "/Derived_data/Simulated data/init_sims.csv"))
                       
-# rasters
+# rasters (already standardized)
 landscape.covs.B1 <- rast("Rasters/B1.tif")
 landscape.covs.B2 <- rast("Rasters/B2.tif")
 landscape.covs.B3 <- rast("Rasters/B3.tif")
@@ -240,26 +240,27 @@ sample_extract_RSF <- function (steps.df,
     # extract values from rasters
     focal.fora <- terra::extract(landscape$fora, all.sf, ID = FALSE)
     focal.elev <- terra::extract(landscape$elev, all.sf, ID = FALSE)
+    focal.elev2 <- terra::extract(landscape$elev2, all.sf, ID = FALSE)
     focal.open <- terra::extract(landscape$open, all.sf, ID = FALSE)
     
     # and bind in
-    all.sf.1 <- cbind(all.sf, focal.fora, focal.elev, focal.open)
+    all.sf.1 <- cbind(all.sf, focal.fora, focal.elev, focal.elev2, focal.open)
 
     # bind together
     RSF.samples <- as.data.frame(rbind(RSF.samples, all.sf.1))
     
   }
   
-  # scale all continuous covariates and add weights for RSF
+  # add weights for RSF
   RSF.samples <- RSF.samples %>%
     
-    mutate(fora.s = as.numeric(scale(fora)),
-           elev.s = as.numeric(scale(elev)),
-           open.s = as.numeric(scale(open)),
-           weight = ifelse(case == 0,
+    mutate(weight = ifelse(case == 0,
                            5000,
                            1),
-           indiv = i)
+           indiv = i) %>%
+  
+  # standardize elevation to reduce crazy estimates
+  mutate(elev.s = as.numeric(scale(elev)))
     
   # return
   return(RSF.samples)
@@ -304,21 +305,18 @@ sample_extract_SSF <- function (steps.df,
                    ta_distr = ta.dist) %>%
       
       # extract covariates (end and start of step)
-      extract_covariates(landscape, where = "both")
+      extract_covariates(landscape, where = "both") %>%
+      
+      # standardize elev so it doesn't lead to insane estimates
+      mutate(elev.s = as.numeric(scale(elev_end)))
     
     # bind together
     all.steps <- rbind(all.steps, steps.df.1)
     
   }
   
-  # scale all continuous covariates
+  # create unique stratum
   all.steps <- all.steps %>%
-    
-    mutate(fora.end.s = as.numeric(scale(fora_end)),
-           fora.start.s = as.numeric(scale(fora_start)),
-           elev.s = as.numeric(scale(elev_end)),
-           open.start.s = as.numeric(scale(open_start)),
-           open.end.s = as.numeric(scale(open_end))) %>%
     
     # create unique stratum
     mutate(stratum = paste0(indiv, step_id_))
@@ -407,22 +405,18 @@ mean.sd.ssf <- rbind(extract_mean_sd(SSF.B1, "before", 1, "SSF"),
 # full random slopes
 fit_RSF <- function (sampled.points) {
   
-  RSF.struc <- glmmTMB(case ~ fora.s +
+  RSF.struc <- glmmTMB(case ~ fora +
                               elev.s +
-                              I(elev.s^2) +
-                              open.s +
-                              (1 | indiv) +
-                              (0 + fora.s | indiv) +
-                              (0 + elev.s | indiv) +
-                              (0 + I(elev.s^2) | indiv) +
-                              (0 + open.s | indiv),
+                              I(elev.s^2) +       # the squared variable was a nice thought
+                              open +            # but it's way too correlated with the linear
+                              (1 | indiv),
                              weights = weight,
                              family = binomial,
                              data = sampled.points,
                              doFit = FALSE) 
   
   RSF.struc$parameters$theta[1] <- log(1e3)
-  RSF.struc$mapArg <- list(theta = factor(c(NA, 1:4)))     # account for two slopes for elevation
+  RSF.struc$mapArg <- list(theta = factor(c(NA)))     # account for two slopes for elevation
   
   RSF.model <- fitTMB(RSF.struc)
   
@@ -432,18 +426,7 @@ fit_RSF <- function (sampled.points) {
 }
 
 #_______________________________________________________________________
-# 8b. Examine correlation ----
-#_______________________________________________________________________
-
-cor(RSF.B1[ , c(4:6)])
-cor(RSF.B2[ , c(4:6)])
-cor(RSF.B3[ , c(4:6)])
-cor(RSF.A1[ , c(4:6)])
-cor(RSF.A2[ , c(4:6)])
-cor(RSF.A3[ , c(4:6)])
-
-#_______________________________________________________________________
-# 8c. Fit models ----
+# 8b. Fit models ----
 #_______________________________________________________________________
 
 RSF.model.B1 <- fit_RSF(RSF.B1)
@@ -462,27 +445,23 @@ RSF.model.A3 <- fit_RSF(RSF.A3)
 # full random slopes
 issf_fit <- function(sampled.steps) {
   
-  iSSF.struc <- glmmTMB(case_ ~ fora.start.s:sl_ +
-                                fora.end.s +
-                                fora.end.s:cos(ta_) +
+  iSSF.struc <- glmmTMB(case_ ~ fora_start:sl_ +
+                                fora_end +
+                                fora_end:cos(ta_) +
                                 elev.s +
                                 I(elev.s^2) +
-                                open.start.s:sl_  +
-                                open.end.s +
+                                open_start:sl_  +
+                                open_end +
                                 sl_ +
                                 log(sl_) +
                                 cos(ta_) +
-                                (1 | stratum) +                 # in the interest of convergence
-                                (0 + fora.end.s | indiv) +      # we'll only include RS for base coefs
-                                (0 + elev.s | indiv) +
-                                (0 + I(elev.s^2) | indiv) +
-                                (0 + open.end.s | indiv),
+                                (1 | stratum),
                               family = poisson,
                               data = sampled.steps,
                               doFit = FALSE) 
   
   iSSF.struc$parameters$theta[1] <- log(1e3)
-  iSSF.struc$mapArg <- list(theta = factor(c(NA, 1:4)))
+  iSSF.struc$mapArg <- list(theta = factor(c(NA)))
   
   iSSF.model <- fitTMB(iSSF.struc)
   
@@ -495,13 +474,13 @@ issf_fit <- function(sampled.steps) {
 issf_fit_1 <- function(sampled.steps) {
   
   iSSF.model <- amt::fit_issf(data = sampled.steps,
-                              formula = case_ ~ fora.start.s:sl_ +
-                                                fora.end.s +
-                                                fora.end.s:cos(ta_) +
+                              formula = case_ ~ fora_start:sl_ +
+                                                fora_end +
+                                                fora_end:cos(ta_) +
                                                 elev.s +
                                                 I(elev.s^2) +
-                                                open.start.s:sl_  +
-                                                open.end.s +
+                                                open_start:sl_  +
+                                                open_end +
                                                 sl_ +
                                                 log(sl_) +
                                                 cos(ta_) +
@@ -513,23 +492,12 @@ issf_fit_1 <- function(sampled.steps) {
 }
 
 #_______________________________________________________________________
-# 9b. Examine correlation ----
-#_______________________________________________________________________
-
-cor(SSF.B1[ , c(16:18)])
-cor(SSF.B2[ , c(16:18)])
-cor(SSF.B3[ , c(16:18)])
-cor(SSF.A1[ , c(16:18)])
-cor(SSF.A2[ , c(16:18)])
-cor(SSF.A3[ , c(16:18)])
-
-#_______________________________________________________________________
-# 9c. Fit models ----
+# 9b. Fit models ----
 #_______________________________________________________________________
 
 iSSF.model.B1 <- issf_fit_1(SSF.B1)
-iSSF.model.B2 <- issf_fit_1(SSF.B2)
-iSSF.model.B3 <- issf_fit_1(SSF.B3)
+iSSF.model.B2 <- issf_fit(SSF.B2)
+iSSF.model.B3 <- issf_fit(SSF.B3)
 iSSF.model.A1 <- issf_fit_1(SSF.A1)
 iSSF.model.A2 <- issf_fit_1(SSF.A2)
 iSSF.model.A3 <- issf_fit_1(SSF.A3)
@@ -625,20 +593,18 @@ all.tidy <- all.tidy %>% filter(term != "(Intercept)")
 # 10c. Plot betas ----
 #_______________________________________________________________________
 
-# I SHOULD ADD IN THE SIMULATION VALUES
-
 # subset for plotting
 all.tidy.beta <- all.tidy %>% 
   
-  filter(term %in% unique(all.tidy$term)[c(1:4, 9:16)]) %>%
+  filter(term %in% unique(all.tidy$term)) %>%
   
   # replace names
   mutate(term = recode(term, 
-                       "fora.end.s" = "fora.s",
-                       "open.end.s" = "open.s")) %>%
+                       "fora_end" = "fora",
+                       "open_end" = "open")) %>%
   
   # add original betas from simulation
-  add_row(term = "fora.s",
+  add_row(term = "fora",
           estimate = 1.5,
           std.error = 0,
           statistic = 0,
@@ -647,7 +613,7 @@ all.tidy.beta <- all.tidy %>%
           rep = NA,
           type = "sim") %>%
   
-  add_row(term = "fora.end.s:cos(ta_)",
+  add_row(term = "fora_end:cos(ta_)",
           estimate = -0.5,
           std.error = 0,
           statistic = 0,
@@ -656,7 +622,7 @@ all.tidy.beta <- all.tidy %>%
           rep = NA,
           type = "sim") %>%
   
-  add_row(term = "sl_:fora.start.s",
+  add_row(term = "sl_:fora_start",
           estimate = -0.05,
           std.error = 0,
           statistic = 0,
@@ -683,7 +649,7 @@ all.tidy.beta <- all.tidy %>%
           rep = NA,
           type = "sim") %>%
   
-  add_row(term = "sl_:open.start.s",
+  add_row(term = "sl_:open_start",
           estimate = 0.25,
           std.error = 0,
           statistic = 0,
@@ -692,7 +658,7 @@ all.tidy.beta <- all.tidy %>%
           rep = NA,
           type = "sim") %>%
   
-  add_row(term = "open.s",
+  add_row(term = "open",
           estimate = -1.0,
           std.error = 0,
           statistic = 0,
@@ -703,13 +669,13 @@ all.tidy.beta <- all.tidy %>%
   
   # reorder and label factor
   mutate(term = factor(term,
-                       levels = rev(c("fora.s", 
-                                      "fora.end.s:cos(ta_)",
-                                      "sl_:fora.start.s", 
+                       levels = rev(c("fora", 
+                                      "fora_end:cos(ta_)",
+                                      "sl_:fora_start", 
                                       "elev.s",
                                       "I(elev.s^2)", 
-                                      "open.s", 
-                                      "sl_:open.start.s", 
+                                      "open", 
+                                      "sl_:open_start", 
                                       "sl_",
                                       "log(sl_)",
                                       "cos(ta_)")),

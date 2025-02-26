@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 02 Dec 2024
-# Date last modified: 24 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -97,9 +97,10 @@ ggplot() +
 
 #_______________________________________________________________________
 # 4. Base iSSF coefficients ----
-#_______________________________________________________________________
 
-# importantly, these are *standardized* coefficients
+# these are standardized
+
+#_______________________________________________________________________
 
 coef.fora.sl <- -0.005      # β1 - (start) fora and speed interaction = negative
 coef.fora <- 1.5            # β2 = (end) fora selection = positive
@@ -196,7 +197,7 @@ ta.max <- pi
 #_______________________________________________________________________
 
 # df
-fora.df <- tibble(x = seq(-2, 2, length.out = 1000)) %>%
+fora.df <- tibble(x = seq(-4, 4, length.out = 1000)) %>%
   
   mutate(y.mean = x * coef.fora,      # at the mean ta
          y.high = x * coef.fora + x * coef.fora.ta * cos(ta.max)) %>%
@@ -226,7 +227,7 @@ ggplot(fora.df,
   theme(panel.grid = element_blank(),
         legend.position = c(0.2, 0.8)) +
   
-  xlab("Forage (standardized)") +
+  xlab("Forage") +
   ylab("ln(RSS)")
 
 #_______________________________________________________________________
@@ -234,9 +235,14 @@ ggplot(fora.df,
 #_______________________________________________________________________
 
 # df
-elev.df <- tibble(x = seq(-2, 2, length.out = 1000)) %>%
+elev.df <- tibble(x.unstand = seq(0, 1, length.out = 1000),
+                  x2.unstand = seq(0, 1, length.out = 1000)^2) %>%
   
-  mutate(y.mean = x * coef.elev + x^2 * coef.elev2)
+  # standardized
+  mutate(x = as.numeric(scale(x.unstand)),
+         x2 = as.numeric(scale(x2.unstand))) %>%
+  
+  mutate(y.mean = x * coef.elev + x2 * coef.elev2)
 
 ggplot(elev.df,
        aes(x = x,
@@ -253,7 +259,7 @@ ggplot(elev.df,
   theme(panel.grid = element_blank(),
         legend.position = c(0.2, 0.8)) +
   
-  xlab("Elevation (standardized)") +
+  xlab("Elevation") +
   ylab("ln(RSS)")
 
 #_______________________________________________________________________
@@ -261,7 +267,7 @@ ggplot(elev.df,
 #_______________________________________________________________________
 
 # df
-open.df <- tibble(x = seq(-2, 2, length.out = 1000)) %>%
+open.df <- tibble(x = seq(-4, 4, length.out = 1000)) %>%
   
   mutate(y.mean = x * coef.open)
 
@@ -280,7 +286,7 @@ ggplot(open.df,
   theme(panel.grid = element_blank(),
         legend.position = c(0.2, 0.8)) +
   
-  xlab("Openness (standardized)") +
+  xlab("Openness") +
   ylab("ln(RSS)")
 
 #_______________________________________________________________________
@@ -291,8 +297,8 @@ ggplot(open.df,
 # these are all the calculations at the "start" of the step
 
 # habitat covariate quantiles
-cov.high <- quantile(seq(-2, 2, length.out = 1000), prob = 0.90)
-cov.low <- quantile(seq(-2, 2, length.out = 1000), prob = 0.10)
+cov.high <- quantile(seq(-4, 4, length.out = 1000), prob = 0.90)
+cov.low <- quantile(seq(-4, 4, length.out = 1000), prob = 0.10)
 
 #_______________________________________________________________________
 # 7a. Forage:sl ----
@@ -404,48 +410,39 @@ ggplot(open.sl.df,
 # randomly - this is akin to the movement-free habitat kernel
 
 #_______________________________________________________________________
-# 8a. Scale rasters ----
+# 8a. Crop rasters ----
 #_______________________________________________________________________
-
-# scale
-B1.scale <- scale(B1)
-B2.scale <- scale(B2)
-B3.scale <- scale(B3)
-
-A1.scale <- scale(A1)
-A2.scale <- scale(A2)
-A3.scale <- scale(A3)
 
 # define extent
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
 
 # crop
-B1.crop <- crop(B1.scale, unit.bound)
-B2.crop <- crop(B2.scale, unit.bound)
-B3.crop <- crop(B3.scale, unit.bound)
+B1.crop <- crop(B1, unit.bound)
+B2.crop <- crop(B2, unit.bound)
+B3.crop <- crop(B3, unit.bound)
 
-A1.crop <- crop(A1.scale, unit.bound)
-A2.crop <- crop(A2.scale, unit.bound)
-A3.crop <- crop(A3.scale, unit.bound)
+A1.crop <- crop(A1, unit.bound)
+A2.crop <- crop(A2, unit.bound)
+A3.crop <- crop(A3, unit.bound)
 
 #_______________________________________________________________________
 # 8b. Calculate "naive" RSF surfaces ----
 #_______________________________________________________________________
 
 # BEFORE
-B1.rsf <- exp(coef.fora * B1.crop$fora +
+B1.rsf <- exp(coef.fora* B1.crop$fora +
               coef.elev * B1.crop$elev +
-              coef.elev2 * B1.crop$elev^2 +
+              coef.elev2 * B1.crop$elev2 +
               coef.open * B1.crop$open)
 
 B2.rsf <- exp(coef.fora * B2.crop$fora +
                 coef.elev * B2.crop$elev +
-                coef.elev2 * B2.crop$elev^2 +
+                coef.elev2 * B2.crop$elev2 +
                 coef.open * B2.crop$open)
 
 B3.rsf <- exp(coef.fora * B3.crop$fora +
                 coef.elev * B3.crop$elev +
-                coef.elev2 * B3.crop$elev^2 +
+                coef.elev2 * B3.crop$elev2 +
                 coef.open * B3.crop$open)
 
 # bind together and rename
@@ -456,17 +453,17 @@ names(B.rsf) <- c("B1", "B2", "B3")
 # AFTER
 A1.rsf <- exp(coef.fora * A1.crop$fora +
                 coef.elev * A1.crop$elev +
-                coef.elev2 * A1.crop$elev^2 +
+                coef.elev2 * A1.crop$elev2 +
                 coef.open * A1.crop$open)
 
 A2.rsf <- exp(coef.fora * A2.crop$fora +
                 coef.elev * A2.crop$elev +
-                coef.elev2 * A2.crop$elev^2 +
+                coef.elev2 * A2.crop$elev2 +
                 coef.open * A2.crop$open)
 
 A3.rsf <- exp(coef.fora * A3.crop$fora +
                 coef.elev * A3.crop$elev +
-                coef.elev2 * A3.crop$elev^2 +
+                coef.elev2 * A3.crop$elev2 +
                 coef.open * A3.crop$open)
 
 # bind together and rename

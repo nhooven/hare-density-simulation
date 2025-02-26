@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 15 Nov 2024
 # Date completed: 21 Nov 2024
-# Date last modified: 24 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -23,25 +23,16 @@ library(lubridate)       # work with time
 #_______________________________________________________________________
 
 # covariate rasters
-B1 <- rast(paste0(getwd(), "/Rasters/B1.tif"))
-B2 <- rast(paste0(getwd(), "/Rasters/B2.tif"))
-B3 <- rast(paste0(getwd(), "/Rasters/B3.tif"))
+landscape.covs.B <- list(rast(paste0(getwd(), "/Rasters/B1.tif")),
+                         rast(paste0(getwd(), "/Rasters/B2.tif")),
+                         rast(paste0(getwd(), "/Rasters/B3.tif")))
 
-A1 <- rast(paste0(getwd(), "/Rasters/A1.tif"))
-A2 <- rast(paste0(getwd(), "/Rasters/A2.tif"))
-A3 <- rast(paste0(getwd(), "/Rasters/A3.tif"))
+landscape.covs.A <- list(rast(paste0(getwd(), "/Rasters/A1.tif")),
+                         rast(paste0(getwd(), "/Rasters/A2.tif")),
+                         rast(paste0(getwd(), "/Rasters/A3.tif")))
 
 # unit bound
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
-
-# scale rasters
-landscape.covs.B <- list(scale(B1),
-                         scale(B2),
-                         scale(B3))
-
-landscape.covs.A <- list(scale(A1),
-                         scale(A2),
-                         scale(A3))
 
 # naive RSF surfaces
 B.rsf <- rast(paste0(getwd(), "/Rasters/B_rsf.tif"))
@@ -63,8 +54,6 @@ ta.dist <- make_vonmises_distr(kappa = 1.5)
 #_______________________________________________________________________
 # 3b. Habitat selection coefficients ----
 #_______________________________________________________________________
-
-# standardized!!!
 
 coef.fora.sl <- -0.005      # β1 - (start) fora and speed interaction = negative
 coef.fora <- 1.5            # β2 = (end) fora selection = positive
@@ -183,7 +172,7 @@ st_write(hrc[[3]],
          append = FALSE)
 
 #_______________________________________________________________________
-# 5. Define fuction that calculates home ranging parameters ----
+# 5. Define function that calculates home ranging parameters ----
 #_______________________________________________________________________
 
 hr_params <- function(e.var = e.var,          # expected variance of the bivariate normal
@@ -419,12 +408,12 @@ ggplot() +
   
   facet_grid(rep ~ trt) +
   
-  # paths
+  # points
   geom_point(data = init.sim.all,
             aes(x = x_,
                 y = y_,
                 color = trt),
-            alpha = 0.05,
+            alpha = 0.01,
             size = 0.5) +
   
   scale_color_manual(values = c("purple", "orange")) +

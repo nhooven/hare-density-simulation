@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 09 Dec 2024
 # Date completed: 12 Dec 2024
-# Date last modified: 21 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -22,9 +22,6 @@ library(lubridate)       # work with time
 # 2. Read in data ----
 #_______________________________________________________________________
 
-# load workspace
-load(paste0(getwd(), "/Progress/sims_02_10_2025.RData"))
-
 # iSSF coefficients
 all.params <- read.csv(paste0(getwd(), "/Derived_data/Model parameters/all_params.csv"))
 
@@ -40,13 +37,8 @@ landscape.covs.A2 <- rast("Rasters/Scaled covariates/A2.tif")
 landscape.covs.A3 <- rast("Rasters/Scaled covariates/A3.tif")
 
 # sl/ta distributions
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B1.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B2.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_B3.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A1.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A2.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/sl_dist_A3.RData"))
-load(paste0(getwd(), "/Derived_data/Model parameters/ta_dist.RData"))
+sl.params <- read.csv(paste0(getwd(), "/Derived_data/Lookup/sl_params.csv"))
+ta.params <- read.csv(paste0(getwd(), "/Derived_data/Lookup/ta_params.csv"))
 
 #_______________________________________________________________________
 # 3. Define simulation parameters ----
@@ -65,7 +57,7 @@ model.params <- all.params %>% filter(type == "iSSF")
 unit.bbox <- st_bbox(unit.bound)
 
 # define function
-hr_params <- function(e.var = 5000,          # variance of the bivariate normal
+hr_params <- function(e.var = 2000,          # variance of the bivariate normal
                       hrc = hrc)             # home range centroid as previously drawn
   
 {
@@ -100,15 +92,15 @@ hr_params <- function(e.var = 5000,          # variance of the bivariate normal
 
 # buffer unit boundary (double the area)
 # our current unit is sqrt(100,000) wide and tall
-# we want a square that is twice that
-side.length <- sqrt(200000)
+# we want a square that is 2.5x that
+side.length <- sqrt(250000)
 
 # extract coordinates - find centroid of raster
 rast.centroid <- c(ext(landscape.covs.B1)[2] / 2,
                    ext(landscape.covs.B1)[2] / 2)
 
-# how many meters per side? (let's make our unit 20 ha)
-m.side <- sqrt(20 * 10000)
+# how many meters per side? (let's make our unit 25 ha)
+m.side <- sqrt(25 * 10000)
 
 # how many meters to add and subtract?
 m.side.half <- m.side / 2
@@ -158,7 +150,6 @@ sampled.starts.coords <- st_coordinates(sampled.starts)
 #_______________________________________________________________________
 
 tud_sim <- function (landscape.covs,
-                     sl.dist, 
                      id.trt,
                      id.rep,
                      n.reps = 100,
@@ -170,7 +161,24 @@ tud_sim <- function (landscape.covs,
     filter(trt == id.trt,
            rep == id.rep)
   
-  # loop through individuals (sim.rep from burnin)
+  # extract sl/ta parameters
+  focal.sl <- sl.params %>%
+    
+    filter(trt == id.trt,
+           rep == id.rep)
+  
+  focal.ta <- ta.params %>%
+    
+    filter(trt == id.trt,
+           rep == id.rep)
+  
+  # make distributions
+  sl.dist <- make_gamma_distr(shape = focal.sl$shape,
+                              scale = focal.sl$scale)
+  
+  ta.dist <- make_vonmises_distr(kappa = focal.ta$kappa)
+  
+  # loop through individuals
   sim.all <- data.frame()
   
   start.time <- Sys.time()
@@ -193,19 +201,22 @@ tud_sim <- function (landscape.covs,
                              crs = crs("EPSG:32611"))
     
     # home ranging parameters
-    hr.params <- hr_params(e.var = 5000,      
+    hr.params <- hr_params(e.var = 2000,      
                            hrc = hrc)
     
     hr.params <- unname(hr.params)
     
     # make iSSF model
     # here the terms are important to get right so redistribution_kernel() works okay
-    issf.model <- make_issf_model(coefs = c("forage_end" = focal.params$estimate[focal.params$term == "forage.s"],   
-                                            "forage_end:log(sl_)" = focal.params$estimate[focal.params$term == "forage.s:log(sl_)"],
-                                            "edge_end" = focal.params$estimate[focal.params$term == "edge.s"],
-                                            "open_start" = focal.params$estimate[focal.params$term == "open"],
-                                            "log(sl_):open_start" = focal.params$estimate[focal.params$term == "open_start:log(sl_)"],
+    issf.model <- make_issf_model(coefs = c("sl_:fora_start" = focal.params$estimate[focal.params$term == "sl_:fora_start"],
+                                            "fora_end" = focal.params$estimate[focal.params$term == "fora_end"],   
+                                            "fora_end:cos(ta_)" = focal.params$estimate[focal.params$term == "fora_end:cos(ta_)"],
+                                            "elev_end" = focal.params$estimate[focal.params$term == "elev.s"],
+                                            "I(elev_end^2)" = focal.params$estimate[focal.params$term == "I(elev.s^2)"],
+                                            "sl_:open_start" = focal.params$estimate[focal.params$term == "sl_:open_start"],
+                                            "sl_" = focal.params$estimate[focal.params$term == "sl_"],
                                             "log(sl_)" = focal.params$estimate[focal.params$term == "log(sl_)"],
+                                            "cos(ta_)" = focal.params$estimate[focal.params$term == "cos(ta_)"],
                                             x2_ = hr.params[1],
                                             y2_ = hr.params[2], 
                                             "I(x2_^2 + y2_^2)" = hr.params[3]),              
@@ -256,7 +267,7 @@ tud_sim <- function (landscape.covs,
                                                 units = "mins")), 
                             digits = 1)
       
-      print(paste0("Completed individual ", i, " of ", nrow(burnin), " - ", elapsed.time, " mins"))
+      print(paste0("Completed individual ", i, " of ", nrow(n.reps), " - ", elapsed.time, " mins"))
       
     }
     
@@ -267,15 +278,13 @@ tud_sim <- function (landscape.covs,
   
 }
 
-# 100 runs of this takes 5.3 minutes, so the full 100 x 100 would take 8.83 hours
-
 #_______________________________________________________________________
 # 5b. Run simulations ----
 #_______________________________________________________________________
 
-sims.B1 <- tud_sim(landscape.covs.B1, sl.dist.B1, "before", 1)
-sims.B2 <- tud_sim(landscape.covs.B2, sl.dist.B2, "before", 2)
-sims.B3 <- tud_sim(landscape.covs.B3, sl.dist.B3, "before", 3)
-sims.A1 <- tud_sim(landscape.covs.A1, sl.dist.A1, "after", 1)
-sims.A2 <- tud_sim(landscape.covs.A2, sl.dist.A2, "after", 2)
-sims.A3 <- tud_sim(landscape.covs.A3, sl.dist.A3, "after", 3)
+sims.B1 <- tud_sim(landscape.covs.B1, "before", 1)
+sims.B2 <- tud_sim(landscape.covs.B2, "before", 2)
+sims.B3 <- tud_sim(landscape.covs.B3, "before", 3)
+sims.A1 <- tud_sim(landscape.covs.A1, "after", 1)
+sims.A2 <- tud_sim(landscape.covs.A2, "after", 2)
+sims.A3 <- tud_sim(landscape.covs.A3, "after", 3)

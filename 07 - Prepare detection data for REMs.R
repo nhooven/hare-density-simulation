@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Nov 2024
 # Date completed: 09 Dec 2024
-# Date last modified: 24 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -278,7 +278,9 @@ passes.gp.4 <- passes.gp.4 %>%
 passes.gp.all <- rbind(passes.gp.4, passes.gp.9, passes.gp.16)
 
 #_______________________________________________________________________
-# 7. Plot log(passes) by n.indiv ----
+# 7. Plots ----
+#_______________________________________________________________________
+# 7a. Plot log(passes) by n.indiv ----
 #_______________________________________________________________________
 
 ggplot(passes.gp.all) +
@@ -297,7 +299,24 @@ ggplot(passes.gp.all) +
         legend.position = "none")
 
 #_______________________________________________________________________
-# 7. Write to .csv ----
+# 7b. Plot B-A ----
+#_______________________________________________________________________
+
+ggplot(passes.gp.all) +
+  
+  theme_bw() +
+  
+  facet_grid(as.factor(rep) ~ as.factor(n.indiv)) +
+  
+  geom_point(aes(x = as.factor(trt),
+                 y = log(total.passes + 1)),
+             alpha = 0.5) +
+  
+  theme(panel.grid = element_blank(),
+        legend.position = "none")
+
+#_______________________________________________________________________
+# 8. Write to .csv ----
 #_______________________________________________________________________
   
 write.csv(passes.gp.all, paste0(getwd(), "/Derived_data/Passes/passes_gp_all.csv"))

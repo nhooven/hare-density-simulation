@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 24 Dec 2024
 # Date completed: 27 Dec 2024
-# Date last modified: 24 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -43,7 +43,7 @@ vcov.lookup <- read.csv(paste0(getwd(), "/Derived_data/Lookup/vcov.csv"))
 # unit boundary
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
 
-# unprocessed covariate rasters
+# covariate rasters
 landscape.covs.B1 <- rast("Rasters/B1.tif")
 landscape.covs.B2 <- rast("Rasters/B2.tif")
 landscape.covs.B3 <- rast("Rasters/B3.tif")
@@ -156,18 +156,18 @@ RSF_pred <- function (landscape.covs,     # raster
   # subset MVN samples
   mvn.samples <- mvn.sampled.RSF[[vcov.lookup.1$index]]
   
-  # scale raster correctly
-  landscape.covs.1 <- c((landscape.covs$fora - focal.scale$mean.fora) / focal.scale$sd.fora,
-                        (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
-                        (landscape.covs$open - focal.scale$mean.open) / focal.scale$sd.open)
+  # scale raster correctly (only elevation, everything else is decent)
+  landscape.covs.1 <- c(landscape.covs$fora,
+                       (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
+                       landscape.covs$open)
   
   # calculate mean prediction
   # NOTE: These will not be exponentiated yet
   # mean
-  pred.mean <- landscape.covs.1$fora * focal.params$estimate[focal.params$term == "fora.s"] +
+  pred.mean <- landscape.covs.1$fora * focal.params$estimate[focal.params$term == "fora"] +
                landscape.covs.1$elev * focal.params$estimate[focal.params$term == "elev.s"] +
                landscape.covs.1$elev^2 * focal.params$estimate[focal.params$term == "I(elev.s^2)"] +
-               landscape.covs.1$open * focal.params$estimate[focal.params$term == "open.s"]
+               landscape.covs.1$open * focal.params$estimate[focal.params$term == "open"]
   
   # crop and exponentiate
   pred.mean.crop <- exp(crop(pred.mean, unit.bound))
@@ -415,10 +415,10 @@ sl_raster <- function(landscape.covs,     # raster
   # subset MVN samples
   mvn.samples <- mvn.sampled.iSSF[[vcov.lookup.1$index - 6]]
   
-  # scale raster correctly
-  landscape.covs.1 <- c((landscape.covs$fora - focal.scale$mean.fora.start) / focal.scale$sd.fora.start,
-                        (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
-                        (landscape.covs$open - focal.scale$mean.open.start) / focal.scale$sd.open.start)
+  # scale raster correctly (elevation only)
+  landscape.covs.1 <- c(landscape.covs$fora,
+                       (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
+                        landscape.covs$open)
   
   # calculate spatially-explicit SL scale parameter adjustments
   # https://conservancy.umn.edu/server/api/core/bitstreams/a4a63c0b-bceb-45e1-bd05-2b81dc4575a9/content
@@ -426,8 +426,8 @@ sl_raster <- function(landscape.covs,     # raster
   # base adjustment from the sl parameter + 
   # the interaction terms for both fora and open
   pred.mean <- focal.params$estimate[focal.params$term == "sl_"] +
-               landscape.covs.1$fora * focal.params$estimate[focal.params$term == "sl_:fora.start.s"] +
-               landscape.covs.1$open * focal.params$estimate[focal.params$term == "sl_:open.start.s"]
+               landscape.covs.1$fora * focal.params$estimate[focal.params$term == "sl_:fora_start"] +
+               landscape.covs.1$open * focal.params$estimate[focal.params$term == "sl_:open_start"]
   
   # adjust the gamma distributions with the new parameters (in a raster)
   scale.adjust <- 1 / ((1 / tentative.scale.rast) - pred.mean)
@@ -514,6 +514,9 @@ writeRaster(adj.dr.A3, paste0(getwd(), "/Rasters/Adjusted day range/A3.tif"), ov
 
 #_______________________________________________________________________
 # 6. Scaled covariate rasters for UD simulation ----
+
+# we only need to scale the elevation covariate to prevent strange behavior
+
 #_______________________________________________________________________
 # 6a. Define function ----
 #_______________________________________________________________________
@@ -529,9 +532,9 @@ scaled_covs <- function(landscape.covs,     # raster
            rep == id.rep)
   
   # scale raster correctly (use the end points because why not)
-  landscape.covs.1 <- c((landscape.covs$fora - focal.scale$mean.fora.end) / focal.scale$sd.fora.end,
+  landscape.covs.1 <- c(landscape.covs$fora,
                         (landscape.covs$elev - focal.scale$mean.elev) / focal.scale$sd.elev,
-                        (landscape.covs$open - focal.scale$mean.open.end) / focal.scale$sd.open.end)
+                        landscape.covs$open)
   
   # return
   return(landscape.covs.1)
