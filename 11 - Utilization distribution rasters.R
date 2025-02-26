@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 12 Feb 2025
 # Date completed: 12 Feb 2025
-# Date last modified: 18 Feb 2025
+# Date last modified: 26 Feb 2025
 # R version: 4.2.2
 
 #_______________________________________________________________________
@@ -16,8 +16,6 @@ library(tidyverse)
 library(lubridate)          # work with dates
 library(terra)              # rasters
 library(sf)                 # polygons
-library(amt)                # tracks
-library(ctmm)               # ctmms/aKDEs
 
 #_______________________________________________________________________
 # 2. Read in data ----
@@ -35,127 +33,72 @@ sims.A3 <- read.csv(paste0(getwd(), "/UD sims/sims_A3.csv"))
 unit.bound <- st_read(paste0(getwd(), "/Derived_data/Shapefiles/unit_bound.shp"))
 
 # define a raster grid on which to calculate the aKDE
-landscape.covs.B1 <- rast("Rasters/Scaled covariates/B1.tif")
-
-base.grid <- raster::raster(landscape.covs.B1$forage)
+templ.rast<- rast("Rasters/Scaled covariates/B1.tif")
 
 #_______________________________________________________________________
 # 2. Define function ----
+
+# here we want to:
+# (1) iterate through all 100 simulation replicates
+# (2) tally the number of locations per pixel 
+#         - of possible (n.indiv * 337)
+# (3) calculate mean and SD over all replicates
+
 #_______________________________________________________________________
 
-# function
-akde_count <- function(sims) {
+sim_count <- function(sims) {
   
-  # here we want to calculate expected use at any one time step, per pixel
-  # we will take one replicate from EACH individual to do this calculation
-  # this will give us a raster of expected counts for each replicate 
-  # we can then calculate a pixel-wise mean and SD, invert to create a correction factor, etc.
+  # extract indices
+  id.trt <- sims$trt[1]
+  id.rep <- sims$rep[1]
   
-  # loop through replicates m (sim.rep from the sims df)
-  # define base raster
-  all.rast.m <- crop(rast(nrows = nrow(base.grid),
-                          ncols = ncol(base.grid),
-                          resolution = res(base.grid),
-                          extent = raster::extent(base.grid),
-                          vals = NA,
-                          crs = "EPSG:32611"),
-                     unit.bound)
-  
-  # loop
-  for (m in 1:max(sims$sim.rep)) {
+  # loop through all replicates
+  # base raster to bind into
+  base.rast <- rast(crop(templ.rast$fora, unit.bound),
+                    vals = NA)
+
+  for (i in 1:max(sims$sim.rep)) {
     
-    # subset
-    focal.sims <- sims %>%
+    # subset 
+    sims.focal <- sims %>%
       
-      filter(sim.rep == m) %>%
-      
-      # format time correctly (anything sampled at 00:00 doesn't have a time component)
-      mutate(t_ = case_when(nchar(t_) == 19 ~  t_,
-                            nchar(t_) == 10 ~ paste0(t_, " 00:00:00"))) %>%
-      
-      mutate(t_ = ymd_hms(t_))
+      filter(sim.rep == i)
     
-    # now we have 100 individuals n, with a focal m
-    # we'll need to loop through these individuals to fit aKDEs
+    # create sf points
+    sims.focal.sf <- st_as_sf(sims.focal,
+                              coords = c("x_", "y_"),
+                              crs = "EPSG:32611")
     
-    # define base raster
-    all.rast.n <- rast(nrows = nrow(base.grid),
-                       ncols = ncol(base.grid),
-                       resolution = res(base.grid),
-                       extent = extent(base.grid),
-                       vals = NA,
-                       crs = "EPSG:32611")
-    
-    # loop
-    for (n in 1:max(focal.sims$indiv)) {
-      
-      # subset individual and coerce to track
-      indiv.sim <- focal.sims %>%
-        
-        filter(indiv == n) %>%
-        
-        make_track(.x = x_, 
-                   .y = y_, 
-                   .t = t_, 
-                   crs = 32611)
-      
-      # convert to telemetry object
-      indiv.telem <- as_telemetry(indiv.sim,
-                                  timeformat = "auto",
-                                  timezone = "America/Los_Angeles",
-                                  keep = TRUE)
-      
-      # change projection
-      projection(indiv.telem) <- "EPSG:32611"
-      
-      # fit CTSP models
-      # guesstimated model parameters from the variogram
-      guess.param <- variogram.fit(variogram(indiv.telem), 
-                                   name = "guess.param", 
-                                   interactive = FALSE)
-      
-      # baseline model (we'll use the Ornstein-Uhlenbeck process)
-      ctmm.model.1 <- ctmm(tau = guess.param$tau[1],
-                           omega = FALSE,
-                           range = TRUE,
-                           error = FALSE,
-                           isotropic = TRUE,
-                           data = indiv.telem)
-      
-      # fit aKDE
-      focal.akde <- akde(data = indiv.telem,
-                         CTMM = ctmm.fit(data = indiv.telem,
-                                         CTMM = ctmm.model.1),
-                         grid = base.grid)
-      
-      # convert to SpatRaster and normalize
-      focal.akde.pdf <- rast(base.grid)
-      values(focal.akde.pdf) <- focal.akde$PDF / sum(focal.akde$PDF)  # must sum to 1
-      
-      # name layer (unique individual)
-      names(focal.akde.pdf) <- n
-      
-      # bind into raster stack
-      all.rast.n <- c(all.rast.n, focal.akde.pdf)
-      
-    }
-    
-    # sum all rasters
-    all.rast.n.sum <- sum(all.rast.n, na.rm = TRUE)
+    # rasterize the counts
+    focal.rast <- rasterize(sims.focal.sf,
+                            templ.rast,
+                            fun = "count")
     
     # crop
-    all.rast.n.sum.crop <- crop(all.rast.n.sum, unit.bound)
+    focal.rast.crop <- crop(focal.rast, unit.bound)
     
-    # add name of replicate
-    names(all.rast.n.sum.crop) <- m
+    # change layer name
+    names(focal.rast.crop) <- i
     
-    # and add into a stack of length m
-    all.rast.m <- c(all.rast.m, all.rast.n.sum.crop)
+    # "normalize" to calculate the RSS
+    focal.rast.rss <- focal.rast.crop / mean(values(focal.rast.crop))
+    
+    # and calculate the correction factor
+    focal.rast.cf <- 1 / focal.rast.rss
+    
+    # bind into base raster
+    base.rast <- c(base.rast, focal.rast.cf)
     
   }
   
+  # remove first layer
+  total.rast <- base.rast[[-1]]
+  
+  # calculate mean and SD
+  mean.rast <- c(mean(total.rast, na.rm = T), stdev(total.rast, na.rm = T))
+  
   # return
-  return(all.rast.m)
+  return(mean.rast)
   
 }
 
@@ -163,6 +106,20 @@ akde_count <- function(sims) {
 # 3. Use function ----
 #_______________________________________________________________________
 
- <- akde_count()
+sim.count.B1 <- sim_count(sims.B1)
+sim.count.B2 <- sim_count(sims.B2)
+sim.count.B3 <- sim_count(sims.B3)
+sim.count.A1 <- sim_count(sims.A1)
+sim.count.A2 <- sim_count(sims.A2)
+sim.count.A3 <- sim_count(sims.A3)
 
-# completed these in multiple sessions - completed 02-18-2025
+#_______________________________________________________________________
+# 4. Examine rasters ----
+#_______________________________________________________________________
+
+plot(sim.count.B1)
+plot(sim.count.B2)
+plot(sim.count.B3)
+plot(sim.count.A1)
+plot(sim.count.A2)
+plot(sim.count.A3)
