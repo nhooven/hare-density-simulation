@@ -4,8 +4,8 @@
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 06 Mar 2025
-# Date completed: 
-# Date last modified: 07 Mar 2025 
+# Date completed: 25 Mar 2025 
+# Date last modified: 25 Mar 2025 
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -74,11 +74,11 @@ ggplot(sim.bm,
 #_______________________________________________________________________
 # 4. Ornstein-Uhlenbeck Foraging model ----
 
-# OUF accounts for both range residency and velocity autocorrelation-
-# two key components of real animal movement
+# OUF accounts for range residency, positional autocorrelation, and velocity autocorrelation-
+# three key components of real animal movement
 
 # In order to fit this to real tracking data, they need to be pretty finely-sampled.
-# However, this is the only model that can allow speed estimation and thus
+# However, this is the only range-resident model that can allow speed estimation and thus
 # is the only CTSP that I know of that is appropriate for estimating
 # day range in the REM
 
@@ -162,7 +162,7 @@ plot_ouf <- function(sim,         # simulated telemetry object
 #_______________________________________________________________________
 # 4b. tau_r ----
 
-# This parameter controls the timescale for range residency (first tau parameter)
+# This parameter controls the timescale for positional autocorrelation (first tau parameter)
 # note that this will always be relative to the REAL time
 
 # From Calabrese et al. 2016: position correlations die off over some period of time tau_r
@@ -247,14 +247,20 @@ plot(variogram(sim.ouf.tau.v.hig))
 #_______________________________________________________________________
 # 4d. Sigma ----
 
-# This is the asymptotic variance (presumably controlling the total area used)
+# This is the asymptotic variance, defined by both the major and minor axes
+# (assuming anisotropy, which we likely will)
+
+# below we'll assume isotropy
+
+# I'm not convinced that this is in area, I think these are linear (m)
+# these tend to extend the "home range" away from zero by ~ sigma / 10
 
 #_______________________________________________________________________
 
 # different sigma values
-sigma.low <- 10 %#% "ha"
-sigma.mid <- 50 %#% "ha"
-sigma.hig <- 100 %#% "ha"
+sigma.low <- 100
+sigma.mid <- 500
+sigma.hig <- 1000
 
 # fit models
 ctmm.ouf.sigma.low <- ctmm(tau = c(5 %#% "minutes", 5 %#% "seconds"), sigma = sigma.low, mu = c(0, 0))
@@ -323,134 +329,518 @@ plot_grid(plot_ouf(sim.ouf.sigma.low,
 # ALWAYS keep that in mind when running the simulations and analysis for this study
 
 #_______________________________________________________________________
-# 5. Examine some real hare data ----
+# 5. Tune simulation parameters (and time them) ----
 
-# 420's data will probably be the best to look at here
+# now the rubber meets the road - we want to examine how to make reasonable,
+# realistic tracks that can be used both to tally camera contacts AND
+# subsample to fit and simulate more models for
 
 #_______________________________________________________________________
-# 5a. Clean data and prepare for modeling ----
+# 5a. Track duration ----
+
+# for Q2, we want our longest duration to be 2 months (8 weeks), while 1 month 
+# will be standard for Qs 1 and 3
+
 #_______________________________________________________________________
 
-# read in .csv for 420 
-hare.data <- read.csv("E:/Hare project/GPS data/alldata/DUR/005_420_2.csv", 
-                      sep = "",           # required to separate columns
-                      fill = TRUE)        # required to separate columns
+# how many seconds are in 8 weeks?
+(sec.8wk <- 8 * 7 * 24 * 60 * 60)
 
-# examine
-summary(hare.data)
+# each simulation must run for 4,838,400 steps (if we want a location every second)
+# this seems extravagant; let's assume that our animal's fundamental step length 
+# is straight over a period of 10 seconds
+# let's time this
 
-# clean
-hare.data.1 <- hare.data %>%
-  
-  # keep only lat-long entries
-  mutate(location.lon = as.numeric(location.lon),
-         location.lat = as.numeric(location.lat)) %>%
-  
-  filter(location.lon > -121 & location.lon < -117 &
-         location.lat > 47 & location.lat < 50) %>%
-  
-  # create timestamp and coerce to POSIXct
-  mutate(timestamp = dmy_hms(paste0(Date, " ", Time))) %>%
-  
-  # keep columns we want
-  dplyr::select(location.lon, 
-                location.lat,
-                timestamp,
-                height.msl,
-                satellites,
-                hdop) %>%
-  
-  # coerce required columns
-  mutate(height.msl = as.numeric(height.msl)) %>%
-  
-  # drop any NAs in the key columns
-  drop_na(location.lon,
-          location.lat,
-          timestamp)
+seq.8wk <- seq(1, sec.8wk, 10)
 
-# examine erroneous locations
-ggplot(data = hare.data.1,
-       aes(x = location.lon,
-           y = location.lat,
-           color = timestamp)) +
+length(seq.8wk)
+
+ctmm.ouf.duration <- ctmm(tau = c(6 %#% "hours", 
+                                  2 %#% "hours"), 
+                          isotropic = FALSE, 
+                          sigma = c(1000,
+                                    100,
+                                    -0.05), 
+                          mu = c(0, 0))
+
+# simulate 10000 points
+start.time <- Sys.time()
+
+sim.ouf.duration <- simulate(object = ctmm.ouf.duration, 
+                             t = seq.8wk, 
+                             complete = TRUE)
+
+# difftime
+Sys.time() - start.time
+
+# this took ~ 47 seconds. If we wanted 602 simulated tracks this would take:
+(47 * 602) / 3600
+
+# let's round up to 8 hours
+
+# and 120 simulated tracks at 4 weeks:
+(23.5 * 120) / 3600                      # not even an hour
+
+# what if we included multiple sims?
+start.time <- Sys.time()
+
+sim.ouf.duration.1 <- simulate(object = ctmm.ouf.duration, 
+                               t = seq.8wk, 
+                               nsim = 2,
+                               complete = TRUE)
+
+# difftime
+Sys.time() - start.time
+
+# it's about twice the original- we want different means (i.e., home range centers)
+# anyway. 
+
+# We can also probably crank up the fundamental step timescale to reduce this further
+# this will help balance the computational time with the biological realism
+seq.8wk.2 <- seq(1, sec.8wk, 20)
+
+length(seq.8wk.2)
+
+# test one last time
+start.time <- Sys.time()
+
+sim.ouf.duration.2 <- simulate(object = ctmm.ouf.duration, 
+                               t = seq.8wk.2, 
+                               complete = TRUE)
+
+# difftime
+Sys.time() - start.time
+
+# perfect - this is ~ 23 seconds, which is very reasonable
+(23 * 602) / 3600   # < 4 hr
+(23 * 120) / 3600   # ~ 45 minutes  
+
+# plot the resultant track
+plot_ouf(sim.ouf.duration.2,
+         "8 weeks",
+         "20-sec fundamental step")
+
+#_______________________________________________________________________
+# 5b. Tau 1 - positional autocorrelation ----
+
+# We want this to be longer than any of our fix rates, so 6 hr seems reasonable
+
+#_______________________________________________________________________
+
+# start with a 4-week duration
+(sec.4wk <- 4 * 7 * 24 * 60 * 60)
+
+seq.4wk <- seq(1, sec.4wk, 20)
+
+# we'll look at track differences between 6 and 12 hours
+ctmm.ouf.tau1.1 <- ctmm(tau = c(6 %#% "hours", 
+                                2 %#% "hours"), 
+                        isotropic = FALSE, 
+                        sigma = c(1000,
+                                  100,
+                                  -0.05), 
+                        mu = c(0, 0))
+
+ctmm.ouf.tau1.2 <- ctmm(tau = c(12 %#% "hours", 
+                                2 %#% "hours"), 
+                        isotropic = FALSE, 
+                        sigma = c(1000,
+                                  100,
+                                  -0.05), 
+                        mu = c(0, 0))
+
+# simulate
+sim.ouf.tau1.1 <- simulate(object = ctmm.ouf.tau1.1, 
+                           t = seq.4wk, 
+                           complete = TRUE)
+
+sim.ouf.tau1.2 <- simulate(object = ctmm.ouf.tau1.2, 
+                           t = seq.4wk, 
+                           complete = TRUE)
+
+# plot together
+plot_grid(plot_ouf(sim.ouf.tau1.1,
+                   "tau.p",
+                   "6 hr"),
+          plot_ouf(sim.ouf.tau1.2,
+                   "tau.p",
+                   "12 hr"))
+
+# we'll keep 6 - this is a highly variable parameter in our real data BTW
+
+#_______________________________________________________________________
+# 5c. Tau 2 - velocity autocorrelation timescale ----
+
+# this will be longer than our finest fix rate, equal to our medium fix rate, and
+# shorter than our coarsest fix rate
+
+# 2 hours seems reasonable, although real data suggests hares may show velocity
+# autocorr "decay" between 10 minutes and an hour - no wonder we can't fit any OUFs!
+
+#_______________________________________________________________________
+
+# we'll look at track differences between 2 and 0.5 hours
+ctmm.ouf.tau2.1 <- ctmm(tau = c(6 %#% "hours", 
+                                2 %#% "hours"), 
+                        isotropic = FALSE, 
+                        sigma = c(1000,
+                                  100,
+                                  -0.05), 
+                        mu = c(0, 0))
+
+ctmm.ouf.tau2.2 <- ctmm(tau = c(6 %#% "hours", 
+                                0.5 %#% "hours"), 
+                        isotropic = FALSE, 
+                        sigma = c(1000,
+                                  100,
+                                  -0.05), 
+                        mu = c(0, 0))
+
+# simulate
+sim.ouf.tau2.1 <- simulate(object = ctmm.ouf.tau2.1, 
+                           t = seq.4wk, 
+                           complete = TRUE)
+
+sim.ouf.tau2.2 <- simulate(object = ctmm.ouf.tau2.2, 
+                           t = seq.4wk, 
+                           complete = TRUE)
+
+# plot together
+plot_grid(plot_ouf(sim.ouf.tau2.1,
+                   "tau.v",
+                   "2 hr"),
+          plot_ouf(sim.ouf.tau2.2,
+                   "tau.v",
+                   "0.5 hr"))
+
+# it's easy to see here why you need fine fix rates to resolve tau v
+# we'll work with them near to the grain of our fix rate,
+# recognizing that this may not be the case with our real data
+
+#_______________________________________________________________________
+# 5d. Sigmas - asymptotic variance ----
+
+# since we'll simulate anisotropic home ranges, we'll need to tune these
+# to give the elongate, elliptical space use areas we see
+# we can probably allow these to vary slightly for Qs 1 and 2
+
+# angles vary from pi / 2 to - pi /2 because they represent
+# deviations from 0 (i.e., aligned N-S, or in the case of ctmm's projection, E-W)
+
+#_______________________________________________________________________
+
+# let's do three sizes for the major axis:
+# 20,000 m, 10,000 m, 5,000 m
+
+# mean aspect ratio for real hare data ~ 7.4,
+# so minor axes will be major / 7
+sigmas.major <- c(20000, 10000, 5000)
+sigmas.minor <- sigmas.major / 7
+
+ctmm.ouf.sigma.1 <- ctmm(tau = c(6 %#% "hours", 
+                                 2 %#% "hours"), 
+                         isotropic = FALSE, 
+                         sigma = c(sigmas.major[1],
+                                  sigmas.minor[1],
+                                  runif(1, 
+                                        -pi / 2, 
+                                        pi / 2)), 
+                         mu = c(0, 0))
+
+ctmm.ouf.sigma.2 <- ctmm(tau = c(6 %#% "hours", 
+                                 2 %#% "hours"), 
+                         isotropic = FALSE, 
+                         sigma = c(sigmas.major[2],
+                                   sigmas.minor[2],
+                                   runif(1, 
+                                         -pi / 2, 
+                                         pi / 2)), 
+                         mu = c(0, 0))
+
+ctmm.ouf.sigma.3 <- ctmm(tau = c(6 %#% "hours", 
+                                 2 %#% "hours"), 
+                         isotropic = FALSE, 
+                         sigma = c(sigmas.major[3],
+                                   sigmas.minor[3],
+                                   runif(1, 
+                                         -pi / 2, 
+                                         pi / 2)), 
+                         mu = c(0, 0))
+
+# simulate
+sim.ouf.sigma.1 <- simulate(object = ctmm.ouf.sigma.1, 
+                            t = seq.4wk, 
+                            complete = TRUE)
+
+sim.ouf.sigma.2 <- simulate(object = ctmm.ouf.sigma.2, 
+                            t = seq.4wk, 
+                            complete = TRUE)
+
+sim.ouf.sigma.3 <- simulate(object = ctmm.ouf.sigma.3, 
+                            t = seq.4wk, 
+                            complete = TRUE)
+
+# plot together
+plot_grid(plot_ouf(sim.ouf.sigma.1,
+                   "Major = 2e4",
+                   "Minor = 2e4 / 7"),
+          plot_ouf(sim.ouf.sigma.2,
+                   "Major = 1e4",
+                   "Minor = 1e4 / 7"),
+          plot_ouf(sim.ouf.sigma.3,
+                   "Major = 5e3",
+                   "Minor = 5e3 / 7"))
+
+# these change the spatial scale of movement, so for our purposes, this is related
+# to the total space use area, or range size
+
+# we'll want to tune the variability here for both the "low" and "high" scenarios
+
+#_______________________________________________________________________
+# 6. Movement parameter variability ----
+
+# for Qs 1 and 2, we'll keep these low and centered on the mean
+# for Q3, allowing them to vary widely is central to our question
+
+# these should be drawn from a strictly positive distribution, so the log-normal makes sense
+
+# recall that the two parameters of the log-normal distribution are the 
+# mean and SD of the LOGARITHM, not the parameter itself
+
+# ln(X) ~ N(mu, sigma)
+
+# From Wikipedia: https://en.wikipedia.org/wiki/Log-normal_distribution
+
+# "In order to produce a distribution with desired mean mu_x and variance sigma^2_x:
+
+# mu = ln(mu_x^2 / sqrt(mu_x^2 + sigma^2_x))
+
+# sigma^2 = ln(1 + (sigma^2_x / mu_x^2))
+
+# so we need a helper function:
+log_norm_params <- function (
+    
+  vals    # must be a length 2 vector with the desired mean and SD
+  
+  ) {
+  
+  # median = geometric mean
+  lnorm.med <- log(vals[1])
+  
+  lnorm.mean <- log((vals[1]^2) / sqrt((vals[1]^2) + (vals[2]^2)))
+  
+  lnorm.sd <- sqrt(log(1 + ((vals[2]^2) / (vals[1]^2))))
+  
+  # bind together
+  lnorm.params <- c(lnorm.med, lnorm.mean, lnorm.sd)
+  
+  # return
+  return(lnorm.params)
+  
+}
+
+# HOWEVER - the mean and SD might be less informative than the median and the "scatter"
+
+#_______________________________________________________________________
+# 6a. Tau 1 ---- 
+
+# in our real data, Tau 1 varies wildly (2,200 to 80,000, corresponding to
+# 0.61 to 22 hr, with a mean of ~ 11 hr).
+
+# our mean will be 6 hours
+# SDs range will be a quarter of the mean to the full mean
+
+#_______________________________________________________________________
+
+# define parameters
+lnorm.tau1.lo <- log_norm_params(c(6 %#% "hours", 1.5 %#% "hours"))
+lnorm.tau1.hi <- log_norm_params(c(6 %#% "hours", 6 %#% "hours"))
+
+# both means should be 6 hours
+tau.1.lo <- dlnorm(x = seq(0, 
+                           24 %#% "hours", 
+                           length.out = 500),
+                   meanlog = lnorm.tau1.lo[1],       # geometric mean here
+                   sdlog = lnorm.tau1.lo[3]) 
+
+tau.1.hi <- dlnorm(x = seq(0, 
+                           24 %#% "hours", 
+                           length.out = 500),
+                   meanlog = lnorm.tau1.hi[1],
+                   sdlog = lnorm.tau1.hi[3]) 
+
+# df
+tau.1.df <- data.frame(x = seq(0, 
+                               24 %#% "hours", 
+                               length.out = 500),
+                       y = c(tau.1.lo,
+                             tau.1.hi),
+                       variability = rep(c("low",
+                                           "high"),
+                                         each = 500))
+
+# plot
+ggplot(data = tau.1.df,
+       aes(x = x,
+           y = y,
+           color = variability)) +
   
   theme_bw() +
   
-  geom_point()
+  geom_line(linewidth = 1.1) +
+  
+  scale_x_continuous(breaks = c(0, 6, 12, 18, 24) %#% "hours",
+                     labels = c(0, 6, 12, 18, 24)) +
+  
+  xlab("Positional autocorrelation timescale (hr)")
 
-# looks like we've got some, let's also look at hdop
-ggplot(data = hare.data.1,
-       aes(x = hdop,
-           y = height.msl,
-           color = timestamp)) +
+# look at means
+mean(rlnorm(n = 500, meanlog = lnorm.tau1.lo[1], sdlog = lnorm.tau1.lo[3])) / 3600
+mean(rlnorm(n = 500, meanlog = lnorm.tau1.hi[1], sdlog = lnorm.tau1.hi[3])) / 3600
+
+# look at medians
+median(rlnorm(n = 500, meanlog = lnorm.tau1.lo[1], sdlog = lnorm.tau1.lo[3])) / 3600
+median(rlnorm(n = 500, meanlog = lnorm.tau1.hi[1], sdlog = lnorm.tau1.hi[3])) / 3600
+
+# and SDs
+sd(rlnorm(n = 500, meanlog = lnorm.tau1.lo[1], sdlog = lnorm.tau1.lo[3])) / 3600
+sd(rlnorm(n = 500, meanlog = lnorm.tau1.hi[1], sdlog = lnorm.tau1.hi[3])) / 3600
+
+#_______________________________________________________________________
+# 6b. Tau 2 ---- 
+
+# we have very little information about tau 2 (velocity)
+# from our limited real data (20 OUf and 4 OUF)
+
+# I suspect that these OUf parameters may not be representative
+# of the population, but who knows
+
+# the mean across both model types is 3,350
+# OUF = 1,083 (under a half hour)
+# OUf = 3,808 (just over an hour)
+
+# our mean will be 2 hours
+# again, SDs vary from half the mean, to the mean
+
+#_______________________________________________________________________
+
+# define parameters
+lnorm.tau2.lo <- log_norm_params(c(2 %#% "hours", 0.5 %#% "hours"))
+lnorm.tau2.hi <- log_norm_params(c(2 %#% "hours", 2 %#% "hours"))
+
+# both means should be 6 hours
+tau.2.lo <- dlnorm(x = seq(0, 
+                           12 %#% "hours", 
+                           length.out = 500),
+                   meanlog = lnorm.tau2.lo[1],
+                   sdlog = lnorm.tau2.lo[3]) 
+
+tau.2.hi <- dlnorm(x = seq(0, 
+                           12 %#% "hours", 
+                           length.out = 500),
+                   meanlog = lnorm.tau2.hi[1],
+                   sdlog = lnorm.tau2.hi[3]) 
+
+# df
+tau.2.df <- data.frame(x = seq(0, 
+                               12 %#% "hours", 
+                               length.out = 500),
+                       y = c(tau.2.lo,
+                             tau.2.hi),
+                       variability = rep(c("low",
+                                           "high"),
+                                         each = 500))
+
+# plot
+ggplot(data = tau.2.df,
+       aes(x = x,
+           y = y,
+           color = variability)) +
   
   theme_bw() +
   
-  geom_point()
-
-# drop erroneous locations
-hare.data.2 <- hare.data.1 %>%
+  geom_line(linewidth = 1.1) +
   
-  filter(location.lon < 119.7 &
-         location.lat < 48.8 & location.lat > 48.75 &
-         height.msl > 1400 & height.msl < 1600 &
-         hdop < 10)
+  scale_x_continuous(breaks = c(0, 3, 6, 9, 12) %#% "hours",
+                     labels = c(0, 3, 6, 9, 12)) +
+  
+  xlab("Velocity autocorrelation timescale (hr)")
 
-# examine again
-ggplot(data = hare.data.2,
-       aes(x = location.lon,
-           y = location.lat,
-           color = timestamp)) +
+# look at means
+mean(rlnorm(n = 500, meanlog = lnorm.tau2.lo[1], sdlog = lnorm.tau2.lo[3])) / 3600
+mean(rlnorm(n = 500, meanlog = lnorm.tau2.hi[1], sdlog = lnorm.tau2.hi[3])) / 3600
+
+# look at medians
+median(rlnorm(n = 500, meanlog = lnorm.tau2.lo[1], sdlog = lnorm.tau2.lo[3])) / 3600
+median(rlnorm(n = 500, meanlog = lnorm.tau2.hi[1], sdlog = lnorm.tau2.hi[3])) / 3600
+
+# and SDs
+sd(rlnorm(n = 500, meanlog = lnorm.tau2.lo[1], sdlog = lnorm.tau2.lo[3])) / 3600
+sd(rlnorm(n = 500, meanlog = lnorm.tau2.hi[1], sdlog = lnorm.tau2.hi[3])) / 3600
+
+# look like the geometric mean parameterization is a bit more logical
+
+#_______________________________________________________________________
+# 6c. Sigma ---- 
+
+# there is a LOT of variability in our real dataset here
+# the sigmas control the size of the area used, as well as the aspect ratio
+
+# as mentioned earlier, the mean aspect ratio (major / minor) for our data
+# is ~ 7.4 
+
+# it seems reasonable to vary this as well
+
+# the angle should just be a random draw
+
+# we'll define the mean major to be 10,000 m
+# SDs will again be half and full mean
+# aspect ratio will also be lognormal, mean = 7 and half and full mean SDs
+
+#_______________________________________________________________________
+
+# define parameters
+# sigma major
+lnorm.sigma.maj.lo <- log_norm_params(c(10000, 2500))
+lnorm.sigma.maj.hi <- log_norm_params(c(10000, 10000))
+
+# aspect ratio
+lnorm.aspect.lo <- log_norm_params(c(7, 1.75))
+lnorm.aspect.hi <- log_norm_params(c(7, 7))
+
+# major
+sigma.maj.lo <- dlnorm(x = seq(0, 
+                               100000, 
+                               length.out = 500),
+                       meanlog = lnorm.sigma.maj.lo[1],
+                       sdlog = lnorm.sigma.maj.lo[3]) 
+
+sigma.maj.hi <- dlnorm(x = seq(0, 
+                               100000, 
+                               length.out = 500),
+                       meanlog = lnorm.sigma.maj.hi[1],
+                       sdlog = lnorm.sigma.maj.hi[3]) 
+
+# df
+sigma.maj.df <- data.frame(x = seq(0, 
+                                   100000, 
+                                   length.out = 500),
+                       y = c(sigma.maj.lo,
+                             sigma.maj.hi),
+                       variability = rep(c("low",
+                                           "high"),
+                                         each = 500))
+
+# plot
+ggplot(data = sigma.maj.df,
+       aes(x = x,
+           y = y,
+           color = variability)) +
   
   theme_bw() +
   
-  geom_point()
-
-ggplot(data = hare.data.2,
-       aes(x = hdop,
-           y = height.msl,
-           color = timestamp)) +
+  geom_line(linewidth = 1.1) +
   
-  theme_bw() +
+  scale_x_continuous(breaks = c(0, 25000, 50000, 75000, 100000)) +
   
-  geom_point()
-
-# these look good for running a model now!
-
-#_______________________________________________________________________
-# 5b. Spatialize and coerce to telemetry object ----
-#_______________________________________________________________________
-
-# promote to sf object
-hare.sf <- st_as_sf(hare.data.2,
-                    coords = c("location.lon",
-                               "location.lat"),
-                    crs = "EPSG:4326")
-
-# transform to projected coords (UTM 11N)
-hare.sf.utm <- st_transform(hare.sf, crs = "EPSG:32611")
-
-# add in coords as columns
-hare.sf.utm$x <- st_coordinates(hare.sf.utm)[ , 1]
-hare.sf.utm$y <- st_coordinates(hare.sf.utm)[ , 2]
-
-# plot for sanity check
-plot(hare.sf.utm)
-
-# make a track
-hare.track <- make_track(hare.sf.utm,
-                         .x = x,
-                         .y = y,
-                         .t = timestamp,
-                         crs = "EPSG:32611",
-                         all_cols = TRUE)
-
-# convert to telemetry object
-hare.telem <- as_telemetry(hare.track)
-
-# plot 
-plot(hare.telem, error = FALSE)
-
-#_______________________________________________________________________
-# 5c. Fit CTMMs ----
-#_______________________________________________________________________
+  xlab("Asymptotic variance (major axis; m)")
