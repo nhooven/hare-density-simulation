@@ -1,6 +1,6 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 04a - CTMM simulations (camera - low)
+# Script: 04b - CTMM simulations (collar - low)
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
@@ -22,7 +22,7 @@ library(sf)                   # spatial operations
 # 2. Read in data ----
 #_______________________________________________________________________
 
-indivs <- read.csv(paste0(getwd(), "/Derived data/Individuals and parameters/camera_lo.csv"))
+indivs <- read.csv(paste0(getwd(), "/Derived data/Individuals and parameters/collar_lo.csv"))
 
 # unit boundary
 unit.bound <- st_read(paste0(getwd(), "/Derived data/Shapefiles/unit_bound.shp"))
@@ -179,6 +179,4 @@ sim.all <- ctmm_sim(data = indivs)
 # 6. Write to .csv ----
 #_______________________________________________________________________
 
-write.csv(sim.all[[1]], paste0(getwd(), "/Derived data/Camera detections/detections_lo.csv"))
-
-write.csv(sim.all[[2]], paste0(getwd(), "/Derived data/Simulated tracks/tracks_lo.csv"))
+write.csv(sim.all[[2]], paste0(getwd(), "/Derived data/Simulated tracks/tracks_collar_lo.csv"))
