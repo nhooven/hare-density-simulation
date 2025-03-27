@@ -58,6 +58,7 @@ ctmm_sim <- function(data = indivs) {
   # loop through all rows
   all.passes <- data.frame()
   all.relocs <- data.frame()
+  all.speeds <- data.frame()
   
   # start time
   start.time <- Sys.time()
@@ -129,7 +130,23 @@ ctmm_sim <- function(data = indivs) {
       
       make_track(.x = x,
                  .y = y,
-                 .t = timestamp) %>%
+                 .t = timestamp)
+    
+    # calculate "true" speed (m/s)
+    telem.track.speed <- telem.track %>%
+      
+      steps() 
+    
+    # 8 week
+    speed.8wk <- sum(telem.track.speed$sl_) / sim.duration.sec
+    
+    # 4 week
+    telem.track.speed.4 <- telem.track.speed %>% slice(1:(n() / 2))
+    
+    speed.4wk <- sum(telem.track.speed.4$sl_) / (sim.duration.sec / 2)
+    
+    # resample track for telemetering
+    telem.track.1 <- telem.track %>%
       
       track_resample(rate = hours(1),
                      tolerance = minutes(0)) %>%
@@ -147,6 +164,16 @@ ctmm_sim <- function(data = indivs) {
     # bind in to relocations df
     all.relocs <- rbind(all.relocs, telem.track)
     
+    # bind into speeds df
+    all.speeds <- rbind(all.speeds,
+                        data.frame(indiv = focal.row$indiv,
+                                   rep = focal.row$rep,
+                                   use = focal.row$use,
+                                   abund.group = focal.row$abund.group,
+                                   collared = focal.row$collared,
+                                   speed.8wk = speed.8wk,
+                                   speed.4wk = speed.4wk))
+    
     # status message (every 10 iterations)
     if (i %% 10 == 0) {
       
@@ -162,10 +189,11 @@ ctmm_sim <- function(data = indivs) {
   }
   
   # pack into list and return
-  passes.relocs <- list(all.passes,
-                        all.relocs)
+  passes.relocs.speeds <- list(all.passes,
+                               all.relocs,
+                               all.speeds)
   
-  return(passes.relocs)
+  return(passes.relocs.speeds)
   
 }
 
@@ -182,3 +210,5 @@ sim.all <- ctmm_sim(data = indivs)
 write.csv(sim.all[[1]], paste0(getwd(), "/Derived data/Camera detections/detections_lo.csv"))
 
 write.csv(sim.all[[2]], paste0(getwd(), "/Derived data/Simulated tracks/tracks_lo.csv"))
+
+write.csv(sim.all[[3]], paste0(getwd(), "/Derived data/True speeds/speeds_lo.csv"))
