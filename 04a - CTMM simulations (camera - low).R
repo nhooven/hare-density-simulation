@@ -162,7 +162,7 @@ ctmm_sim <- function(data = indivs) {
              collared = focal.row$collared)
     
     # bind in to relocations df
-    all.relocs <- rbind(all.relocs, telem.track)
+    all.relocs <- rbind(all.relocs, telem.track.1)
     
     # bind into speeds df
     all.speeds <- rbind(all.speeds,
