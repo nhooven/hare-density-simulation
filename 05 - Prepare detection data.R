@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 26 Mar 2025
 # Date completed: 
-# Date last modified: 26 Mar 2025
+# Date last modified: 28 Mar 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -73,3 +73,9 @@ q1.agg.1 <- q1.agg %>%
   arrange(abund.group, 
           rep,
           cam.id)
+
+#_______________________________________________________________________
+# 5. Write to .csvs ----
+#_______________________________________________________________________
+
+write.csv(q1.agg.1, paste0(getwd(), "/Derived data/Aggregated detections/detections_lo.csv"))
