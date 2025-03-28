@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 26 Mar 2025
-# Date last modified: 26 Mar 2025
+# Date last modified: 28 Mar 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -211,4 +211,4 @@ write.csv(sim.all[[1]], paste0(getwd(), "/Derived data/Camera detections/detecti
 
 write.csv(sim.all[[2]], paste0(getwd(), "/Derived data/Simulated tracks/tracks_lo.csv"))
 
-write.csv(sim.all[[3]], paste0(getwd(), "/Derived data/True speeds/speeds_lo.csv"))
+write.csv(sim.all[[3]], paste0(getwd(), "/Derived data/Speeds/speeds_lo.csv"))
