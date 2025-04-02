@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 25 Mar 2025
-# Date last modified: 25 Mar 2025
+# Date last modified: 02 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -69,6 +69,11 @@ lens.angle.deg <- 57.3
 
 #_______________________________________________________________________
 # 4. Write function to generate viewsheds ----
+
+# let's make this a true "pie slice" rather than an approximated triangle
+
+# https://stackoverflow.com/questions/59328707/how-do-i-partition-a-circle-into-equal-multipolygon-slices-with-sf-and-r
+
 #_______________________________________________________________________
 
 make_viewshed <- function(cams) {
@@ -89,39 +94,34 @@ make_viewshed <- function(cams) {
     # calculate lens angle in rad
     lens.angle <- lens.angle.deg * (pi / 180)
     
-    # y axis adjustment
-    y.adjust <- max.dist
+    # theta (sequence of angles)
+    theta <- seq(-lens.angle / 2, lens.angle / 2, length.out = 50)
     
-    # x axis adjustment
-    x.adjust <- y.adjust * tan(lens.angle / 2)
+    # x coords of the arc
+    xarc <- focal.coords[1] + max.dist * sin(theta)
     
-    # create triangle vertices
-    vert.w <- c(focal.coords[1] - x.adjust,
-                focal.coords[2] + y.adjust)
+    # y coords of the arc
+    yarc <- focal.coords[2] + max.dist * cos(theta)
     
-    vert.e <- c(focal.coords[1] + x.adjust,
-                focal.coords[2] + y.adjust)
+    # final coords
+    xc <- c(focal.coords[1], xarc, focal.coords[1])
+    yc <- c(focal.coords[2], yarc, focal.coords[2])
     
-    # bind vertices together
-    tri.verts <- as.data.frame(matrix(c(focal.coords, 
-                                        vert.w, 
-                                        vert.e),
-                                      nrow = 3,
-                                      ncol = 2,
-                                      byrow = TRUE))
-    
-    # convert to sf polygon
-    tri.polygon <- tri.verts %>%
+    pie.df <- data.frame(x = xc,
+                         y = yc)
       
-      st_as_sf(coords = c("V1", 
-                          "V2")) %>%
+    # convert to sf
+    pie.sf <- pie.df %>% 
       
-      summarise(geometry = st_combine(geometry)) %>%
+      st_as_sf(coords = c("x",
+                          "y")) %>%
+      
+      summarize(geometry = st_combine(geometry)) %>%
       
       st_cast("POLYGON")
     
     # bind into df
-    all.polys <- rbind(all.polys, tri.polygon)
+    all.polys <- rbind(all.polys, pie.sf)
     
   }
   
@@ -165,7 +165,18 @@ plot(st_geometry(cams.9), add = T)
 cams.viewsheds <- make_viewshed(cams.9)
 
 #_______________________________________________________________________
-# 7. Write to shapefile ----
+# 7. Plot them ----
+#_______________________________________________________________________
+
+plot(st_geometry(cams.viewsheds))
+
+# area for sanity check
+st_area(cams.viewsheds)
+
+(pi * 3.5^2) * (57.3 / 360)
+
+#_______________________________________________________________________
+# 8. Write to shapefile ----
 #_______________________________________________________________________
 
 st_write(cams.viewsheds, 
