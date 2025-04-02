@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 25 Mar 2025
-# Date last modified: 31 Mar 2025
+# Date last modified: 01 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -22,7 +22,7 @@ library(ctmm)                 # helper function for unit conversion
 #_______________________________________________________________________
 
 # number of iterations
-n.iter <- 1000
+n.iter <- 500
 
 # total individuals to simulate per iteration
 # camera contacts for Q1
@@ -35,7 +35,7 @@ n.indiv.collar.Q1 <- 10
 n.indiv.cam.Q2 <- 10
 
 # high variability additional out of sample collars for Q2
-n.indiv.collar.Q2 <- 5
+n.indiv.collar.Q2 <- 10
 
 #_______________________________________________________________________
 # 3. Sample individuals ----
@@ -48,6 +48,13 @@ indivs.cam.Q1 <- expand.grid(iter = 1:n.iter,
                              Q = "Q1",
                              use = "camera")
 
+# add in folds
+indivs.cam.Q1$fold <- case_when(indivs.cam.Q1$iter %in% 1:100 ~ 1,
+                                indivs.cam.Q1$iter %in% 101:200 ~ 2,
+                                indivs.cam.Q1$iter %in% 201:300 ~ 3,
+                                indivs.cam.Q1$iter %in% 301:400 ~ 4,
+                                indivs.cam.Q1$iter %in% 401:500 ~ 5)
+
 #_______________________________________________________________________
 # 3b. Q1 collar ----
 #_______________________________________________________________________
@@ -56,6 +63,13 @@ indivs.collar.Q1 <- expand.grid(iter = 1:n.iter,
                                 indiv = 1:n.indiv.collar.Q1,
                                 Q = "Q1",
                                 use = "collar")
+
+# add in folds
+indivs.collar.Q1$fold <- case_when(indivs.collar.Q1$iter %in% 1:100 ~ 1,
+                                   indivs.collar.Q1$iter %in% 101:200 ~ 2,
+                                   indivs.collar.Q1$iter %in% 201:300 ~ 3,
+                                   indivs.collar.Q1$iter %in% 301:400 ~ 4,
+                                   indivs.collar.Q1$iter %in% 401:500 ~ 5)
 
 #_______________________________________________________________________
 # 3c. Q2 camera ----
@@ -66,6 +80,13 @@ indivs.cam.Q2 <- expand.grid(iter = 1:n.iter,
                              Q = "Q2",
                              use = "camera")
 
+# add in folds
+indivs.cam.Q2$fold <- case_when(indivs.cam.Q2$iter %in% 1:100 ~ 1,
+                                indivs.cam.Q2$iter %in% 101:200 ~ 2,
+                                indivs.cam.Q2$iter %in% 201:300 ~ 3,
+                                indivs.cam.Q2$iter %in% 301:400 ~ 4,
+                                indivs.cam.Q2$iter %in% 401:500 ~ 5)
+
 #_______________________________________________________________________
 # 3d. Q2 collar ----
 #_______________________________________________________________________
@@ -74,6 +95,13 @@ indivs.collar.Q2 <- expand.grid(iter = 1:n.iter,
                                 indiv = 1:n.indiv.collar.Q2,
                                 Q = "Q2",
                                 use = "collar")
+
+# add in folds
+indivs.collar.Q2$fold <- case_when(indivs.collar.Q2$iter %in% 1:100 ~ 1,
+                                   indivs.collar.Q2$iter %in% 101:200 ~ 2,
+                                   indivs.collar.Q2$iter %in% 201:300 ~ 3,
+                                   indivs.collar.Q2$iter %in% 301:400 ~ 4,
+                                   indivs.collar.Q2$iter %in% 401:500 ~ 5)
 
 #_______________________________________________________________________
 # 4. Define distributions of movement parameters ----

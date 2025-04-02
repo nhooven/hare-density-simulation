@@ -1,11 +1,11 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 04 - CTMM simulations
+# Script: 04a - CTMM simulations (fold 1)
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 26 Mar 2025
-# Date last modified: 31 Mar 2025
+# Date last modified: 01 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -27,6 +27,12 @@ Q1.cam <- read.csv(paste0(getwd(), "/Derived data/Parameters/camera_lo.csv"))
 Q1.col <- read.csv(paste0(getwd(), "/Derived data/Parameters/collar_lo.csv"))
 Q2.cam <- read.csv(paste0(getwd(), "/Derived data/Parameters/camera_hi.csv"))
 Q2.col <- read.csv(paste0(getwd(), "/Derived data/Parameters/collar_hi.csv"))
+
+# subset to the correct fold
+Q1.cam <- Q1.cam %>% filter(fold == 1)
+Q1.col <- Q1.col %>% filter(fold == 1)
+Q2.cam <- Q2.cam %>% filter(fold == 1)
+Q2.col <- Q2.col %>% filter(fold == 1)
 
 # unit boundary
 unit.bound <- st_read(paste0(getwd(), "/Derived data/Shapefiles/unit_bound.shp"))
@@ -195,7 +201,7 @@ col_sim <- function (focal.row) {
   
   # run simulation
   ouf.sim <- simulate(object = ouf.mod, 
-                      t = sim.timestep.hr,
+                      t = sim.timestep.hr,        # hourly only
                       complete = T)
   
   # coerce telemetry object to sf
@@ -301,9 +307,9 @@ for (i in 1:n.iter) {
     focal.sims.y <- cam_sim_contact(focal.row.y)
     
     # bind in
-    Q2.cam.all.passes <- rbind(Q1.cam.all.passes, focal.sims.y[[1]])
-    Q2.cam.all.relocs <- rbind(Q1.cam.all.relocs, focal.sims.y[[2]])
-    Q2.cam.all.speeds <- rbind(Q1.cam.all.speeds, focal.sims.y[[3]])
+    Q2.cam.all.passes <- rbind(Q2.cam.all.passes, focal.sims.y[[1]])
+    Q2.cam.all.relocs <- rbind(Q2.cam.all.relocs, focal.sims.y[[2]])
+    Q2.cam.all.speeds <- rbind(Q2.cam.all.speeds, focal.sims.y[[3]])
     
   }
   
@@ -328,17 +334,17 @@ for (i in 1:n.iter) {
   if (i %% 50 == 0) {
     
     # save each to file
-    write.csv(Q1.cam.all.passes, paste0(getwd(), "/Derived data/Camera detections/detections_lo.csv")) 
-    write.csv(Q1.cam.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_lo.csv"))
-    write.csv(Q1.cam.all.speeds, paste0(getwd(), "/Derived data/Speeds/speeds_lo.csv"))
+    write.csv(Q1.cam.all.passes, paste0(getwd(), "/Derived data/Camera detections/detections_lo1.csv")) 
+    write.csv(Q1.cam.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_lo1.csv"))
+    write.csv(Q1.cam.all.speeds, paste0(getwd(), "/Derived data/Speeds/speeds_lo1.csv"))
     
-    write.csv(Q1.col.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_col_lo.csv"))
+    write.csv(Q1.col.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_col_lo1.csv"))
     
-    write.csv(Q2.cam.all.passes, paste0(getwd(), "/Derived data/Camera detections/detections_hi.csv"))
-    write.csv(Q2.cam.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_hi.csv"))
-    write.csv(Q2.cam.all.speeds, paste0(getwd(), "/Derived data/Speeds/speeds_hi.csv"))
+    write.csv(Q2.cam.all.passes, paste0(getwd(), "/Derived data/Camera detections/detections_hi1.csv"))
+    write.csv(Q2.cam.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_hi1.csv"))
+    write.csv(Q2.cam.all.speeds, paste0(getwd(), "/Derived data/Speeds/speeds_hi1.csv"))
     
-    write.csv(Q2.col.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_col_hi.csv"))
+    write.csv(Q2.col.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_col_hi1.csv"))
     
     # print status message
     elapsed.time <- round(as.numeric(difftime(Sys.time(), 
@@ -351,3 +357,19 @@ for (i in 1:n.iter) {
   }
   
 }
+
+#_______________________________________________________________________
+# 5. Save all to file ----
+#_______________________________________________________________________
+
+write.csv(Q1.cam.all.passes, paste0(getwd(), "/Derived data/Camera detections/detections_lo1.csv")) 
+write.csv(Q1.cam.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_lo1.csv"))
+write.csv(Q1.cam.all.speeds, paste0(getwd(), "/Derived data/Speeds/speeds_lo1.csv"))
+
+write.csv(Q1.col.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_col_lo1.csv"))
+
+write.csv(Q2.cam.all.passes, paste0(getwd(), "/Derived data/Camera detections/detections_hi1.csv"))
+write.csv(Q2.cam.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_hi1.csv"))
+write.csv(Q2.cam.all.speeds, paste0(getwd(), "/Derived data/Speeds/speeds_hi1.csv"))
+
+write.csv(Q2.col.all.relocs, paste0(getwd(), "/Derived data/Simulated tracks/tracks_col_hi1.csv"))
