@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 26 Mar 2025
-# Date last modified: 01 Apr 2025
+# Date last modified: 02 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -110,7 +110,7 @@ cam_sim_contact <- function (focal.row) {
   
   # tally camera contacts ("passes")
   # in this case, 60-second locations that fall within each viewshed
-  # these will be independent detections (> 20 minutes apart)
+  # each "pass" through a viewshed will only count as one
   passes <- st_intersection(vs, 
                             telem.sf) %>%
     
@@ -123,8 +123,9 @@ cam_sim_contact <- function (focal.row) {
     # add a time difference column
     mutate(time.diff = as.numeric(t - lag(t))) %>%
     
-    # drop anything < 20 minutes
-    filter(time.diff > 20 %#% "minutes") %>%
+    # keep intersections that are not part of the same "pass"
+    filter(time.diff > 60 |
+           is.na(time.diff) == T) %>%
     
     # tally all intersections
     tally() %>%
