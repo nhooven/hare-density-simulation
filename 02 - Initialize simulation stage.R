@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 25 Mar 2025
-# Date last modified: 02 Apr 2025
+# Date last modified: 03 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -50,6 +50,9 @@ unit.bound.sf <- st_as_sf(st_sfc(unit.bound))
 # plot 
 plot(unit.bound.sf) 
 
+# area
+st_area(unit.bound.sf)
+
 # write to shapefile
 st_write(unit.bound.sf,
          dsn = paste0(getwd(), "/Derived data/Shapefiles/unit_bound.shp"),
@@ -60,7 +63,7 @@ st_write(unit.bound.sf,
 # 3. Define viewshed parameters ----
 #_______________________________________________________________________
 
-# (assume all cameras face north) create triangle
+# (assume all cameras face north)
 # max distance - 3.5 m
 max.dist <- 3.5
 
@@ -168,12 +171,43 @@ cams.viewsheds <- make_viewshed(cams.9)
 # 7. Plot them ----
 #_______________________________________________________________________
 
-plot(st_geometry(cams.viewsheds))
+plot(st_geometry(unit.bound.sf))
+plot(st_geometry(cams.viewsheds), add = T)
 
 # area for sanity check
 st_area(cams.viewsheds)
 
 (pi * 3.5^2) * (57.3 / 360)
+
+#_______________________________________________________________________
+# 8. Expected detections per unit time ----
+#_______________________________________________________________________
+
+# total viewshed area (m2)
+total.vs.area <- sum(st_area(cams.viewsheds))
+
+# total unit area
+total.unit.area <- m.side^2
+
+# proportion of total
+prop.vs.area <- total.vs.area / total.unit.area
+
+# assume an animal moves a m / min (1440 m/day)
+# this is the number of 1-m2 pixels an animal will use a day
+speed <- 1440
+
+# how many random camera contacts, given the proportion of area covered
+total.contacts <- speed * prop.vs.area
+
+# expected contacts by cam
+(total.contacts.bycam <- total.contacts / 9)
+
+# for each abundance (per day)
+(total.contacts / 9) * 2
+(total.contacts / 9) * 5
+(total.contacts / 9) * 10
+(total.contacts / 9) * 25
+(total.contacts / 9) * 50
 
 #_______________________________________________________________________
 # 8. Write to shapefile ----

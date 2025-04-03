@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 26 Mar 2025
-# Date last modified: 02 Apr 2025
+# Date last modified: 03 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -63,9 +63,9 @@ sim.samp.rate <- 60
 sim.timestep <- seq(1, sim.duration.sec, sim.samp.rate)
 
 # collar sims ONLY
-sim.duration.hr <- sim.duration.wk * 7 * 24
+sim.duration.halfhr <- sim.duration.wk * 7 * 24 * 2
 
-sim.timestep.hr <- seq(1, sim.duration.sec, 3600)
+sim.timestep.halfhr <- seq(1, sim.duration.sec, 3600 / 2)
 
 #_______________________________________________________________________
 # 4. Loop ----
@@ -84,14 +84,14 @@ cam_sim_contact <- function (focal.row) {
   focal.list <- list()
   
   # define OUF model
-  ouf.mod <- ctmm(tau = c(focal.row$tau1,             # positional autocorr time
-                          focal.row$tau2),            # velocity autocorr time
+  ouf.mod <- ctmm(tau = c(8 %#% "hours",             # positional autocorr time
+                          1 %#% "hours"),            # velocity autocorr time
                   isotropic = FALSE,                  # anisotropic
-                  sigma = c(focal.row$sigma.maj,      # variance along major axis
-                            focal.row$sigma.min,      # variance along minor axis
-                            focal.row$angle),         # angle of axis
-                  mu = c(focal.row$mean1,             # x coord
-                         focal.row$mean2))            # y coord
+                  sigma = c(5000,      # variance along major axis
+                            5000,      # variance along minor axis
+                            0),         # angle of axis
+                  mu = c(0 + rnorm(1, 0, 50),             # x coord
+                         0 + rnorm(1, 0, 50)))            # y coord
   
   # run simulation
   ouf.sim <- simulate(object = ouf.mod, 
@@ -121,11 +121,11 @@ cam_sim_contact <- function (focal.row) {
     group_by(cam.id) %>% 
     
     # add a time difference column
-    mutate(time.diff = as.numeric(t - lag(t))) %>%
+    #mutate(time.diff = as.numeric(t - lag(t))) %>%
     
     # keep intersections that are not part of the same "pass"
-    filter(time.diff > 60 |
-           is.na(time.diff) == T) %>%
+    #filter(time.diff > 60 |
+    #       is.na(time.diff) == T) %>%
     
     # tally all intersections
     tally() %>%
@@ -155,7 +155,7 @@ cam_sim_contact <- function (focal.row) {
   # resample track for telemetering
   telem.track.1 <- telem.track %>%
     
-    track_resample(rate = hours(1),
+    track_resample(rate = minutes(30),
                    tolerance = minutes(0)) %>%
     
     # remove "burst"
@@ -202,7 +202,7 @@ col_sim <- function (focal.row) {
   
   # run simulation
   ouf.sim <- simulate(object = ouf.mod, 
-                      t = sim.timestep.hr,        # hourly only
+                      t = sim.timestep.halfhr,        # half-hourly only
                       complete = T)
   
   # coerce telemetry object to sf

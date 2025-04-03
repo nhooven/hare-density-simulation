@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 06 Mar 2025
 # Date completed: 25 Mar 2025 
-# Date last modified: 25 Mar 2025 
+# Date last modified: 03 Apr 2025 
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -337,28 +337,24 @@ plot_grid(plot_ouf(sim.ouf.sigma.low,
 
 #_______________________________________________________________________
 # 5a. Track duration ----
-
-# for Q2, we want our longest duration to be 2 months (8 weeks), while 1 month 
-# will be standard for Qs 1 and 3
-
 #_______________________________________________________________________
 
-# how many seconds are in 8 weeks?
-(sec.8wk <- 8 * 7 * 24 * 60 * 60)
+# how many seconds are in 4 weeks?
+(sec.4wk <- 4 * 7 * 24 * 60 * 60)
 
-# each simulation must run for 4,838,400 steps (if we want a location every second)
+# each simulation must run for 2,419,200 steps (if we want a location every second)
 # this seems extravagant; let's assume that our animal's fundamental step length 
-# is straight over a period of 10 seconds
+# is straight over a period of 60 seconds
 # let's time this
 
-seq.8wk <- seq(1, sec.8wk, 10)
+seq.4wk <- seq(1, sec.4wk, 60)
 
-length(seq.8wk)
+length(seq.4wk)
 
 ctmm.ouf.duration <- ctmm(tau = c(6 %#% "hours", 
                                   2 %#% "hours"), 
                           isotropic = FALSE, 
-                          sigma = c(1000,
+                          sigma = c(700,
                                     100,
                                     -0.05), 
                           mu = c(0, 0))
@@ -367,58 +363,21 @@ ctmm.ouf.duration <- ctmm(tau = c(6 %#% "hours",
 start.time <- Sys.time()
 
 sim.ouf.duration <- simulate(object = ctmm.ouf.duration, 
-                             t = seq.8wk, 
+                             t = seq.4wk, 
                              complete = TRUE)
 
 # difftime
 Sys.time() - start.time
 
-# this took ~ 47 seconds. If we wanted 602 simulated tracks this would take:
-(47 * 602) / 3600
+# this took ~ 4.98 seconds. If we wanted 1000 simulated tracks this would take:
+(4.98 * 1000) / 3600
 
-# let's round up to 8 hours
-
-# and 120 simulated tracks at 4 weeks:
-(23.5 * 120) / 3600                      # not even an hour
-
-# what if we included multiple sims?
-start.time <- Sys.time()
-
-sim.ouf.duration.1 <- simulate(object = ctmm.ouf.duration, 
-                               t = seq.8wk, 
-                               nsim = 2,
-                               complete = TRUE)
-
-# difftime
-Sys.time() - start.time
-
-# it's about twice the original- we want different means (i.e., home range centers)
-# anyway. 
-
-# We can also probably crank up the fundamental step timescale to reduce this further
-# this will help balance the computational time with the biological realism
-seq.8wk.2 <- seq(1, sec.8wk, 20)
-
-length(seq.8wk.2)
-
-# test one last time
-start.time <- Sys.time()
-
-sim.ouf.duration.2 <- simulate(object = ctmm.ouf.duration, 
-                               t = seq.8wk.2, 
-                               complete = TRUE)
-
-# difftime
-Sys.time() - start.time
-
-# perfect - this is ~ 23 seconds, which is very reasonable
-(23 * 602) / 3600   # < 4 hr
-(23 * 120) / 3600   # ~ 45 minutes  
+# ~ 1.38 h
 
 # plot the resultant track
-plot_ouf(sim.ouf.duration.2,
-         "8 weeks",
-         "20-sec fundamental step")
+plot_ouf(sim.ouf.duration,
+         "4 weeks",
+         "60-sec fundamental step")
 
 #_______________________________________________________________________
 # 5b. Tau 1 - positional autocorrelation ----
@@ -427,25 +386,20 @@ plot_ouf(sim.ouf.duration.2,
 
 #_______________________________________________________________________
 
-# start with a 4-week duration
-(sec.4wk <- 4 * 7 * 24 * 60 * 60)
-
-seq.4wk <- seq(1, sec.4wk, 20)
-
-# we'll look at track differences between 6 and 12 hours
-ctmm.ouf.tau1.1 <- ctmm(tau = c(6 %#% "hours", 
+# we'll look at track differences between 4 and 6 hours
+ctmm.ouf.tau1.1 <- ctmm(tau = c(4 %#% "hours", 
                                 2 %#% "hours"), 
                         isotropic = FALSE, 
-                        sigma = c(1000,
-                                  100,
+                        sigma = c(7000,
+                                  1000,
                                   -0.05), 
                         mu = c(0, 0))
 
-ctmm.ouf.tau1.2 <- ctmm(tau = c(12 %#% "hours", 
+ctmm.ouf.tau1.2 <- ctmm(tau = c(6 %#% "hours", 
                                 2 %#% "hours"), 
                         isotropic = FALSE, 
-                        sigma = c(1000,
-                                  100,
+                        sigma = c(7000,
+                                  1000,
                                   -0.05), 
                         mu = c(0, 0))
 
@@ -461,12 +415,12 @@ sim.ouf.tau1.2 <- simulate(object = ctmm.ouf.tau1.2,
 # plot together
 plot_grid(plot_ouf(sim.ouf.tau1.1,
                    "tau.p",
-                   "6 hr"),
+                   "4 hr"),
           plot_ouf(sim.ouf.tau1.2,
                    "tau.p",
-                   "12 hr"))
+                   "6 hr"))
 
-# we'll keep 6 - this is a highly variable parameter in our real data BTW
+# maybe we could do 3 h for this, ~ 3x Tau2 at 1 h
 
 #_______________________________________________________________________
 # 5c. Tau 2 - velocity autocorrelation timescale ----
@@ -474,21 +428,21 @@ plot_grid(plot_ouf(sim.ouf.tau1.1,
 # this will be longer than our finest fix rate, equal to our medium fix rate, and
 # shorter than our coarsest fix rate
 
-# 2 hours seems reasonable, although real data suggests hares may show velocity
-# autocorr "decay" between 10 minutes and an hour - no wonder we can't fit any OUFs!
+# 1 hours seems reasonable and similar to real data
+# then 3 h would be 3tau which should not allow for OUF fitting
 
 #_______________________________________________________________________
 
-# we'll look at track differences between 2 and 0.5 hours
-ctmm.ouf.tau2.1 <- ctmm(tau = c(6 %#% "hours", 
-                                2 %#% "hours"), 
+# we'll look at track differences between 1 and 0.5 hours
+ctmm.ouf.tau2.1 <- ctmm(tau = c(3 %#% "hours", 
+                                1 %#% "hours"), 
                         isotropic = FALSE, 
                         sigma = c(1000,
                                   100,
                                   -0.05), 
                         mu = c(0, 0))
 
-ctmm.ouf.tau2.2 <- ctmm(tau = c(6 %#% "hours", 
+ctmm.ouf.tau2.2 <- ctmm(tau = c(3 %#% "hours", 
                                 0.5 %#% "hours"), 
                         isotropic = FALSE, 
                         sigma = c(1000,
@@ -599,8 +553,8 @@ plot_grid(plot_ouf(sim.ouf.sigma.1,
 #_______________________________________________________________________
 # 6. Movement parameter variability ----
 
-# for Qs 1 and 2, we'll keep these low and centered on the mean
-# for Q3, allowing them to vary widely is central to our question
+# for Q 1, we'll keep these low and centered on the mean
+# for Q2, allowing them to vary widely is central to our question
 
 # these should be drawn from a strictly positive distribution, so the log-normal makes sense
 

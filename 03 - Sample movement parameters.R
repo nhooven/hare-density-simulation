@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 25 Mar 2025
-# Date last modified: 01 Apr 2025
+# Date last modified: 03 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -164,11 +164,13 @@ indivs.collar.Q2$mean2 <- runif(n = nrow(indivs.collar.Q2), coord.min, coord.max
 #_______________________________________________________________________
 # 4b. Tau 1 ----
 
-# geometric mean = 6 hr
-# SDs = 1.5, 6 hr
+# position autocorrelation / home range crossing time parameter
 
-lnorm.tau1.lo <- log_norm_params(c(6 %#% "hours", 1.5 %#% "hours"))
-lnorm.tau1.hi <- log_norm_params(c(6 %#% "hours", 6 %#% "hours"))
+# geometric mean = 8 hr
+# SDs = 2, 8 hr
+
+lnorm.tau1.lo <- log_norm_params(c(8 %#% "hours", 2 %#% "hours"))
+lnorm.tau1.hi <- log_norm_params(c(8 %#% "hours", 8 %#% "hours"))
 
 #_______________________________________________________________________
 
@@ -193,11 +195,11 @@ indivs.collar.Q2$tau1 <- rlnorm(nrow(indivs.collar.Q2),
 #_______________________________________________________________________
 # 4c. Tau 2 ----
 
-# geometric mean = 2 hr
-# SDs = 0.5, 2 hr
+# geometric mean = 1 hr
+# SDs = 0.25, 1 hr
 
-lnorm.tau2.lo <- log_norm_params(c(2 %#% "hours", 0.5 %#% "hours"))
-lnorm.tau2.hi <- log_norm_params(c(2 %#% "hours", 2 %#% "hours"))
+lnorm.tau2.lo <- log_norm_params(c(1 %#% "hours", 0.25 %#% "hours"))
+lnorm.tau2.hi <- log_norm_params(c(1 %#% "hours", 1 %#% "hours"))
 
 #_______________________________________________________________________
 
@@ -223,11 +225,11 @@ indivs.collar.Q2$tau2 <- rlnorm(nrow(indivs.collar.Q2),
 # 4d. Sigma ----
 
 # sigma major
-# geometric mean = 10,000 m
-# SDs = 2,500, 10,000 m
+# geometric mean = 5,000 m
+# SDs = 1,750, 5,000 m
 
-lnorm.sigma.maj.lo <- log_norm_params(c(10000, 2500))
-lnorm.sigma.maj.hi <- log_norm_params(c(10000, 10000))
+lnorm.sigma.maj.lo <- log_norm_params(c(5000, 1750))
+lnorm.sigma.maj.hi <- log_norm_params(c(5000, 5000))
 
 # "aspect ratio"
 # synthetic parameter that relates the major to minor axis sigmas
@@ -331,6 +333,64 @@ sum(indivs.cam.Q1$tau2 > indivs.cam.Q1$tau1)
 sum(indivs.collar.Q1$tau2 > indivs.collar.Q1$tau1)
 sum(indivs.cam.Q2$tau2 > indivs.cam.Q2$tau1)
 sum(indivs.collar.Q2$tau2 > indivs.collar.Q2$tau1)
+
+#_______________________________________________________________________
+# 5b. Examine distributions ----
+#_______________________________________________________________________
+
+hist(indivs.cam.Q1$tau1)
+hist(indivs.cam.Q1$tau2)
+hist(indivs.cam.Q1$sigma.maj)
+hist(indivs.cam.Q1$sigma.min)
+
+hist(indivs.cam.Q2$tau1)
+hist(indivs.cam.Q2$tau2)
+hist(indivs.cam.Q2$sigma.maj)
+hist(indivs.cam.Q2$sigma.min)
+
+#_______________________________________________________________________
+# 7. Simulate a typical track ----
+#_______________________________________________________________________
+
+# simulation duration
+sim.duration.wk <- 4
+
+sim.duration.sec <- sim.duration.wk * 7 * 24 * 60 * 60 
+
+# "sampling rate" for fundamental (i.e., straight line) steps
+sim.samp.rate <- 60
+
+# time steps to simulate on (from, to, by)
+sim.timestep <- seq(1, sim.duration.sec, sim.samp.rate)
+
+typical.track.ctmm <- ctmm(tau = c(2 %#% "hours",             # positional autocorr time
+                                   1 %#% "hours"),            # velocity autocorr time
+                           isotropic = FALSE,                 # anisotropic
+                           sigma = c(5000,                   # variance along major axis
+                                     714,                    # variance along minor axis
+                                     0),                      # angle of axis
+                           mu = c(0,                          # x coord
+                                  0))                         # y coord
+
+# run simulation
+typical.track.sim <- simulate(object = typical.track.ctmm, 
+                              t = sim.timestep,
+                              complete = T)
+
+# plot
+ggplot(data = typical.track.sim) + 
+  
+  theme_bw() +
+  
+  geom_path(aes(x = x,
+                y = y,
+                color = timestamp)) +
+  
+  scale_color_viridis_c() +
+  
+  theme(legend.position = "none",
+        panel.grid = element_blank(),
+        axis.title = element_blank())
 
 #_______________________________________________________________________
 # 6. Write to .csvs ----
