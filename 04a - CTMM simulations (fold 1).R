@@ -84,14 +84,13 @@ cam_sim_contact <- function (focal.row) {
   focal.list <- list()
   
   # define OUF model
-  ouf.mod <- ctmm(tau = c(8 %#% "hours",             # positional autocorr time
-                          1 %#% "hours"),            # velocity autocorr time
-                  isotropic = FALSE,                  # anisotropic
-                  sigma = c(5000,      # variance along major axis
-                            5000,      # variance along minor axis
+  ouf.mod <- ctmm(tau = c(5000),            # velocity autocorr time
+                  isotropic = TRUE,                  # anisotropic
+                  sigma = c(500,
+                            500,
                             0),         # angle of axis
-                  mu = c(0 + rnorm(1, 0, 50),             # x coord
-                         0 + rnorm(1, 0, 50)))            # y coord
+                  mu = c(0,             # x coord
+                         0))            # y coord
   
   # run simulation
   ouf.sim <- simulate(object = ouf.mod, 
@@ -121,14 +120,17 @@ cam_sim_contact <- function (focal.row) {
     group_by(cam.id) %>% 
     
     # add a time difference column
-    #mutate(time.diff = as.numeric(t - lag(t))) %>%
+    mutate(time.diff = as.numeric(t - lag(t))) %>%
     
     # keep intersections that are not part of the same "pass"
-    #filter(time.diff > 60 |
-    #       is.na(time.diff) == T) %>%
+    filter(time.diff > 60 |
+           is.na(time.diff) == T) %>%
     
     # tally all intersections
-    tally() %>%
+    tally() 
+  
+  
+  %>%
     
     # and add identifiers
     mutate(iter = focal.row$iter,
@@ -149,8 +151,8 @@ cam_sim_contact <- function (focal.row) {
     
     steps() 
   
-  # 4 week
-  speed.4wk <- sum(telem.track.speed$sl_) / sim.duration.sec
+  # 4 week average speed (m / min)
+  speed.4wk <- sum(telem.track.speed$sl_) / nrow(telem.track.speed)
   
   # resample track for telemetering
   telem.track.1 <- telem.track %>%

@@ -387,7 +387,7 @@ plot_ouf(sim.ouf.duration,
 #_______________________________________________________________________
 
 # we'll look at track differences between 4 and 6 hours
-ctmm.ouf.tau1.1 <- ctmm(tau = c(4 %#% "hours", 
+ctmm.ouf.tau1.1 <- ctmm(tau = c(6 %#% "hours", 
                                 2 %#% "hours"), 
                         isotropic = FALSE, 
                         sigma = c(7000,
@@ -395,7 +395,7 @@ ctmm.ouf.tau1.1 <- ctmm(tau = c(4 %#% "hours",
                                   -0.05), 
                         mu = c(0, 0))
 
-ctmm.ouf.tau1.2 <- ctmm(tau = c(6 %#% "hours", 
+ctmm.ouf.tau1.2 <- ctmm(tau = c(12 %#% "hours", 
                                 2 %#% "hours"), 
                         isotropic = FALSE, 
                         sigma = c(7000,
@@ -415,12 +415,31 @@ sim.ouf.tau1.2 <- simulate(object = ctmm.ouf.tau1.2,
 # plot together
 plot_grid(plot_ouf(sim.ouf.tau1.1,
                    "tau.p",
-                   "4 hr"),
+                   "6 hr"),
           plot_ouf(sim.ouf.tau1.2,
                    "tau.p",
-                   "6 hr"))
+                   "12 hr"))
 
 # maybe we could do 3 h for this, ~ 3x Tau2 at 1 h
+
+# occurrence distributions (subsampled to hourly)
+occur1 <- occurrence(sim.ouf.tau1.1[seq(1, 40320, 60), ], CTMM = ctmm.ouf.tau1.1)
+occur2 <- occurrence(sim.ouf.tau1.2[seq(1, 40320, 60), ], CTMM = ctmm.ouf.tau1.2)
+
+plot(occur1)
+plot(occur2)
+
+# convert to sf
+occur1.sf <- as(SpatialPolygonsDataFrame.UD(occur1, level.UD = 0.75), "sf")
+occur2.sf <- as(SpatialPolygonsDataFrame.UD(occur2, level.UD = 0.75), "sf")
+
+plot(st_geometry(occur1.sf))
+plot(st_geometry(occur2.sf))
+
+st_area(occur1.sf)
+st_area(occur2.sf)
+
+# is there too much core area in the simulations? is space use too concentrated???
 
 #_______________________________________________________________________
 # 5c. Tau 2 - velocity autocorrelation timescale ----
@@ -434,7 +453,7 @@ plot_grid(plot_ouf(sim.ouf.tau1.1,
 #_______________________________________________________________________
 
 # we'll look at track differences between 1 and 0.5 hours
-ctmm.ouf.tau2.1 <- ctmm(tau = c(3 %#% "hours", 
+ctmm.ouf.tau2.1 <- ctmm(tau = c(12 %#% "hours", 
                                 1 %#% "hours"), 
                         isotropic = FALSE, 
                         sigma = c(1000,
@@ -442,7 +461,7 @@ ctmm.ouf.tau2.1 <- ctmm(tau = c(3 %#% "hours",
                                   -0.05), 
                         mu = c(0, 0))
 
-ctmm.ouf.tau2.2 <- ctmm(tau = c(3 %#% "hours", 
+ctmm.ouf.tau2.2 <- ctmm(tau = c(12 %#% "hours", 
                                 0.5 %#% "hours"), 
                         isotropic = FALSE, 
                         sigma = c(1000,
@@ -798,3 +817,13 @@ ggplot(data = sigma.maj.df,
   scale_x_continuous(breaks = c(0, 25000, 50000, 75000, 100000)) +
   
   xlab("Asymptotic variance (major axis; m)")
+
+#_______________________________________________________________________
+# 7. What do real hare data look like? ---- 
+
+# we'll use a few of the OUF models that we were able to fit to hare data
+# what's really going on here?
+
+#_______________________________________________________________________
+
+
