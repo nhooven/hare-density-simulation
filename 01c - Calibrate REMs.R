@@ -72,7 +72,7 @@ sim.samp.rate <- 60
 sim.timestep <- seq(1, sim.duration.sec, sim.samp.rate)
 
 # number of iterations (let's stop calling them replicates)
-n.iter <- 5
+n.iter <- 10
 
 # number of indivs
 n.indiv <- 10
@@ -86,7 +86,7 @@ all.indivs$mean2 <- runif(nrow(all.indivs), as.numeric(st_bbox(unit.bound)[1]), 
 
 # ensure that approximate home range area stays the same
 # 1:1 (isotropic)
-iso.area <- pi * 5000^2
+iso.area <- pi * 2000^2
 
 # area of an oval = pi * (major / 2) * (minor / 2)
 # 7:1
@@ -97,13 +97,12 @@ iso.area <- pi * 5000^2
 (min.14 <- sqrt((iso.area / pi) * 28 * 2) / 14) 
 
 # HR crossing time (tau1) should be correlated to sigma major
-# from initial simulations, it appears that 10000 sig maj and 12-h tau1 seem to work well together
-tau1.base <- 12
+tau1.base <- 6
 
-tau1.2 <- tau1.base * (maj.7 - 10000) / (10000)     # 64% larger
-tau1.3 <- tau1.base * (maj.14 - 10000) / (10000)     # 270% larger
+tau1.2 <- tau1.base * (maj.7 - 4000) / (4000)     # 64% larger
+tau1.3 <- tau1.base * (maj.14 - 4000) / (4000)     # 270% larger
 
-plot(c(10000, maj.7, maj.14), c(tau1.base, tau1.2, tau1.3))
+plot(c(4000, maj.7, maj.14), c(tau1.base, tau1.2, tau1.3))
 
 #_______________________________________________________________________
 # 5. Function ----
@@ -111,8 +110,8 @@ plot(c(10000, maj.7, maj.14), c(tau1.base, tau1.2, tau1.3))
 
 sim_contacts <- function (
     
-  tau = c(12 %#% "hours", 1 %#% "hours"),
-  sigma = c(10000, 10000)
+  tau = c(6 %#% "hours", 6 %#% "hours"),
+  sigma = c(4000, 4000)
   
 ) {
   
@@ -136,7 +135,7 @@ for (i in 1:n.iter) {
     if (sigma[1] == sigma[2]) {
       
       ouf.mod <- ctmm(tau = c(tau[1],             
-                            tau[2]),    
+                            tau[2]),  
                     isotropic = TRUE,                 
                     sigma = c(sigma[1],
                               sigma[2],
@@ -241,15 +240,15 @@ return(all.list)
 # 5b. Use function ----
 #_______________________________________________________________________
 
-all.passes.1 <- sim_contacts(tau = c(12 %#% "hours", 1 %#% "hours"), sigma = c(10000, 10000))
-all.passes.2 <- sim_contacts(tau = c(tau1.2 %#% "hours", 1 %#% "hours"), sigma = c(maj.7, min.7))
-all.passes.3 <- sim_contacts(tau = c(tau1.3 %#% "hours", 1 %#% "hours"), sigma = c(maj.14, min.14))
-all.passes.4 <- sim_contacts(tau = c(12 %#% "hours", 2 %#% "hours"), sigma = c(10000, 10000))
-all.passes.5 <- sim_contacts(tau = c(tau1.2 %#% "hours", 2 %#% "hours"), sigma = c(maj.7, min.7))
-all.passes.6 <- sim_contacts(tau = c(tau1.3 %#% "hours", 2 %#% "hours"), sigma = c(maj.14, min.14))
-all.passes.7 <- sim_contacts(tau = c(12 %#% "hours", 4 %#% "hours"), sigma = c(10000, 10000))
-all.passes.8 <- sim_contacts(tau = c(tau1.2 %#% "hours", 4 %#% "hours"), sigma = c(maj.7, min.7))
-all.passes.9 <- sim_contacts(tau = c(tau1.3 %#% "hours", 4 %#% "hours"), sigma = c(maj.14, min.14))
+all.passes.1 <- sim_contacts(tau = c(6 %#% "hours", 6 %#% "hours"), sigma = c(4000, 4000))
+all.passes.2 <- sim_contacts(tau = c(tau1.2 %#% "hours", tau1.2 %#% "hours"), sigma = c(maj.7, min.7))
+all.passes.3 <- sim_contacts(tau = c(tau1.3 %#% "hours", tau1.3 %#% "hours"), sigma = c(maj.14, min.14))
+all.passes.4 <- sim_contacts(tau = c(6 %#% "hours", 6 %#% "hours"), sigma = c(4000, 4000))
+all.passes.5 <- sim_contacts(tau = c(tau1.2 %#% "hours", tau1.2 %#% "hours"), sigma = c(maj.7, min.7))
+all.passes.6 <- sim_contacts(tau = c(tau1.3 %#% "hours", tau1.3 %#% "hours"), sigma = c(maj.14, min.14))
+all.passes.7 <- sim_contacts(tau = c(6 %#% "hours", 6 %#% "hours"), sigma = c(4000, 4000))
+all.passes.8 <- sim_contacts(tau = c(tau1.2 %#% "hours", tau1.2 %#% "hours"), sigma = c(maj.7, min.7))
+all.passes.9 <- sim_contacts(tau = c(tau1.3 %#% "hours", tau1.3 %#% "hours"), sigma = c(maj.14, min.14))
 
 #_______________________________________________________________________
 # 6. Aggregate passes by camera ----
@@ -394,18 +393,18 @@ all.passes.bind.3 <- all.passes.bind.2 %>%
   left_join(all.speeds.bind.1) %>%
   
   # REM point estimate
-  mutate(mean.REM = (mean.passes / 28) * (pi / ((mean.speed * (86400 / 1000)) * (3.5 / 1000) * (2 + lens.rad))) / 100) %>%
+  mutate(mean.REM = (mean.passes / 28) * (pi / ((mean.passes * (86400 / 1000)) * (3.5 / 1000) * (2 + lens.rad))) / 100) %>%
   
   # percent bias and space use parameter IDs
   mutate(perc.bias = (mean.REM - 1.0) / 1.0,
-         hr.crossing.time = factor(case_when(scenario %in% c(1, 4, 7) ~ "12 h",
-                                             scenario %in% c(2, 5, 8) ~ "20 h",
-                                             scenario %in% c(3, 6, 9) ~ "33 h"),
-                                   levels = c("12 h", "20 h", "33 h")),
-         velo.autocorr.t = factor(case_when(scenario %in% c(1, 2, 3) ~ "1 h",
-                                            scenario %in% c(4, 5, 6) ~ "2 h",
-                                            scenario %in% c(7, 8, 9) ~ "4 h"),
-                                   levels = c("1 h", "2 h", "4 h")),
+         #hr.crossing.time = factor(case_when(scenario %in% c(1, 4, 7) ~ "12 h",
+         #                                    scenario %in% c(2, 5, 8) ~ "20 h",
+         #                                    scenario %in% c(3, 6, 9) ~ "33 h"),
+         #                          levels = c("12 h", "20 h", "33 h")),
+         #velo.autocorr.t = factor(case_when(scenario %in% c(1, 2, 3) ~ "1 h",
+         #                                   scenario %in% c(4, 5, 6) ~ "2 h",
+         #                                   scenario %in% c(7, 8, 9) ~ "4 h"),
+         #                          levels = c("1 h", "2 h", "4 h")),
          aspect.ratio = factor(case_when(scenario %in% c(1, 4, 7) ~ "1:1",
                                          scenario %in% c(2, 5, 8) ~ "7:1",
                                          scenario %in% c(3, 6, 9) ~ "14:1"),
@@ -413,10 +412,8 @@ all.passes.bind.3 <- all.passes.bind.2 %>%
 
 # plot
 ggplot(data = all.passes.bind.3,
-       aes(x = velo.autocorr.t,
+       aes(x = aspect.ratio,
            y = perc.bias)) +
-  
-  facet_wrap(~ aspect.ratio) +
   
   theme_bw() +
   
@@ -433,10 +430,49 @@ ggplot(data = all.passes.bind.3,
   theme(panel.grid = element_blank(),
         legend.position = "none") +
   
-  xlab("Velocity autocorrelation timescale") +
-  ylab("Percent bias in density") +
+  xlab("Aspect ratio") +
+  ylab("Percent bias in density")
+
+# examine speeds and bias
+ggplot(data = all.passes.bind.3,
+       aes(x = mean.speed,
+           y = perc.bias,
+           shape = aspect.ratio)) +
   
-  scale_y_continuous(breaks = seq(-1, 3.5, 0.5))
+  theme_bw() +
+  
+  geom_hline(yintercept = 0) +
+  
+  geom_point(size = 2,
+             color = "black") +
+  
+  theme(panel.grid = element_blank(),
+        legend.position = "none") +
+  
+  xlab("mean speed (m/s)") +
+  ylab("Percent bias in density")
+
+# what about variability in speed?
+ggplot(data = all.passes.bind.3,
+       aes(x = sd.speed,
+           y = mean.passes,
+           shape = aspect.ratio,
+           color = aspect.ratio)) +
+  
+  facet_wrap(~ aspect.ratio,
+             scales = "free") +
+  
+  theme_bw() +
+  
+  geom_smooth(method = "lm") +
+  
+  geom_point(size = 2) +
+
+  theme(panel.grid = element_blank(),
+        legend.position = "none") +
+  
+  xlab("SD speed") +
+  ylab("Passes")
 
 #_______________________________________________________________________
 # 9. Plot space use areas ----
@@ -481,8 +517,6 @@ mutate(scenario = factor(scenario,
                                     "Tau2 = 4h, AR = 7:1",
                                     "Tau2 = 4h, AR = 14:1")))
   
-  
-
 #_______________________________________________________________________
 # 9b. Convert to sf ----
 #_______________________________________________________________________
@@ -532,3 +566,119 @@ ggplot() +
         panel.spacing = unit(0, "in")) +
   
   scale_color_viridis_d()
+
+#_______________________________________________________________________
+# 10. Use intensity ----
+
+all.track.combos <- expand.grid(iter = 1:10,
+                                indiv = 1:10,
+                                scenario = 1:9)
+
+#_______________________________________________________________________
+
+all.track.metrics <- data.frame()
+
+for (i in 1:nrow(all.track.combos)) {
+  
+  focal.row <- all.track.combos[i, ]
+  
+  # subset 
+  focal.relocs <- all.relocs.bind %>%
+    
+    filter(iter == focal.row$iter,
+           indiv == focal.row$indiv,
+           scenario == focal.row$scenario)
+  
+  # calculate movement metrics
+  focal.row$straightness <- straightness(focal.relocs)
+  focal.row$msd <- msd(focal.relocs)
+  focal.row$intensity.use <- intensity_use(focal.relocs)
+  focal.row$sinuosity <- sinuosity(focal.relocs)
+  
+  # bind in
+  all.track.metrics <- rbind(all.track.metrics, focal.row)
+  
+}
+
+# join
+all.passes.bind.4 <- all.track.metrics %>%
+  
+  group_by(iter, scenario) %>%
+  
+  mutate(straightness = mean(straightness),
+         msd = mean(msd),
+         intensity.use = mean(intensity.use),
+         sinuosity = mean(sinuosity)) %>%
+  
+  right_join(all.passes.bind.3)
+
+# examine relationships between passes and each metric
+plot(all.passes.bind.4$straightness, all.passes.bind.4$mean.passes)
+plot(all.passes.bind.4$msd, all.passes.bind.4$mean.passes)
+plot(all.passes.bind.4$intensity.use, all.passes.bind.4$mean.passes)
+plot(all.passes.bind.4$sinuosity, all.passes.bind.4$mean.passes)
+
+plot(all.passes.bind.4$straightness, all.passes.bind.4$perc.bias)
+plot(all.passes.bind.4$msd, all.passes.bind.4$perc.bias)
+plot(all.passes.bind.4$intensity.use, all.passes.bind.4$perc.bias)
+plot(all.passes.bind.4$sinuosity, all.passes.bind.4$perc.bias)
+
+plot(all.passes.bind.4$straightness, all.passes.bind.4$mean.passes)
+plot(all.passes.bind.4$msd, all.passes.bind.4$mean.passes)
+plot(all.passes.bind.4$intensity.use, all.passes.bind.4$mean.passes)
+plot(all.passes.bind.4$sinuosity, all.passes.bind.4$mean.passes)
+
+ggplot(data = all.passes.bind.4,
+       aes(x = straightness,
+           y = mean.passes)) +
+  
+  facet_wrap(~ aspect.ratio,
+             scales = "free") +
+  
+  geom_point() +
+  
+  geom_smooth(method = "lm")
+
+ggplot(data = all.passes.bind.4,
+       aes(x = msd,
+           y = mean.passes)) +
+  
+  facet_wrap(~ aspect.ratio,
+             scales = "free") +
+  
+  geom_point() +
+  
+  geom_smooth(method = "lm")
+
+ggplot(data = all.passes.bind.4,
+       aes(x = intensity.use,
+           y = mean.passes)) +
+  
+  facet_wrap(~ aspect.ratio,
+             scales = "free") +
+  
+  geom_point() +
+  
+  geom_smooth(method = "lm")
+
+ggplot(data = all.passes.bind.4,
+       aes(x = sinuosity,
+           y = mean.passes)) +
+  
+  facet_wrap(~ aspect.ratio,
+             scales = "free") +
+  
+  geom_point() +
+  
+  geom_smooth(method = "lm")
+
+ggplot(data = all.passes.bind.4,
+       aes(x = sinuosity,
+           y = perc.bias)) +
+  
+  facet_wrap(~ aspect.ratio,
+             scales = "free") +
+  
+  geom_point() +
+  
+  geom_smooth(method = "lm")

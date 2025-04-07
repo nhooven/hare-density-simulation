@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 06 Mar 2025
 # Date completed: 25 Mar 2025 
-# Date last modified: 03 Apr 2025 
+# Date last modified: 07 Apr 2025 
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -819,11 +819,50 @@ ggplot(data = sigma.maj.df,
   xlab("Asymptotic variance (major axis; m)")
 
 #_______________________________________________________________________
-# 7. What do real hare data look like? ---- 
+# 7. OU-omega ----
 
-# we'll use a few of the OUF models that we were able to fit to hare data
-# what's really going on here?
+# this model is oscillatory, and perhaps can allow us to model
+# multiple home range centroids
 
 #_______________________________________________________________________
 
+# initial simulations just to see what this looks like
+# initialize a CTMM object for simulation
+ctmm.omega <- ctmm(
+  
+  tau = c(6 %#% "hours", 6 %#% "hours"), 
+  sigma = c(14000, 1000, 0), 
+  #omega = (2 * pi) / 36 %#% "hours",
+  isotropic = FALSE,
+  range = TRUE,
+  #sigma = c(1400,
+  #          100,
+  #          0),
+  mu = c(0, 0)         # mean location
+  
+)
+
+# time
+t.omega <- seq(1, 28 * 24 %#% "hours", length.out = 672)
+
+# simulate
+sim.omega <- simulate(object = ctmm.omega,
+                      t = t.omega,
+                      complete = TRUE)
+
+# plot
+ggplot(sim.omega,
+       aes(x = x,
+           y = y)) +
+  
+  theme_bw() +
+
+  #geom_path(aes(color = timestamp)) +
+  
+  geom_point(size = 0.05) +
+  
+  scale_color_viridis_c() +
+  
+  coord_cartesian(xlim = c(-300, 300),
+                  ylim = c(-300, 300))
 
