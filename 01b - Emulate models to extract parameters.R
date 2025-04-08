@@ -15,8 +15,6 @@
 library(tidyverse)            # data cleaning and manipulation
 library(lubridate)            # work with dates
 library(ctmm)                 # CTSP movement modeling
-library(sf)                   # spatial operations
-library(cowplot)              # multiple plots
 library(glmmTMB)              # regression
 
 #_______________________________________________________________________
@@ -77,6 +75,8 @@ save(mean.model, file = "Derived data/Hares - Emulated models/mean_fit.RData")
 # we'll take 500 draws from each model, making them available for
 # simulation in the next step
 
+# we'll also write these to file so we don't have to have a massive file taking up memory
+
 n.draws <- 500
 
 #_______________________________________________________________________
@@ -100,6 +100,13 @@ for (i in 1:length(all.models)) {
     focal.model.fits[[j]] <- emulate(focal.model,
                                      fast = TRUE)
     
+    # ensure that strange speed values don't get propagated
+    while (speed(focal.model.fits[[j]])$CI[2] > 15) {
+      
+      focal.model.fits[[j]] <- emulate(focal.model,
+                                       fast = TRUE)
+    }
+    
     # focal.params
     focal.params <- data.frame(model = i,
                                draw = j,
@@ -108,12 +115,20 @@ for (i in 1:length(all.models)) {
                                sigma.maj = focal.model.fits[[j]]$sigma@par[1],
                                sigma.min = focal.model.fits[[j]]$sigma@par[2],
                                angle = focal.model.fits[[j]]$sigma@par[3],
-                               speed.low = speed(focal.model.fits[[j]])$CI[1],
-                               speed.est = speed(focal.model.fits[[j]])$CI[2],
-                               speed.hig = speed(focal.model.fits[[j]])$CI[3])
+                               speed.est = speed(focal.model.fits[[j]])$CI[2])
     
     # bind in 
     sampled.model.params <- rbind(sampled.model.params, focal.params)
+    
+    # write to file
+    model.to.write <- focal.model.fits[[j]]
+    
+    save(model.to.write, 
+         file = paste0("Derived data/Hares - Emulated models/Models/",
+                       i,
+                       "/draw_",
+                       j,
+                       ".RData"))
     
   }
   
@@ -312,19 +327,17 @@ speed.reg <- glmmTMB(log(speed.est) ~
                        scale(sigma.maj) +
                        (1 | model),
                      family = gaussian(),
-                data = sampled.model.params %>% filter(speed.est < 15))
+                data = sampled.model.params)
 
 summary(speed.reg)
 
 performance::performance(speed.reg)
 
-# marg R2 of 0.565
+# marg R2 of 0.578
 # cond R2 of 0.966
 
 #_______________________________________________________________________
 # 8. Write to files ----
 #_______________________________________________________________________
-
-save(sampled.model.fits, file = "Derived data/Hares - Emulated models/sampled_fits.RData")
 
 write.csv(sampled.model.params, "Derived data/Hares - Emulated models/sampled_params.csv")
