@@ -4,11 +4,9 @@
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 07 Apr 2025
-# Date completed: 
-# Date last modified: 07 Apr 2025
+# Date completed: 08 Apr 2025
+# Date last modified: 08 Apr 2025
 # R version: 4.4.3
-
-# COMPLETED PRE DATA 07 APR 2025
 
 #_______________________________________________________________________
 # 1. Load in packages ----
@@ -40,8 +38,8 @@ list.post <- list.files(dir.post)
 # error model
 load("E:/Hare project/Data analysis/GPS processing/Derived data/error_model.RData")
 
-# read in .csv 
-(focal.csv <- list.pre[54])
+# read in .csv
+(focal.csv <- list.pre[19])
 
 hare.data <- read.csv(paste0(dir.pre,
                              focal.csv))        
@@ -113,4 +111,4 @@ top.model$sigma
 summary(top.model)
 
 # save to file
-save(top.model, file = "Derived data/Hares - Fitted models/PRE_055.RData")
+save(top.model, file = "Derived data/Hares - Fitted models/PRE_019.RData")
