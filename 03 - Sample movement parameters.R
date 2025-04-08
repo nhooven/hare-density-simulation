@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 25 Mar 2025
-# Date last modified: 03 Apr 2025
+# Date last modified: 08 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -18,385 +18,150 @@ library(mefa4)
 library(ctmm)                 # helper function for unit conversion
 
 #_______________________________________________________________________
-# 2. Define numbers for simulations ----
+# 2. Read in data ----
 #_______________________________________________________________________
-
-# number of iterations
-n.iter <- 500
-
-# total individuals to simulate per iteration
-# camera contacts for Q1
-n.indiv.cam.Q1 <- 50
-
-# additional out of sample collars for Q1
-n.indiv.collar.Q1 <- 10
-
-# high variability camera contacts for Q2
-n.indiv.cam.Q2 <- 10
-
-# high variability additional out of sample collars for Q2
-n.indiv.collar.Q2 <- 10
-
-#_______________________________________________________________________
-# 3. Sample individuals ----
-#_______________________________________________________________________
-# 3a. Q1 camera ----
-#_______________________________________________________________________
-
-indivs.cam.Q1 <- expand.grid(iter = 1:n.iter,
-                             indiv = 1:n.indiv.cam.Q1,
-                             Q = "Q1",
-                             use = "camera")
-
-# add in folds
-indivs.cam.Q1$fold <- case_when(indivs.cam.Q1$iter %in% 1:100 ~ 1,
-                                indivs.cam.Q1$iter %in% 101:200 ~ 2,
-                                indivs.cam.Q1$iter %in% 201:300 ~ 3,
-                                indivs.cam.Q1$iter %in% 301:400 ~ 4,
-                                indivs.cam.Q1$iter %in% 401:500 ~ 5)
-
-#_______________________________________________________________________
-# 3b. Q1 collar ----
-#_______________________________________________________________________
-
-indivs.collar.Q1 <- expand.grid(iter = 1:n.iter,
-                                indiv = 1:n.indiv.collar.Q1,
-                                Q = "Q1",
-                                use = "collar")
-
-# add in folds
-indivs.collar.Q1$fold <- case_when(indivs.collar.Q1$iter %in% 1:100 ~ 1,
-                                   indivs.collar.Q1$iter %in% 101:200 ~ 2,
-                                   indivs.collar.Q1$iter %in% 201:300 ~ 3,
-                                   indivs.collar.Q1$iter %in% 301:400 ~ 4,
-                                   indivs.collar.Q1$iter %in% 401:500 ~ 5)
-
-#_______________________________________________________________________
-# 3c. Q2 camera ----
-#_______________________________________________________________________
-
-indivs.cam.Q2 <- expand.grid(iter = 1:n.iter,
-                             indiv = 1:n.indiv.cam.Q2,
-                             Q = "Q2",
-                             use = "camera")
-
-# add in folds
-indivs.cam.Q2$fold <- case_when(indivs.cam.Q2$iter %in% 1:100 ~ 1,
-                                indivs.cam.Q2$iter %in% 101:200 ~ 2,
-                                indivs.cam.Q2$iter %in% 201:300 ~ 3,
-                                indivs.cam.Q2$iter %in% 301:400 ~ 4,
-                                indivs.cam.Q2$iter %in% 401:500 ~ 5)
-
-#_______________________________________________________________________
-# 3d. Q2 collar ----
-#_______________________________________________________________________
-
-indivs.collar.Q2 <- expand.grid(iter = 1:n.iter,
-                                indiv = 1:n.indiv.collar.Q2,
-                                Q = "Q2",
-                                use = "collar")
-
-# add in folds
-indivs.collar.Q2$fold <- case_when(indivs.collar.Q2$iter %in% 1:100 ~ 1,
-                                   indivs.collar.Q2$iter %in% 101:200 ~ 2,
-                                   indivs.collar.Q2$iter %in% 201:300 ~ 3,
-                                   indivs.collar.Q2$iter %in% 301:400 ~ 4,
-                                   indivs.collar.Q2$iter %in% 401:500 ~ 5)
-
-#_______________________________________________________________________
-# 4. Define distributions of movement parameters ----
-
-# log-normal parameter function
-log_norm_params <- function (
-    
-  vals    # must be a length 2 vector with the desired mean and SD
-  
-) {
-  
-  # median = geometric mean
-  lnorm.med <- log(vals[1])
-  
-  lnorm.mean <- log((vals[1]^2) / sqrt((vals[1]^2) + (vals[2]^2)))
-  
-  lnorm.sd <- sqrt(log(1 + ((vals[2]^2) / (vals[1]^2))))
-  
-  # bind together
-  lnorm.params <- c(lnorm.med, lnorm.mean, lnorm.sd)
-  
-  # return
-  return(lnorm.params)
-  
-}
-
-#_______________________________________________________________________
-# 4a. Home range centroids ----
-
-# here, our definition of population density will be n home range centroids
-# (activity centers, etc.) per a 10-ha area
-
-# is this the most realistic? It's an assumption the SECR uses, and we can 
-# model it pretty intuitively with the mean parameters in ctmm
-
-# each individual will get a random uniform draw within the unit boundary, for each x and y
-
+# 2a. Shapefiles ----
 #_______________________________________________________________________
 
 unit.bound <- st_read(paste0(getwd(), "/Derived data/Shapefiles/unit_bound.shp"))
+outer.bound <- st_read(paste0(getwd(), "/Derived data/Shapefiles/outer_bound.shp"))
+
+st_crs(unit.bound) <- "epsg:32611"
+st_crs(outer.bound) <- "epsg:32611"
 
 # min and max x/y
-coord.min <- as.numeric(st_bbox(unit.bound)[1])
-coord.max <- as.numeric(st_bbox(unit.bound)[3])
-
-# Q1
-indivs.cam.Q1$mean1  <- runif(n = nrow(indivs.cam.Q1), coord.min, coord.max)
-indivs.cam.Q1$mean2  <- runif(n = nrow(indivs.cam.Q1), coord.min, coord.max)
-
-indivs.collar.Q1$mean1 <- runif(n = nrow(indivs.collar.Q1), coord.min, coord.max)
-indivs.collar.Q1$mean2 <- runif(n = nrow(indivs.collar.Q1), coord.min, coord.max)
-
-# Q2
-indivs.cam.Q2$mean1  <- runif(n = nrow(indivs.cam.Q2), coord.min, coord.max)
-indivs.cam.Q2$mean2  <- runif(n = nrow(indivs.cam.Q2), coord.min, coord.max)
-
-indivs.collar.Q2$mean1 <- runif(n = nrow(indivs.collar.Q2), coord.min, coord.max)
-indivs.collar.Q2$mean2 <- runif(n = nrow(indivs.collar.Q2), coord.min, coord.max)
+unit.coord.min <- as.numeric(st_bbox(unit.bound)[1])
+unit.coord.max <- as.numeric(st_bbox(unit.bound)[3])
 
 #_______________________________________________________________________
-# 4b. Tau 1 ----
+# 2b. Models ----
+#_______________________________________________________________________
 
-# position autocorrelation / home range crossing time parameter
+load(file = "Derived data/Hares - Emulated models/sampled_fits.RData")
 
-# geometric mean = 8 hr
-# SDs = 2, 8 hr
+# best approximating mean model is PRE_021
+mean.model.draws <- sampled.model.fits[[20]]
 
-lnorm.tau1.lo <- log_norm_params(c(8 %#% "hours", 2 %#% "hours"))
-lnorm.tau1.hi <- log_norm_params(c(8 %#% "hours", 8 %#% "hours"))
+#_______________________________________________________________________
+# 3. Numbers for simulations ----
+
+# for each question (Q1 and Q2), we'll simulate 1000 tracks (500 each for target and non-target)
+
+# Notation:
+# Question 1 (mean movement model), target individuals: 1T
+# Question 1 (mean movement model), non-target individuals: 1NT
+# Question 2 (all movement models), target individuals: 2T
+# Question 2 (all movement models), non-target individuals: 2NT
 
 #_______________________________________________________________________
 
-# Q1
-indivs.cam.Q1$tau1 <- rlnorm(nrow(indivs.cam.Q1), 
-                             meanlog = lnorm.tau1.lo[1],
-                             sdlog = lnorm.tau1.lo[3])
-
-indivs.collar.Q1$tau1 <- rlnorm(nrow(indivs.collar.Q1), 
-                                meanlog = lnorm.tau1.lo[1],
-                                sdlog = lnorm.tau1.lo[3])
-
-# Q2
-indivs.cam.Q2$tau1 <- rlnorm(nrow(indivs.cam.Q2), 
-                             meanlog = lnorm.tau1.lo[1],
-                             sdlog = lnorm.tau1.lo[3])
-
-indivs.collar.Q2$tau1 <- rlnorm(nrow(indivs.collar.Q2), 
-                                meanlog = lnorm.tau1.lo[1],
-                                sdlog = lnorm.tau1.lo[3])
+n.sim.tracks <- 500
 
 #_______________________________________________________________________
-# 4c. Tau 2 ----
+# 4. Construct dfs of all individuals ----
 
-# geometric mean = 1 hr
-# SDs = 0.25, 1 hr
+# here we'll:
+# (1) Sample home range centroids
+# (2) Sample movement models
 
-lnorm.tau2.lo <- log_norm_params(c(1 %#% "hours", 0.25 %#% "hours"))
-lnorm.tau2.hi <- log_norm_params(c(1 %#% "hours", 1 %#% "hours"))
-
-#_______________________________________________________________________
-
-# Q1
-indivs.cam.Q1$tau2 <- rlnorm(nrow(indivs.cam.Q1), 
-                             meanlog = lnorm.tau2.lo[1],
-                             sdlog = lnorm.tau2.lo[3])
-
-indivs.collar.Q1$tau2 <- rlnorm(nrow(indivs.collar.Q1), 
-                                meanlog = lnorm.tau2.lo[1],
-                                sdlog = lnorm.tau2.lo[3])
-
-# Q2
-indivs.cam.Q2$tau2 <- rlnorm(nrow(indivs.cam.Q2), 
-                             meanlog = lnorm.tau2.hi[1],
-                             sdlog = lnorm.tau2.hi[3])
-
-indivs.collar.Q2$tau2 <- rlnorm(nrow(indivs.collar.Q2), 
-                                meanlog = lnorm.tau2.hi[1],
-                                sdlog = lnorm.tau2.hi[3])
+# remember that for Q1, we'll use only the "mean" movement model
+# and for Q2, it will be a random draw from the full suite
 
 #_______________________________________________________________________
-# 4d. Sigma ----
+# 4a. 1T ----
+#_______________________________________________________________________
 
-# sigma major
-# geometric mean = 5,000 m
-# SDs = 1,750, 5,000 m
+df.1T <- data.frame(question = 1,
+                    target = "T",
+                    indiv = 1:n.sim.tracks,
+                    hrc.x = runif(n.sim.tracks, unit.coord.min, unit.coord.max),
+                    hrc.y = runif(n.sim.tracks, unit.coord.min, unit.coord.max),
+                    angle = runif(n.sim.tracks, - pi / 2, pi / 2),
+                    model = "mean",
+                    draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
 
-lnorm.sigma.maj.lo <- log_norm_params(c(5000, 1750))
-lnorm.sigma.maj.hi <- log_norm_params(c(5000, 5000))
+#_______________________________________________________________________
+# 4b. 1NT ----
 
-# "aspect ratio"
-# synthetic parameter that relates the major to minor axis sigmas
-# these will also be log-normal draws, and then we'll calculate sigma minor
-lnorm.aspect.lo <- log_norm_params(c(7, 1.75))
-lnorm.aspect.hi <- log_norm_params(c(7, 7))
-
-# angle
-# this determine which axis the long dimension of the track aligns with
-# it varies between - pi / 2 and pi / 2
+# here we'll need to do a spatial sample within the area
+sample.1NT <- st_coordinates(st_sample(outer.bound, size = n.sim.tracks))
 
 #_______________________________________________________________________
 
-# sigma major
-# Q1
-indivs.cam.Q1$sigma.maj <- rlnorm(nrow(indivs.cam.Q1), 
-                                  meanlog = lnorm.sigma.maj.lo[1],
-                                  sdlog = lnorm.sigma.maj.lo[3])
-
-indivs.collar.Q1$sigma.maj <- rlnorm(nrow(indivs.collar.Q1), 
-                                     meanlog = lnorm.sigma.maj.lo[1],
-                                     sdlog = lnorm.sigma.maj.lo[3])
-
-# Q2
-indivs.cam.Q2$sigma.maj <- rlnorm(nrow(indivs.cam.Q2), 
-                                  meanlog = lnorm.sigma.maj.hi[1],
-                                  sdlog = lnorm.sigma.maj.hi[3])
-
-indivs.collar.Q2$sigma.maj <- rlnorm(nrow(indivs.collar.Q2), 
-                                     meanlog = lnorm.sigma.maj.hi[1],
-                                     sdlog = lnorm.sigma.maj.hi[3])
-
-# aspect ratio
-# Q1
-indivs.cam.Q1$aspect <- rlnorm(nrow(indivs.cam.Q1), 
-                               meanlog = lnorm.aspect.lo[1],
-                               sdlog = lnorm.aspect.lo[3])
-
-indivs.collar.Q1$aspect <- rlnorm(nrow(indivs.collar.Q1), 
-                                  meanlog = lnorm.aspect.lo[1],
-                                  sdlog = lnorm.aspect.lo[3])
-
-# Q2
-indivs.cam.Q2$aspect <- rlnorm(nrow(indivs.cam.Q2), 
-                               meanlog = lnorm.aspect.hi[1],
-                               sdlog = lnorm.aspect.hi[3])
-
-indivs.collar.Q2$aspect <- rlnorm(nrow(indivs.collar.Q2), 
-                                  meanlog = lnorm.aspect.hi[1],
-                                  sdlog = lnorm.aspect.hi[3])
-
-# calculate sigma minor
-indivs.cam.Q1$sigma.min         <- indivs.cam.Q1$sigma.maj / indivs.cam.Q1$aspect
-indivs.collar.Q1$sigma.min      <- indivs.collar.Q1$sigma.maj / indivs.collar.Q1$aspect
-indivs.cam.Q2$sigma.min         <- indivs.cam.Q2$sigma.maj / indivs.cam.Q2$aspect
-indivs.collar.Q2$sigma.min      <- indivs.collar.Q2$sigma.maj / indivs.collar.Q2$aspect
-
-# angle
-indivs.cam.Q1$angle            <- runif(n = nrow(indivs.cam.Q1), -pi / 2, pi /2)
-indivs.collar.Q1$angle         <- runif(n = nrow(indivs.collar.Q1), -pi / 2, pi /2)
-indivs.cam.Q2$angle            <- runif(n = nrow(indivs.cam.Q2), -pi / 2, pi /2)
-indivs.collar.Q2$angle         <- runif(n = nrow(indivs.collar.Q2), -pi / 2, pi /2)
+df.1NT <- data.frame(question = 1,
+                     target = "NT",
+                     indiv = 1:n.sim.tracks,
+                     hrc.x = sample.1NT[ , 1],
+                     hrc.y = sample.1NT[ , 2],
+                     angle = runif(n.sim.tracks, - pi / 2, pi / 2),
+                     model = "mean",
+                     draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
 
 #_______________________________________________________________________
-# 5. Final check ----
+# 4c. 2T ----
+#_______________________________________________________________________
 
-# here we should make absolute certain that Tau2 is never > Tau1
-# a while loop might be necessary here
+df.2T <- data.frame(question = 2,
+                    target = "T",
+                    indiv = 1:n.sim.tracks,
+                    hrc.x = runif(n.sim.tracks, unit.coord.min, unit.coord.max),
+                    hrc.y = runif(n.sim.tracks, unit.coord.min, unit.coord.max),
+                    angle = runif(n.sim.tracks, - pi / 2, pi / 2),
+                    model = sample(1:length(sampled.model.fits), size = n.sim.tracks, replace = TRUE),
+                    draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
+
+#_______________________________________________________________________
+# 4d. 2NT ----
+
+# here we'll need to do a spatial sample within the area
+sample.2NT <- st_coordinates(st_sample(outer.bound, size = n.sim.tracks))
 
 #_______________________________________________________________________
 
-# how many in each?
-sum(indivs.cam.Q1$tau2 > indivs.cam.Q1$tau1)
-sum(indivs.collar.Q1$tau2 > indivs.collar.Q1$tau1)
-sum(indivs.cam.Q2$tau2 > indivs.cam.Q2$tau1)
-sum(indivs.collar.Q2$tau2 > indivs.collar.Q2$tau1)
-
-# replace with a new draw while there are still cases
-fix_tau2 <- function(df) {
-  
-  while (sum(df$tau2 > df$tau1) > 0) {
-    
-    df$tau2[which(df$tau2 > df$tau1)] <- rlnorm(length(df$tau2[which(df$tau2 > df$tau1)]), 
-                                                meanlog = lnorm.tau2.lo[1],
-                                                sdlog = lnorm.tau2.lo[3])
-    
-  } 
-    
-  return(df)
-    
-}
-
-# use function
-indivs.cam.Q1 <- fix_tau2(indivs.cam.Q1)
-indivs.collar.Q1 <- fix_tau2(indivs.collar.Q1)
-indivs.cam.Q2 <- fix_tau2(indivs.cam.Q2)
-indivs.collar.Q2 <- fix_tau2(indivs.collar.Q2)
-
-# did I fix it?
-sum(indivs.cam.Q1$tau2 > indivs.cam.Q1$tau1)
-sum(indivs.collar.Q1$tau2 > indivs.collar.Q1$tau1)
-sum(indivs.cam.Q2$tau2 > indivs.cam.Q2$tau1)
-sum(indivs.collar.Q2$tau2 > indivs.collar.Q2$tau1)
+df.2NT <- data.frame(question = 2,
+                     target = "NT",
+                     indiv = 1:n.sim.tracks,
+                     hrc.x = sample.2NT[ , 1],
+                     hrc.y = sample.2NT[ , 2],
+                     angle = runif(n.sim.tracks, - pi / 2, pi / 2),
+                     model = sample(1:length(sampled.model.fits), size = n.sim.tracks, replace = TRUE),
+                     draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
 
 #_______________________________________________________________________
-# 5b. Examine distributions ----
+# 5. Plot home range centroids ----
 #_______________________________________________________________________
 
-hist(indivs.cam.Q1$tau1)
-hist(indivs.cam.Q1$tau2)
-hist(indivs.cam.Q1$sigma.maj)
-hist(indivs.cam.Q1$sigma.min)
+# bind together
+df.all <- rbind(df.1T, df.1NT, df.2T, df.2NT)
 
-hist(indivs.cam.Q2$tau1)
-hist(indivs.cam.Q2$tau2)
-hist(indivs.cam.Q2$sigma.maj)
-hist(indivs.cam.Q2$sigma.min)
+# promote to spatial to make a nice map
+df.all.sf <- st_as_sf(df.all, coords = c("hrc.x", "hrc.y"), crs = 32611)
 
-#_______________________________________________________________________
-# 7. Simulate a typical track ----
-#_______________________________________________________________________
-
-# simulation duration
-sim.duration.wk <- 4
-
-sim.duration.sec <- sim.duration.wk * 7 * 24 * 60 * 60 
-
-# "sampling rate" for fundamental (i.e., straight line) steps
-sim.samp.rate <- 60
-
-# time steps to simulate on (from, to, by)
-sim.timestep <- seq(1, sim.duration.sec, sim.samp.rate)
-
-typical.track.ctmm <- ctmm(tau = c(2 %#% "hours",             # positional autocorr time
-                                   1 %#% "hours"),            # velocity autocorr time
-                           isotropic = FALSE,                 # anisotropic
-                           sigma = c(5000,                   # variance along major axis
-                                     714,                    # variance along minor axis
-                                     0),                      # angle of axis
-                           mu = c(0,                          # x coord
-                                  0))                         # y coord
-
-# run simulation
-typical.track.sim <- simulate(object = typical.track.ctmm, 
-                              t = sim.timestep,
-                              complete = T)
-
-# plot
-ggplot(data = typical.track.sim) + 
+ggplot() +
   
   theme_bw() +
   
-  geom_path(aes(x = x,
-                y = y,
-                color = timestamp)) +
+  geom_sf(data = outer.bound,
+          fill = NA) +
   
-  scale_color_viridis_c() +
+  geom_sf(data = unit.bound,
+          fill = NA) +
   
-  theme(legend.position = "none",
-        panel.grid = element_blank(),
-        axis.title = element_blank())
+  geom_sf(data = df.all.sf,
+          aes(color = target),
+          size = 0.65) +
+  
+  facet_wrap(~ question) +
+  
+  theme(panel.grid = element_blank(),
+        axis.text = element_blank(),
+        legend.position = "none") +
+  
+  scale_color_manual(values = c("gray",
+                                "purple"))
 
 #_______________________________________________________________________
-# 6. Write to .csvs ----
+# 6. Write to .csv ----
 #_______________________________________________________________________
 
-write.csv(indivs.cam.Q1, paste0(getwd(), "/Derived data/Parameters/camera_lo.csv"))
-write.csv(indivs.collar.Q1, paste0(getwd(), "/Derived data/Parameters/collar_lo.csv"))
-write.csv(indivs.cam.Q2, paste0(getwd(), "/Derived data/Parameters/camera_hi.csv"))
-write.csv(indivs.collar.Q2, paste0(getwd(), "/Derived data/Parameters/collar_hi.csv"))
+write.csv(df.all, "Derived data/Sampled individuals/all_indivs.csv")

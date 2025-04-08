@@ -19,7 +19,7 @@ library(secr)                 # convenient camera array function
 #_______________________________________________________________________
 # 2. Define simulation stage ----
 
-# this will be a 20-ha area centered in the middle of the landscape (i.e., c(0, 0))
+# this will be a 30-ha area centered in the middle of the landscape (i.e., c(0, 0))
 # non-target individual activity centers will be in the outer 10-ha area
 
 #_______________________________________________________________________
@@ -28,7 +28,7 @@ library(secr)                 # convenient camera array function
 unit.centroid <- c(0, 0)
 
 # how many meters per side? (let's make our unit 10 ha)
-m.side.outer <- sqrt(20 * 10000)
+m.side.outer <- sqrt(30 * 10000)
 
 # how many meters to add and subtract?
 m.side.half.outer <- m.side.outer / 2
@@ -104,7 +104,7 @@ st_write(unit.bound.sf,
          layer = "unit_bound.shp",
          append = FALSE)
 
-st_write(unit.bound.sf,
+st_write(outer.bound.sf,
          dsn = paste0(getwd(), "/Derived data/Shapefiles/outer_bound.shp"),
          layer = "outer_bound.shp",
          append = FALSE)
