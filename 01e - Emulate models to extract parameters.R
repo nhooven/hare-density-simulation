@@ -62,6 +62,12 @@ meta.speed <- meta(x = all.models,
                    level = 0.95,
                    sort = TRUE)
 
+# we'll pick one that's as close to the mean as possible
+# looks like PRE_021 is a good approximation
+mean.model <- all.models[[20]]
+
+save(mean.model, file = "Derived data/Hares - Emulated models/mean_fit.RData")
+
 #_______________________________________________________________________
 # 4. Sample possible model fits   ----
 
