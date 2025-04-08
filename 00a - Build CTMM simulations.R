@@ -1,6 +1,6 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 01 - Build CTMM simulations
+# Script: 00a - Build CTMM simulations
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 06 Mar 2025

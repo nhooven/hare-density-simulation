@@ -1,6 +1,6 @@
 # Project: WSU Snowshoe Hare and PCT Project
 # Subproject: Density - movement simulation
-# Script: 01c - Calibrate REMs
+# Script: 00c - Calibrate REMs
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 04 Apr 2025 

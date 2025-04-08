@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 25 Mar 2025
-# Date last modified: 03 Apr 2025
+# Date last modified: 08 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -17,14 +17,50 @@ library(sf)                   # spatial operations
 library(secr)                 # convenient camera array function
 
 #_______________________________________________________________________
-# 2. Define unit boundary ----
+# 2. Define simulation stage ----
 
-# this will be a 10-ha area centered in the middle of the landscape (i.e., c(0, 0))
+# this will be a 20-ha area centered in the middle of the landscape (i.e., c(0, 0))
+# non-target individual activity centers will be in the outer 10-ha area
 
 #_______________________________________________________________________
 
 # centroid
 unit.centroid <- c(0, 0)
+
+# how many meters per side? (let's make our unit 10 ha)
+m.side.outer <- sqrt(20 * 10000)
+
+# how many meters to add and subtract?
+m.side.half.outer <- m.side.outer / 2
+
+# create polygon feature
+stage.bound <- st_polygon(list(cbind(c(unit.centroid[1] - m.side.half.outer, 
+                                       unit.centroid[1] + m.side.half.outer,
+                                       unit.centroid[1] + m.side.half.outer,
+                                       unit.centroid[1] - m.side.half.outer,
+                                       unit.centroid[1] - m.side.half.outer), 
+                                     c(unit.centroid[2] - m.side.half.outer, 
+                                       unit.centroid[2] - m.side.half.outer,
+                                       unit.centroid[2] + m.side.half.outer,
+                                       unit.centroid[2] + m.side.half.outer,
+                                       unit.centroid[2] - m.side.half.outer))))
+
+# assign to sf object
+stage.bound.sf <- st_as_sf(st_sfc(stage.bound))
+
+# plot 
+plot(stage.bound.sf) 
+
+# area
+st_area(stage.bound.sf)
+
+#_______________________________________________________________________
+# 3. Define unit boundary ----
+
+# this will be a 10-ha area centered in the middle of the landscape (i.e., c(0, 0))
+# cut out of the stage
+
+#_______________________________________________________________________
 
 # how many meters per side? (let's make our unit 10 ha)
 m.side <- sqrt(10 * 10000)
@@ -48,19 +84,33 @@ unit.bound <- st_polygon(list(cbind(c(unit.centroid[1] - m.side.half,
 unit.bound.sf <- st_as_sf(st_sfc(unit.bound))
 
 # plot 
-plot(unit.bound.sf) 
+plot(st_geometry(stage.bound.sf))
+plot(st_geometry(unit.bound.sf), add = T) 
 
 # area
-st_area(unit.bound.sf)
+st_area(stage.bound.sf) - st_area(unit.bound.sf)
 
-# write to shapefile
+# clip out unit
+outer.bound.sf <- st_sym_difference(unit.bound.sf, stage.bound.sf)
+
+plot(st_geometry(outer.bound.sf), col = "blue")
+plot(st_geometry(unit.bound.sf), col = "green", add = T)
+
+st_area(outer.bound.sf)
+
+# write to shapefiles
 st_write(unit.bound.sf,
          dsn = paste0(getwd(), "/Derived data/Shapefiles/unit_bound.shp"),
          layer = "unit_bound.shp",
          append = FALSE)
 
+st_write(unit.bound.sf,
+         dsn = paste0(getwd(), "/Derived data/Shapefiles/outer_bound.shp"),
+         layer = "outer_bound.shp",
+         append = FALSE)
+
 #_______________________________________________________________________
-# 3. Define viewshed parameters ----
+# 4. Define viewshed parameters ----
 #_______________________________________________________________________
 
 # (assume all cameras face north)
@@ -71,7 +121,7 @@ max.dist <- 3.5
 lens.angle.deg <- 57.3
 
 #_______________________________________________________________________
-# 4. Write function to generate viewsheds ----
+# 5. Write function to generate viewsheds ----
 
 # let's make this a true "pie slice" rather than an approximated triangle
 
@@ -134,9 +184,9 @@ make_viewshed <- function(cams) {
 }
 
 #_______________________________________________________________________
-# 5. Sample camera locations ----
+# 6. Sample camera locations ----
 #_______________________________________________________________________
-# 5a. Define sampling area ----
+# 6a. Define sampling area ----
 #_______________________________________________________________________
 
 # define 10-ha sampling area
@@ -145,7 +195,7 @@ make_viewshed <- function(cams) {
 dist.adjust <- sqrt(100000) / 2
 
 #_______________________________________________________________________
-# 5b. 9 cameras ----
+# 6b. 9 cameras ----
 #_______________________________________________________________________
 
 # equal spacing between each camera and the sampling area edge
@@ -162,13 +212,13 @@ plot(st_geometry(unit.bound.sf))
 plot(st_geometry(cams.9), add = T)
 
 #_______________________________________________________________________
-# 6. Make viewshed polygons ----
+# 7. Make viewshed polygons ----
 #_______________________________________________________________________
 
 cams.viewsheds <- make_viewshed(cams.9)
 
 #_______________________________________________________________________
-# 7. Plot them ----
+# 8. Plot them ----
 #_______________________________________________________________________
 
 plot(st_geometry(unit.bound.sf))
@@ -180,40 +230,9 @@ st_area(cams.viewsheds)
 (pi * 3.5^2) * (57.3 / 360)
 
 #_______________________________________________________________________
-# 8. Expected detections per unit time ----
-#_______________________________________________________________________
-
-# total viewshed area (m2)
-total.vs.area <- sum(st_area(cams.viewsheds))
-
-# total unit area
-total.unit.area <- m.side^2
-
-# proportion of total
-prop.vs.area <- total.vs.area / total.unit.area
-
-# assume an animal moves a m / min (1440 m/day)
-# this is the number of 1-m2 pixels an animal will use a day
-speed <- 1440
-
-# how many random camera contacts, given the proportion of area covered
-total.contacts <- speed * prop.vs.area
-
-# expected contacts by cam
-(total.contacts.bycam <- total.contacts / 9)
-
-# for each abundance (per day)
-(total.contacts / 9) * 2
-(total.contacts / 9) * 5
-(total.contacts / 9) * 10
-(total.contacts / 9) * 25
-(total.contacts / 9) * 50
-
-#_______________________________________________________________________
-# 8. Write to shapefile ----
+# 9. Write to shapefile ----
 #_______________________________________________________________________
 
 st_write(cams.viewsheds, 
          dsn = paste0(getwd(), "/Derived data/Shapefiles/cams_vs.shp"),
          append = FALSE)
-
