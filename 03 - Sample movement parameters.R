@@ -34,15 +34,6 @@ unit.coord.min <- as.numeric(st_bbox(unit.bound)[1])
 unit.coord.max <- as.numeric(st_bbox(unit.bound)[3])
 
 #_______________________________________________________________________
-# 2b. Models ----
-#_______________________________________________________________________
-
-load(file = "Derived data/Hares - Emulated models/sampled_fits.RData")
-
-# best approximating mean model is PRE_021
-mean.model.draws <- sampled.model.fits[[20]]
-
-#_______________________________________________________________________
 # 3. Numbers for simulations ----
 
 # for each question (Q1 and Q2), we'll simulate 1000 tracks (500 each for target and non-target)
@@ -78,7 +69,7 @@ df.1T <- data.frame(question = 1,
                     hrc.y = runif(n.sim.tracks, unit.coord.min, unit.coord.max),
                     angle = runif(n.sim.tracks, - pi / 2, pi / 2),
                     model = "mean",
-                    draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
+                    draw = sample(1:500, size = n.sim.tracks, replace = TRUE))
 
 #_______________________________________________________________________
 # 4b. 1NT ----
@@ -95,7 +86,7 @@ df.1NT <- data.frame(question = 1,
                      hrc.y = sample.1NT[ , 2],
                      angle = runif(n.sim.tracks, - pi / 2, pi / 2),
                      model = "mean",
-                     draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
+                     draw = sample(1:500, size = n.sim.tracks, replace = TRUE))
 
 #_______________________________________________________________________
 # 4c. 2T ----
@@ -107,8 +98,8 @@ df.2T <- data.frame(question = 2,
                     hrc.x = runif(n.sim.tracks, unit.coord.min, unit.coord.max),
                     hrc.y = runif(n.sim.tracks, unit.coord.min, unit.coord.max),
                     angle = runif(n.sim.tracks, - pi / 2, pi / 2),
-                    model = sample(1:length(sampled.model.fits), size = n.sim.tracks, replace = TRUE),
-                    draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
+                    model = sample(1:24, size = n.sim.tracks, replace = TRUE),
+                    draw = sample(1:500, size = n.sim.tracks, replace = TRUE))
 
 #_______________________________________________________________________
 # 4d. 2NT ----
@@ -124,8 +115,8 @@ df.2NT <- data.frame(question = 2,
                      hrc.x = sample.2NT[ , 1],
                      hrc.y = sample.2NT[ , 2],
                      angle = runif(n.sim.tracks, - pi / 2, pi / 2),
-                     model = sample(1:length(sampled.model.fits), size = n.sim.tracks, replace = TRUE),
-                     draw = sample(1:length(mean.model.draws), size = n.sim.tracks, replace = TRUE))
+                     model = sample(1:24, size = n.sim.tracks, replace = TRUE),
+                     draw = sample(1:500, size = n.sim.tracks, replace = TRUE))
 
 #_______________________________________________________________________
 # 5. Plot home range centroids ----
