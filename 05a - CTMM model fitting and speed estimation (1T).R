@@ -237,9 +237,9 @@ ctmm_speeds <- function (df) {
     # bind into df
     all.speeds <- rbind(all.speeds, focal.i)
     
-    # print status message after every 10 iterationd is completed
+    # print status message after every 10 iterations are completed
     # AND write to disk to save what's left of my sanity
-    if (i %% 1 == 0) {
+    if (i %% 10 == 0) {
       
       elapsed.time <- round(as.numeric(difftime(Sys.time(), 
                                                 start.time, 
