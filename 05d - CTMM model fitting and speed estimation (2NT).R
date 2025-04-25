@@ -255,7 +255,7 @@ ctmm_speeds <- function (df) {
                    " mins"))
       
       # write .csv
-      write.csv(all.speeds, file = paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_1T.csv"))
+      write.csv(all.speeds, file = paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2NT.csv"))
       
     }
     
