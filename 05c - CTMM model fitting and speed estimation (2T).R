@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 10 Apr 2025
 # Date completed: 10 Apr 2025
-# Date last modified: 10 Apr 2025
+# Date last modified: 25 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -237,9 +237,11 @@ ctmm_speeds <- function (df) {
     # bind into df
     all.speeds <- rbind(all.speeds, focal.i)
     
-    # print status message after every 10 iterationd is completed
-    # AND write to disk to save what's left of my sanity
-    if (i %% 1 == 0) {
+    # write to disk to save what's left of my sanity
+    write.csv(all.speeds, file = paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T.csv"))
+    
+    # print status message after every 10 iterations are completed
+    if (i %% 10 == 0) {
       
       elapsed.time <- round(as.numeric(difftime(Sys.time(), 
                                                 start.time, 
@@ -253,9 +255,6 @@ ctmm_speeds <- function (df) {
                    " - ", 
                    elapsed.time, 
                    " mins"))
-      
-      # write .csv
-      write.csv(all.speeds, file = paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_1T.csv"))
       
     }
     
@@ -277,6 +276,8 @@ ctmm_speeds <- function (df) {
 
 ctmm.speeds <- ctmm_speeds(df = all.tracks)
 
+# indiv 299 didn't work for some reason
+
 #_______________________________________________________________________
 # 6. Write to .csv ----
 
@@ -285,3 +286,167 @@ ctmm.speeds <- ctmm_speeds(df = all.tracks)
 #_______________________________________________________________________
 
 write.csv(ctmm.speeds, file = paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T.csv"))
+
+#_______________________________________________________________________
+# 7. Second group ----
+
+# for some reason the function didn't like indiv 299
+
+ctmm_speeds_2 <- function (
+    
+  df,
+  output
+  
+  ) {
+  
+  # start time
+  start.time <- Sys.time()
+  
+  # iterate over individual
+  all.speeds <- data.frame()
+  
+  for (i in 1:length(unique(df$indiv))) {
+    
+    focal.indiv <- df %>% filter(indiv == unique(df$indiv)[i])
+    
+    # iterate over scenarios
+    focal.i <- data.frame()
+    
+    for (j in 1:nrow(scenarios)) {
+      
+      focal.scenario <- scenarios %>% slice(j)
+      
+      # create a track
+      focal.track <- create_track(focal.indiv)
+      
+      # TRACK DURATION
+      if (focal.scenario$duration == 2) {
+        
+        focal.track <- focal.track %>% slice(1:(n() / 2))
+        
+      }
+      
+      # FIX RATE
+      if (focal.scenario$rate %in% c(1, 4)) {
+        
+        focal.track <- focal.track %>%
+          
+          track_resample(period = hours(focal.scenario$rate),
+                         tolerance = minutes(0))  
+        
+      }
+      
+      # FIX SUCCESS
+      if (focal.scenario$success == 60) {
+        
+        focal.track <- focal.track %>%
+          
+          slice(sample(1:nrow(focal.track), size = round(nrow(focal.track) * 0.6))) %>%
+          
+          arrange(t_)
+        
+      }
+      
+      # create telemetry object
+      focal.telem <- prep_telem(focal.track)
+      
+      # guesstimate parameters
+      guess.param <- variogram.fit(variogram(focal.telem), 
+                                   name = "guess.param", 
+                                   interactive = FALSE)
+      
+      # model selection
+      fitted.mods <- ctmm.select(focal.telem,
+                                 CTMM = guess.param,
+                                 verbose = TRUE)
+      
+      # speed estimation (stationary from a correlated velo model)
+      # this is only valid if the top model contains Tau2
+      if (names(fitted.mods)[1] %in% c("OUF",
+                                       "OUF anisotropic",
+                                       "OUf",
+                                       "OUf anisotropic",
+                                       "IOU")) {
+        
+        # mean speed of Gaussian movement process
+        speed.mean <- ctmm::speed(fitted.mods[[1]], 
+                                  units = FALSE)
+        
+        # store in df
+        focal.i.scenario <- data.frame(indiv = i,
+                                       scenario = j,
+                                       top.model = names(fitted.mods)[1],
+                                       speed.mean.lo = speed.mean$CI[1],
+                                       speed.mean.est = speed.mean$CI[2],
+                                       speed.mean.hi = speed.mean$CI[3]) 
+        
+      } else {
+        
+        # store in df
+        focal.i.scenario <- data.frame(indiv = i,
+                                       scenario = j,
+                                       top.model = names(fitted.mods)[1],
+                                       speed.mean.lo = NA,
+                                       speed.mean.est = NA,
+                                       speed.mean.hi = NA) 
+        
+      }
+      
+      # SLD speed estimation
+      focal.i.scenario$sld.speed.mean.lo <- mean(speed(focal.track), na.rm = T) - (sd(speed(focal.track), na.rm = T) / sqrt(nrow(focal.track)))
+      focal.i.scenario$sld.speed.mean.est <- mean(speed(focal.track), na.rm = T)
+      focal.i.scenario$sld.speed.mean.hi <- mean(speed(focal.track), na.rm = T) + (sd(speed(focal.track), na.rm = T) / sqrt(nrow(focal.track)))
+      
+      # bind into df
+      focal.i <- rbind(focal.i, focal.i.scenario)
+      
+    }
+    
+    # bind into df
+    all.speeds <- rbind(all.speeds, focal.i)
+    
+    # write to disk to save what's left of my sanity
+    write.csv(all.speeds, file = output)
+    
+    # print status message after every 10 iterations are completed
+    if (i %% 10 == 0) {
+      
+      elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                                start.time, 
+                                                units = "mins")), 
+                            digits = 1)
+      
+      print(paste0("Completed individual ", 
+                   i, 
+                   " of ", 
+                   length(unique(df$indiv)), 
+                   " - ", 
+                   elapsed.time, 
+                   " mins"))
+      
+    }
+    
+  }
+  
+  return(all.speeds)
+  
+}
+
+#_______________________________________________________________________
+
+ctmm.speeds.2 <- ctmm_speeds_2(all.tracks %>% filter(indiv %in% c(299:500)),
+                               paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T_2.csv"))
+
+# change indiv names
+length(unique(ctmm.speeds.2$indiv))
+
+length(299:500)
+
+# here we'll need to add 298 to each number
+ctmm.speeds.2.corrected <- ctmm.speeds.2 %>%
+  
+  mutate(indiv = indiv + 298)
+
+# write to file
+write.csv(ctmm.speeds.2.corrected, 
+          file = paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T_2.csv"))

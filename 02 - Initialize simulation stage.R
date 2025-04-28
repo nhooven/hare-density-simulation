@@ -20,14 +20,14 @@ library(secr)                 # convenient camera array function
 # 2. Define simulation stage ----
 
 # this will be a 30-ha area centered in the middle of the landscape (i.e., c(0, 0))
-# non-target individual activity centers will be in the outer 10-ha area
+# non-target individual activity centers will be in the outer 20-ha area
 
 #_______________________________________________________________________
 
 # centroid
 unit.centroid <- c(0, 0)
 
-# how many meters per side? (let's make our unit 10 ha)
+# how many meters per side?
 m.side.outer <- sqrt(30 * 10000)
 
 # how many meters to add and subtract?
