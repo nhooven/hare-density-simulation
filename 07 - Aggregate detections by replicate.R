@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 28 Apr 2025
 # Date completed: 28 Apr 2025
-# Date last modified: 28 Apr 2025
+# Date last modified: 29 Apr 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -31,6 +31,7 @@ library(tidyverse)            # data cleaning and manipulation
 # individuals for subsetting
 indivs.1 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/contacts_1.csv"))
 indivs.2 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/contacts_2.csv"))
+indivs.3 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/contacts_3.csv"))
 
 # camera contacts (tallied points + passes for all 500 indivs)
 contacts.1T <- read.csv(paste0(getwd(), "/Derived data/Sampled - Camera contacts/contacts_1T.csv"))
@@ -51,9 +52,19 @@ aggregate_contacts <- function (q = 1) {
     contacts.T <- contacts.1T
     contacts.NT <- contacts.1NT
     
-  } else {
+  } 
+  
+  if (q == 2) {
     
     indivs <- indivs.2
+    contacts.T <- contacts.2T
+    contacts.NT <- contacts.2NT
+    
+  }
+  
+  if (q == 3) {
+    
+    indivs <- indivs.3
     contacts.T <- contacts.2T
     contacts.NT <- contacts.2NT
     
@@ -115,6 +126,7 @@ aggregate_contacts <- function (q = 1) {
 
 agg.contacts.1 <- aggregate_contacts(q = 1)
 agg.contacts.2 <- aggregate_contacts(q = 2)
+agg.contacts.3 <- aggregate_contacts(q = 3)
 
 #_______________________________________________________________________
 # 6. Plots for sanity check ----
@@ -162,3 +174,4 @@ ggplot(data = agg.contacts.2,
 
 write.csv(agg.contacts.1, file = paste0(getwd(), "/Derived data/Aggregated contacts/agg_contacts_1.csv"))
 write.csv(agg.contacts.2, file = paste0(getwd(), "/Derived data/Aggregated contacts/agg_contacts_2.csv"))
+write.csv(agg.contacts.3, file = paste0(getwd(), "/Derived data/Aggregated contacts/agg_contacts_3.csv"))
