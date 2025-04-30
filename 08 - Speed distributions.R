@@ -145,6 +145,7 @@ speed.array.2NT <- speed_array(speeds.2NT)
 
 collared.1 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/collared_1.csv"))
 collared.2 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/collared_2.csv"))
+collared.3 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/collared_3.csv"))
 
 #_______________________________________________________________________
 # 5b. Define function ----
@@ -165,11 +166,19 @@ pooled_speeds <- function (speed.array.T,
     
     collared <- collared.1
     
-  } else {
+  } 
+  
+  if (q == 2) {
     
     collared <- collared.2
     
-  }
+  } 
+  
+  if (q == 3) {
+    
+    collared <- collared.3
+    
+  } 
   
   # define blank array
   all.pooled <- array(data = NA,
@@ -218,6 +227,7 @@ pooled_speeds <- function (speed.array.T,
 
 pooled.speeds.1 <- pooled_speeds(speed.array.1T, speed.array.1NT, q = 1)
 pooled.speeds.2 <- pooled_speeds(speed.array.2T, speed.array.2NT, q = 2)
+pooled.speeds.3 <- pooled_speeds(speed.array.2T, speed.array.2NT, q = 3)
 
 #_______________________________________________________________________
 # 6. Convert from m/s to km/day ----
@@ -226,6 +236,7 @@ pooled.speeds.2 <- pooled_speeds(speed.array.2T, speed.array.2NT, q = 2)
 # conversion factor is 1000 / 86400 ~ 0.0115574
 pooled.speeds.1.day <- pooled.speeds.1 / (1000 / 86400)
 pooled.speeds.2.day <- pooled.speeds.2 / (1000 / 86400)
+pooled.speeds.3.day <- pooled.speeds.3 / (1000 / 86400)
 
 #_______________________________________________________________________
 # 7. Write to file ----
@@ -233,3 +244,4 @@ pooled.speeds.2.day <- pooled.speeds.2 / (1000 / 86400)
 
 save(pooled.speeds.1.day, file = paste0(getwd(), "/Derived data/Speed distributions/speeds_1.RData"))
 save(pooled.speeds.2.day, file = paste0(getwd(), "/Derived data/Speed distributions/speeds_2.RData"))
+save(pooled.speeds.3.day, file = paste0(getwd(), "/Derived data/Speed distributions/speeds_3.RData"))

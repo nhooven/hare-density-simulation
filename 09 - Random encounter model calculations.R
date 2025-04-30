@@ -42,10 +42,12 @@ library(tidyverse)            # data cleaning and manipulation
 # aggregated camera contacts
 contacts.1 <- read.csv("Derived data/Aggregated contacts/agg_contacts_1.csv")
 contacts.2 <- read.csv("Derived data/Aggregated contacts/agg_contacts_2.csv")
+contacts.3 <- read.csv("Derived data/Aggregated contacts/agg_contacts_3.csv")
 
 # speeds
 load("Derived data/Speed distributions/speeds_1.RData")
 load("Derived data/Speed distributions/speeds_2.RData")
+load("Derived data/Speed distributions/speeds_3.RData")
 
 #_______________________________________________________________________
 # 4. Define function ----
@@ -178,6 +180,7 @@ boot_rem <- function (contacts,
 
 boot.rem.1 <- boot_rem(contacts.1, pooled.speeds.1.day, n.iter = 1000)
 boot.rem.2 <- boot_rem(contacts.2, pooled.speeds.2.day, n.iter = 1000)
+boot.rem.3 <- boot_rem(contacts.2, pooled.speeds.3.day, n.iter = 1000)
 
 #_______________________________________________________________________
 # 6. Write files ----
@@ -185,3 +188,4 @@ boot.rem.2 <- boot_rem(contacts.2, pooled.speeds.2.day, n.iter = 1000)
 
 write.csv(boot.rem.1, paste0(getwd(), "/Derived data/REM results/rem_1.csv"))
 write.csv(boot.rem.2, paste0(getwd(), "/Derived data/REM results/rem_2.csv"))
+write.csv(boot.rem.3, paste0(getwd(), "/Derived data/REM results/rem_3.csv"))
