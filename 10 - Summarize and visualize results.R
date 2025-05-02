@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 29 Apr 2025
 # Date completed: 30 Apr 2025
-# Date last modified: 29 Apr 2025
+# Date last modified: 02 May 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -20,6 +20,7 @@ library(tidyverse)            # data cleaning and manipulation
 
 rem.1 <- read.csv("Derived data/REM results/rem_1.csv")
 rem.2 <- read.csv("Derived data/REM results/rem_2.csv")
+rem.3 <- read.csv("Derived data/REM results/rem_3.csv")
 
 #_______________________________________________________________________
 # 3. Calculate bias metrics ----
@@ -40,6 +41,14 @@ rem.1 <- rem.1 %>%
                          0))
 
 rem.2 <- rem.2 %>%
+  
+  mutate(perc.bias = ((mean.REM.D - true.D) / true.D * 100),
+         abs.perc.bias = abs((mean.REM.D - true.D) / true.D * 100),
+         ci.cov = ifelse(true.D >= l95.REM.D & true.D <= u95.REM.D,
+                         1,
+                         0))
+
+rem.3 <- rem.3 %>%
   
   mutate(perc.bias = ((mean.REM.D - true.D) / true.D * 100),
          abs.perc.bias = abs((mean.REM.D - true.D) / true.D * 100),
@@ -90,6 +99,28 @@ rem.1 <- rem.1 %>%
                       levels = c("4", "2")))
     
 rem.2 <- rem.2 %>%
+  
+  mutate(
+    
+    # density as factor
+    true.D = factor(true.D),
+    
+    # fix rate
+    fix.rate = case_when(scenario %in% 1:4 ~ "0.5",
+                         scenario %in% 5:8 ~ "1",
+                         scenario %in% 9:12 ~ "4"),
+    
+    # fix success
+    fix.success = factor(case_when(scenario %in% c(1, 2, 5, 6, 9, 10) ~ "100",
+                                   scenario %in% c(3, 4, 7, 8, 11, 12) ~ "60"),
+                         levels = c("100", "60")),
+    
+    # tracking duration
+    duration = factor(case_when(scenario %in% c(1, 3, 5, 7, 9, 11) ~ "4",
+                                scenario %in% c(2, 4, 6, 8, 10, 12) ~ "2"),
+                      levels = c("4", "2")))
+
+rem.3 <- rem.3 %>%
   
   mutate(
     
@@ -261,6 +292,7 @@ boot_perform <- function (df,
 
 boot.bias.1 <- boot_perform(rem.1, "bias")
 boot.bias.2 <- boot_perform(rem.2, "bias")
+boot.bias.3 <- boot_perform(rem.3, "bias")
 
 #_______________________________________________________________________
 # 5b. Precision (coefficient of variation) ----
@@ -268,6 +300,7 @@ boot.bias.2 <- boot_perform(rem.2, "bias")
 
 boot.precis.1 <- boot_perform(rem.1, "precision")
 boot.precis.2 <- boot_perform(rem.2, "precision")
+boot.precis.3 <- boot_perform(rem.3, "precision")
 
 #_______________________________________________________________________
 # 5c. Coverage (95% confidence interval coverage) ----
@@ -275,6 +308,7 @@ boot.precis.2 <- boot_perform(rem.2, "precision")
 
 boot.cov.1 <- boot_perform(rem.1, "coverage")
 boot.cov.2 <- boot_perform(rem.2, "coverage")
+boot.cov.3 <- boot_perform(rem.3, "coverage")
 
 #_______________________________________________________________________
 # 6. Visualize performance ----
@@ -425,6 +459,76 @@ ggplot(data = rem.2) +
 
 # 632 x 244
 
+# Q3
+ggplot(data = rem.3) +
+  
+  theme_bw() +
+  
+  # each density as columns, duration as rows
+  # the nested function is neat!
+  ggh4x::facet_nested(duration + fix.success ~ true.D,
+                      scales = "free_y",
+                      labeller = labeller(true.D = as_labeller(c("0.4" = "D = 0.4",
+                                                                 "0.8" = "D = 0.8",
+                                                                 "1.6" = "D = 1.6",
+                                                                 "3.2" = "D = 3.2")),
+                                          duration = as_labeller(c("4" = "4 weeks",
+                                                                   "2" = "2 weeks")),
+                                          fix.success = as_labeller(c("100" = "100%",
+                                                                      "60" = "60%")))) +
+  
+  # CIs
+  geom_errorbarh(data = boot.bias.3,
+                 aes(y = interaction(fix.rate, fix.success),
+                     xmin = l95.metric,
+                     xmax = u95.metric,
+                     color = fix.rate),
+                 linewidth = 1.25,
+                 height = 0) +
+  
+  # means
+  geom_point(data = boot.bias.3,
+             aes(x = mean.metric,
+                 y = interaction(fix.rate, fix.success),
+                 shape = fix.success,
+                 size = fix.success,
+                 fill = fix.rate)) +
+  
+  # theme arguments
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "none",
+        panel.spacing = unit(0, "lines"),
+        strip.text.x = element_text(hjust = 0.01,
+                                    face = "bold",
+                                    size = 8),
+        strip.text.y = element_text(hjust = 0.01,
+                                    size = 8),
+        strip.background = element_rect(fill = "white"),
+        axis.text = element_text(size = 7,
+                                 color = "black"),
+        axis.title = element_text(size = 10)) +
+  
+  # labels
+  xlab("|Percent bias|") +
+  ylab("Fix rate (h)") +
+  
+  # shapes, sizes, and colors
+  scale_shape_manual(values = c(21, 22)) +
+  scale_size_manual(values = c(1.35, 1.35)) +
+  scale_color_manual(values = c("gold4", "gold3", "gold2")) +
+  scale_fill_manual(values = c("gold4", "gold3", "gold2")) +
+  
+  # reverse the y axis
+  scale_y_discrete(limits = rev,
+                   labels = c(rep(c("4", "1", "0.5"), 
+                                  times = 4))) +
+  
+  # sensible breaks
+  scale_x_continuous(breaks = c(20, 30, 40))
+
+# 632 x 244
+
 #_______________________________________________________________________
 # 6b. Precision ----
 #_______________________________________________________________________
@@ -565,6 +669,73 @@ ggplot(data = rem.2) +
                                   times = 4))) +
   
   scale_x_continuous(breaks = seq(0, 0.335, 0.005))
+
+# Q3
+ggplot(data = rem.3) +
+  
+  theme_bw() +
+  
+  # each density as columns, duration as rows
+  # the nested function is neat!
+  ggh4x::facet_nested(duration + fix.success ~ true.D,
+                      scales = "free",    # free scales here
+                      labeller = labeller(true.D = as_labeller(c("0.4" = "D = 0.4",
+                                                                 "0.8" = "D = 0.8",
+                                                                 "1.6" = "D = 1.6",
+                                                                 "3.2" = "D = 3.2")),
+                                          duration = as_labeller(c("4" = "4 weeks",
+                                                                   "2" = "2 weeks")),
+                                          fix.success = as_labeller(c("100" = "100%",
+                                                                      "60" = "60%")))) +
+  
+  # CIs
+  geom_errorbarh(data = boot.precis.3,
+                 aes(y = interaction(fix.rate, fix.success),
+                     xmin = l95.metric,
+                     xmax = u95.metric,
+                     color = fix.rate),
+                 linewidth = 1.25,
+                 height = 0) +
+  
+  # means
+  geom_point(data = boot.precis.3,
+             aes(x = mean.metric,
+                 y = interaction(fix.rate, fix.success),
+                 shape = fix.success,
+                 size = fix.success,
+                 fill = fix.rate)) +
+  
+  # theme arguments
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "none",
+        panel.spacing = unit(0, "lines"),
+        strip.text.x = element_text(hjust = 0.01,
+                                    face = "bold",
+                                    size = 8),
+        strip.text.y = element_text(hjust = 0.01,
+                                    size = 8),
+        strip.background = element_rect(fill = "white"),
+        axis.text = element_text(size = 7,
+                                 color = "black"),
+        axis.title = element_text(size = 10)) +
+  
+  # labels
+  xlab("Coefficient of variation") +
+  ylab("Fix rate (h)") +
+  
+  # shapes, sizes, and colors
+  scale_shape_manual(values = c(21, 22)) +
+  scale_size_manual(values = c(1.35, 1.35)) +
+  scale_color_manual(values = c("gold4", "gold3", "gold2")) +
+  scale_fill_manual(values = c("gold4", "gold3", "gold2")) +
+  
+  # reverse the y axis
+  scale_y_discrete(limits = rev,
+                   labels = c(rep(c("4", "1", "0.5"), 
+                                  times = 4))) +
+  
+  scale_x_continuous(breaks = seq(0, 0.340, 0.005)[-53])
 
 
 # 632 x 244
@@ -710,6 +881,71 @@ ggplot(data = rem.2) +
   
   scale_x_continuous(breaks = c(0.45, 0.55, 0.65, 0.75, 0.85))
 
+# Q3
+ggplot(data = rem.3) +
+  
+  theme_bw() +
+  
+  # each density as columns, duration as rows
+  # the nested function is neat!
+  ggh4x::facet_nested(duration + fix.success ~ true.D,
+                      scales = "free_y",
+                      labeller = labeller(true.D = as_labeller(c("0.4" = "D = 0.4",
+                                                                 "0.8" = "D = 0.8",
+                                                                 "1.6" = "D = 1.6",
+                                                                 "3.2" = "D = 3.2")),
+                                          duration = as_labeller(c("4" = "4 weeks",
+                                                                   "2" = "2 weeks")),
+                                          fix.success = as_labeller(c("100" = "100%",
+                                                                      "60" = "60%")))) +
+  
+  # CIs
+  geom_errorbarh(data = boot.cov.3,
+                 aes(y = interaction(fix.rate, fix.success),
+                     xmin = l95.metric,
+                     xmax = u95.metric,
+                     color = fix.rate),
+                 linewidth = 1.25,
+                 height = 0) +
+  
+  # means
+  geom_point(data = boot.cov.3,
+             aes(x = mean.metric,
+                 y = interaction(fix.rate, fix.success),
+                 shape = fix.success,
+                 size = fix.success,
+                 fill = fix.rate)) +
+  
+  # theme arguments
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "none",
+        panel.spacing = unit(0, "lines"),
+        strip.text.x = element_text(hjust = 0.01,
+                                    face = "bold",
+                                    size = 8),
+        strip.text.y = element_text(hjust = 0.01,
+                                    size = 8),
+        strip.background = element_rect(fill = "white"),
+        axis.text = element_text(size = 7,
+                                 color = "black"),
+        axis.title = element_text(size = 10)) +
+  
+  # labels
+  xlab("Proportion of 95% CIs that include true value") +
+  ylab("Fix rate (h)") +
+  
+  # shapes, sizes, and colors
+  scale_shape_manual(values = c(21, 22)) +
+  scale_size_manual(values = c(1.35, 1.35)) +
+  scale_color_manual(values = c("gold4", "gold3", "gold2")) +
+  scale_fill_manual(values = c("gold4", "gold3", "gold2")) +
+  
+  # reverse the y axis
+  scale_y_discrete(limits = rev,
+                   labels = c(rep(c("4", "1", "0.5"), 
+                                  times = 4)))
+
 #_______________________________________________________________________
 # 7. Write tables ----
 #_______________________________________________________________________
@@ -720,4 +956,4 @@ ggplot(data = rem.2) +
 # 8. Save RData ----
 #_______________________________________________________________________
 
-save.image(file = paste0(getwd(), "/Derived data/Plot files/04_30_2025.RData"))
+save.image(file = paste0(getwd(), "/Derived data/Plot files/05_02_2025.RData"))
