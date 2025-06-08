@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 06 May 2025
 # Date completed: 06 May 2025
-# Date last modified: 06 May 2025
+# Date last modified: 08 Jun 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -31,7 +31,7 @@ ggplot(data = typical.df,
   theme_bw() +
   
   geom_line(linewidth = 3,
-            color = "#005a32") +
+            color = "purple3") +
   
   theme(panel.grid = element_blank(),
         axis.title = element_blank(),
@@ -75,6 +75,7 @@ ggplot(data = full.df,
 # 3. Evaluation metrics ----
 
 library(cowplot)
+library(shades)
 
 #_______________________________________________________________________
 
@@ -112,7 +113,10 @@ ggplot(data = data.frame(y = 1:3,
                                 expression(paste("True ", italic("D"))), 
                                 "overestimated")) +
   
-  scale_fill_brewer(palette = "RdPu") -> bias.plot
+  scale_fill_manual(values = saturation("purple3",
+                                        c(0.4, 
+                                          0.6, 
+                                          1.0))) -> bias.plot
 
 # precision
 ggplot(data = data.frame(y = 1:3,
@@ -137,9 +141,12 @@ ggplot(data = data.frame(y = 1:3,
   coord_cartesian(xlim = c(0.1, 0.9)) +
   
   scale_x_continuous(breaks = c(0.2, 0.8),
-                     labels = c("less variation", "more variation")) +
+                     labels = c("less uncertainty", "more uncertainty")) +
   
-  scale_fill_brewer(palette = "RdPu") -> precis.plot
+  scale_fill_manual(values = saturation("purple3",
+                                        c(0.4, 
+                                          0.6, 
+                                          1.0))) -> precis.plot
 
 # coverage
 ggplot(data = data.frame(y = 1:3,
@@ -166,6 +173,7 @@ ggplot(data = data.frame(y = 1:3,
   
   geom_point(aes(fill = as.factor(y),
                  alpha = as.factor(y)),
+             color = "black",
              shape = 21,
              size = 4,
              stroke = 1.4) +
@@ -191,9 +199,15 @@ ggplot(data = data.frame(y = 1:3,
                                     4, 
                                     1)) +
   
-  scale_color_brewer(palette = "RdPu") +
+  scale_color_manual(values = saturation("purple3",
+                                         c(0.4, 
+                                           0.6, 
+                                           1.0))) +
   
-  scale_fill_brewer(palette = "RdPu") +
+  scale_fill_manual(values = saturation("purple3",
+                                        c(0.4, 
+                                          0.6, 
+                                          1.0))) +
   
   scale_alpha_manual(values = c(1.0, 1.0, 0.25)) -> cov.plot
 
@@ -201,7 +215,7 @@ ggplot(data = data.frame(y = 1:3,
 plot_grid(bias.plot, precis.plot, cov.plot,
           nrow = 3)
 
-# 510 x 480
+# 441 x 457
 
 #_______________________________________________________________________
 # 4. Track resampling ----
