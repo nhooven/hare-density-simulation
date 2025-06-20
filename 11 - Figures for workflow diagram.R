@@ -269,7 +269,7 @@ ggplot() +
         axis.title.x = element_blank()) +
   
   ylab("Fix rate") -> plot.rate
-  
+
 # succ
 ggplot() +
   
