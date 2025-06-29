@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 29 Apr 2025
 # Date completed: 30 Apr 2025
-# Date last modified: 02 May 2025
+# Date last modified: 29 Jun 2025
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -13,6 +13,7 @@
 #_______________________________________________________________________
 
 library(tidyverse)            # data cleaning and manipulation
+library(cowplot)
 
 #_______________________________________________________________________
 # 2. Read in data ----
@@ -365,13 +366,12 @@ ggplot(data = rem.1) +
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
         strip.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 7,
-                                 color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("|Percent bias|") +
-  ylab("Fix rate (h)") +
+        axis.text.y = element_text(size = 7,
+                                   color = "black"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -385,9 +385,9 @@ ggplot(data = rem.1) +
                                   times = 4))) +
   
   # sensible breaks
-  scale_x_continuous(breaks = c(20, 30, 40))
-
-# 632 x 244
+  scale_x_continuous(breaks = c(20, 30, 40, 50)) +
+  
+  coord_cartesian(xlim = c(15, 55)) -> bias.Q1.plot
 
 # Q2
 ggplot(data = rem.2) +
@@ -429,19 +429,16 @@ ggplot(data = rem.2) +
         panel.grid.minor.x = element_blank(),
         legend.position = "none",
         panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
-        strip.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 7,
-                                 color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("|Percent bias|") +
-  ylab("Fix rate (h)") +
+        strip.background.y = element_rect(fill = "white"),
+        axis.text.y = element_text(size = 7,
+                                   color = "black"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -455,9 +452,9 @@ ggplot(data = rem.2) +
                                   times = 4))) +
   
   # sensible breaks
-  scale_x_continuous(breaks = c(40, 50))
-
-# 632 x 244
+  scale_x_continuous(breaks = c(20, 30, 40, 50)) +
+  
+  coord_cartesian(xlim = c(15, 55)) -> bias.Q2.plot
 
 # Q3
 ggplot(data = rem.3) +
@@ -499,19 +496,14 @@ ggplot(data = rem.3) +
         panel.grid.minor.x = element_blank(),
         legend.position = "none",
         panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
-        strip.background = element_rect(fill = "white"),
+        strip.background.y = element_rect(fill = "white"),
         axis.text = element_text(size = 7,
                                  color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("|Percent bias|") +
-  ylab("Fix rate (h)") +
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -524,13 +516,23 @@ ggplot(data = rem.3) +
                    labels = c(rep(c("4", "1", "0.5"), 
                                   times = 4))) +
   
-  # sensible breaks
-  scale_x_continuous(breaks = c(20, 30, 40))
+  scale_x_continuous(breaks = c(20, 30, 40, 50)) +
+  
+  coord_cartesian(xlim = c(15, 55)) -> bias.Q3.plot
 
-# 632 x 244
+# plot together
+plot_grid(bias.Q1.plot, bias.Q2.plot, bias.Q3.plot,
+          nrow = 3,
+          rel_heights = c(1.1, 1, 1.05))
+
+# 572 x 484
 
 #_______________________________________________________________________
 # 6b. Precision ----
+
+# these will be bar charts to better represent the 0-1 (+) nature of CV
+# also the CIs aren't nearly as important
+
 #_______________________________________________________________________
 
 # Q1
@@ -551,22 +553,20 @@ ggplot(data = rem.1) +
                                           fix.success = as_labeller(c("100" = "100%",
                                                                       "60" = "60%")))) +
   
+  # means
+  geom_col(data = boot.precis.1,
+             aes(x = mean.metric,
+                 y = interaction(fix.rate, fix.success),
+                 fill = fix.rate),
+           width = 0.5) +
+  
   # CIs
   geom_errorbarh(data = boot.precis.1,
                  aes(y = interaction(fix.rate, fix.success),
                      xmin = l95.metric,
-                     xmax = u95.metric,
-                     color = fix.rate),
-                 linewidth = 1.25,
+                     xmax = u95.metric),
+                 color = "black",
                  height = 0) +
-  
-  # means
-  geom_point(data = boot.precis.1,
-             aes(x = mean.metric,
-                 y = interaction(fix.rate, fix.success),
-                 shape = fix.success,
-                 size = fix.success,
-                 fill = fix.rate)) +
   
   # theme arguments
   theme(panel.grid.major.y = element_blank(),
@@ -579,13 +579,12 @@ ggplot(data = rem.1) +
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
         strip.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 7,
-                                 color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("Coefficient of variation") +
-  ylab("Fix rate (h)") +
+        axis.text.y = element_text(size = 7,
+                                   color = "black"),
+        axis.text.x = element_blank(),
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt"),
+        axis.ticks.x = element_blank()) +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -599,9 +598,8 @@ ggplot(data = rem.1) +
                                   times = 4))) +
   
   # reasonable breaks
-  scale_x_continuous(breaks = seq(0, 0.35, 0.01)[-20])
+  coord_cartesian(xlim = c(0.05, 0.35)) -> precis.Q1.plot
 
-# 632 x 244
 
 # Q2
 ggplot(data = rem.2) +
@@ -621,41 +619,36 @@ ggplot(data = rem.2) +
                                           fix.success = as_labeller(c("100" = "100%",
                                                                       "60" = "60%")))) +
   
+  # means
+  geom_col(data = boot.precis.2,
+           aes(x = mean.metric,
+               y = interaction(fix.rate, fix.success),
+               fill = fix.rate),
+           width = 0.5) +
+  
   # CIs
   geom_errorbarh(data = boot.precis.2,
                  aes(y = interaction(fix.rate, fix.success),
                      xmin = l95.metric,
-                     xmax = u95.metric,
-                     color = fix.rate),
-                 linewidth = 1.25,
+                     xmax = u95.metric),
+                 color = "black",
                  height = 0) +
-  
-  # means
-  geom_point(data = boot.precis.2,
-             aes(x = mean.metric,
-                 y = interaction(fix.rate, fix.success),
-                 shape = fix.success,
-                 size = fix.success,
-                 fill = fix.rate)) +
   
   # theme arguments
   theme(panel.grid.major.y = element_blank(),
         panel.grid.minor.x = element_blank(),
         legend.position = "none",
         panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
+        strip.text.x = element_blank(),
         strip.background = element_rect(fill = "white"),
         axis.text = element_text(size = 7,
                                  color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("Coefficient of variation") +
-  ylab("Fix rate (h)") +
+        axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -668,7 +661,7 @@ ggplot(data = rem.2) +
                    labels = c(rep(c("4", "1", "0.5"), 
                                   times = 4))) +
   
-  scale_x_continuous(breaks = seq(0, 0.335, 0.005))
+  coord_cartesian(xlim = c(0.05, 0.35)) -> precis.Q2.plot
 
 # Q3
 ggplot(data = rem.3) +
@@ -688,41 +681,34 @@ ggplot(data = rem.3) +
                                           fix.success = as_labeller(c("100" = "100%",
                                                                       "60" = "60%")))) +
   
+  # means
+  geom_col(data = boot.precis.3,
+           aes(x = mean.metric,
+               y = interaction(fix.rate, fix.success),
+               fill = fix.rate),
+           width = 0.5) +
+  
   # CIs
   geom_errorbarh(data = boot.precis.3,
                  aes(y = interaction(fix.rate, fix.success),
                      xmin = l95.metric,
-                     xmax = u95.metric,
-                     color = fix.rate),
-                 linewidth = 1.25,
+                     xmax = u95.metric),
+                 color = "black",
                  height = 0) +
-  
-  # means
-  geom_point(data = boot.precis.3,
-             aes(x = mean.metric,
-                 y = interaction(fix.rate, fix.success),
-                 shape = fix.success,
-                 size = fix.success,
-                 fill = fix.rate)) +
   
   # theme arguments
   theme(panel.grid.major.y = element_blank(),
         panel.grid.minor.x = element_blank(),
         legend.position = "none",
         panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
         strip.background = element_rect(fill = "white"),
         axis.text = element_text(size = 7,
                                  color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("Coefficient of variation") +
-  ylab("Fix rate (h)") +
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -735,15 +721,20 @@ ggplot(data = rem.3) +
                    labels = c(rep(c("4", "1", "0.5"), 
                                   times = 4))) +
   
-  scale_x_continuous(breaks = seq(0, 0.340, 0.005)[-53])
+  coord_cartesian(xlim = c(0.05, 0.35)) -> precis.Q3.plot
 
+# plot together
+plot_grid(precis.Q1.plot, precis.Q2.plot, precis.Q3.plot,
+          nrow = 3,
+          rel_heights = c(1.1, 1, 1.05))
 
-# 632 x 244
+# 572 x 484
 
 #_______________________________________________________________________
 # 6c. Coverage ----
 
 # this is the percent of replicates whose 95% CIs include the true value
+# we'll also visualize this as bar charts
 
 #_______________________________________________________________________
 
@@ -765,22 +756,20 @@ ggplot(data = rem.1) +
                                           fix.success = as_labeller(c("100" = "100%",
                                                                       "60" = "60%")))) +
   
+  # means
+  geom_col(data = boot.cov.1,
+           aes(x = mean.metric,
+               y = interaction(fix.rate, fix.success),
+               fill = fix.rate),
+           width = 0.5) +
+  
   # CIs
   geom_errorbarh(data = boot.cov.1,
                  aes(y = interaction(fix.rate, fix.success),
                      xmin = l95.metric,
-                     xmax = u95.metric,
-                     color = fix.rate),
-                 linewidth = 1.25,
+                     xmax = u95.metric),
+                 color = "black",
                  height = 0) +
-  
-  # means
-  geom_point(data = boot.cov.1,
-             aes(x = mean.metric,
-                 y = interaction(fix.rate, fix.success),
-                 shape = fix.success,
-                 size = fix.success,
-                 fill = fix.rate)) +
   
   # theme arguments
   theme(panel.grid.major.y = element_blank(),
@@ -793,13 +782,13 @@ ggplot(data = rem.1) +
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
         strip.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 7,
+        axis.text.y = element_text(size = 7,
                                  color = "black"),
-        axis.title = element_text(size = 10)) +
+        axis.text.x = element_blank(),
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt"),
+        axis.ticks.x = element_blank()) +
   
-  # labels
-  xlab("Proportion of 95% CIs that include true value") +
-  ylab("Fix rate (h)") +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -810,9 +799,11 @@ ggplot(data = rem.1) +
   # reverse the y axis
   scale_y_discrete(limits = rev,
                    labels = c(rep(c("4", "1", "0.5"), 
-                                  times = 4)))
+                                  times = 4))) +
+  
+  coord_cartesian(xlim = c(0.35, 0.95)) +
+  scale_x_continuous(breaks = c(0.4, 0.6, 0.8)) -> cov.Q1.plot
 
-# 632 x 244
 
 # Q2
 ggplot(data = rem.2) +
@@ -831,46 +822,38 @@ ggplot(data = rem.2) +
                                                                    "2" = "2 weeks")),
                                           fix.success = as_labeller(c("100" = "100%",
                                                                       "60" = "60%")))) +
+  # means
+  geom_col(data = boot.cov.2,
+           aes(x = mean.metric,
+               y = interaction(fix.rate, fix.success),
+               fill = fix.rate),
+           width = 0.5) +
   
   # CIs
   geom_errorbarh(data = boot.cov.2,
                  aes(y = interaction(fix.rate, fix.success),
                      xmin = l95.metric,
-                     xmax = u95.metric,
-                     color = fix.rate),
-                 linewidth = 1.25,
+                     xmax = u95.metric),
+                 color = "black",
                  height = 0) +
-  
-  # means
-  geom_point(data = boot.cov.2,
-             aes(x = mean.metric,
-                 y = interaction(fix.rate, fix.success),
-                 shape = fix.success,
-                 size = fix.success,
-                 fill = fix.rate)) +
   
   # theme arguments
   theme(panel.grid.major.y = element_blank(),
         panel.grid.minor.x = element_blank(),
         legend.position = "none",
         panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
         strip.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 7,
-                                 color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("Proportion of 95% CIs that include true value") +
-  ylab("Fix rate (h)") +
+        axis.text.y = element_text(size = 7,
+                                   color = "black"),
+        axis.text.x = element_blank(),
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt"),
+        axis.ticks.x = element_blank()) +
   
   # shapes, sizes, and colors
-  scale_shape_manual(values = c(21, 22)) +
-  scale_size_manual(values = c(1.35, 1.35)) +
   scale_color_manual(values = c("salmon4", "salmon3", "salmon2")) +
   scale_fill_manual(values = c("salmon4", "salmon3", "salmon2")) +
   
@@ -879,7 +862,8 @@ ggplot(data = rem.2) +
                    labels = c(rep(c("4", "1", "0.5"), 
                                   times = 4))) +
   
-  scale_x_continuous(breaks = c(0.45, 0.55, 0.65, 0.75, 0.85))
+  coord_cartesian(xlim = c(0.35, 0.95)) +
+  scale_x_continuous(breaks = c(0.4, 0.6, 0.8)) -> cov.Q2.plot
 
 # Q3
 ggplot(data = rem.3) +
@@ -899,41 +883,34 @@ ggplot(data = rem.3) +
                                           fix.success = as_labeller(c("100" = "100%",
                                                                       "60" = "60%")))) +
   
+  # means
+  geom_col(data = boot.cov.3,
+           aes(x = mean.metric,
+               y = interaction(fix.rate, fix.success),
+               fill = fix.rate),
+           width = 0.5) +
+  
   # CIs
   geom_errorbarh(data = boot.cov.3,
                  aes(y = interaction(fix.rate, fix.success),
                      xmin = l95.metric,
-                     xmax = u95.metric,
-                     color = fix.rate),
-                 linewidth = 1.25,
+                     xmax = u95.metric),
+                 color = "black",
                  height = 0) +
-  
-  # means
-  geom_point(data = boot.cov.3,
-             aes(x = mean.metric,
-                 y = interaction(fix.rate, fix.success),
-                 shape = fix.success,
-                 size = fix.success,
-                 fill = fix.rate)) +
   
   # theme arguments
   theme(panel.grid.major.y = element_blank(),
         panel.grid.minor.x = element_blank(),
         legend.position = "none",
         panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
         strip.background = element_rect(fill = "white"),
         axis.text = element_text(size = 7,
                                  color = "black"),
-        axis.title = element_text(size = 10)) +
-  
-  # labels
-  xlab("Proportion of 95% CIs that include true value") +
-  ylab("Fix rate (h)") +
+        axis.title = element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
   
   # shapes, sizes, and colors
   scale_shape_manual(values = c(21, 22)) +
@@ -944,16 +921,36 @@ ggplot(data = rem.3) +
   # reverse the y axis
   scale_y_discrete(limits = rev,
                    labels = c(rep(c("4", "1", "0.5"), 
-                                  times = 4)))
+                                  times = 4))) +
+  
+  coord_cartesian(xlim = c(0.35, 0.95)) +
+  scale_x_continuous(breaks = c(0.4, 0.6, 0.8)) -> cov.Q3.plot
+
+# plot together
+plot_grid(cov.Q1.plot, cov.Q2.plot, cov.Q3.plot,
+          nrow = 3,
+          rel_heights = c(1.1, 1, 1.05))
+
+# 572 x 484
 
 #_______________________________________________________________________
 # 7. Write tables ----
 #_______________________________________________________________________
 
-# if necessary for publication
+write.table(boot.bias.1, "clipboard", sep = "\t")
+write.table(boot.bias.2, "clipboard", sep = "\t")
+write.table(boot.bias.3, "clipboard", sep = "\t")
+
+write.table(boot.precis.1, "clipboard", sep = "\t")
+write.table(boot.precis.2, "clipboard", sep = "\t")
+write.table(boot.precis.3, "clipboard", sep = "\t")
+
+write.table(boot.cov.1, "clipboard", sep = "\t")
+write.table(boot.cov.2, "clipboard", sep = "\t")
+write.table(boot.cov.3, "clipboard", sep = "\t")
 
 #_______________________________________________________________________
 # 8. Save RData ----
 #_______________________________________________________________________
 
-save.image(file = paste0(getwd(), "/Derived data/Plot files/05_02_2025.RData"))
+save.image(file = paste0(getwd(), "/Derived data/Plot files/06_29_2025.RData"))
