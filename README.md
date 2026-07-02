@@ -1,4 +1,4 @@
-# Movement simulation for unmarked density estimation
+## Movement simulation for unmarked density estimation
 
 The aim of this project is to evaluate a continuous-time movement modeling approach to estimating animal travel speed (Noonan et al. 2019) in deriving a key input for the
 random encounter model (REM), a popular unmarked density estimator for camera trap detections (Rowcliffe et al. 2008). Our general approach is as follows:
@@ -17,7 +17,7 @@ A preprint describing the results of this work is available at: <https://doi.org
 to conduct this approach on real camera trap data at <https://github.com/nhooven/hare-density-cameras>.
 
 
-# References
+## References
 Calabrese, J. M., C. H. Fleming, and E. Gurarie. 2016. ctmm: an R package for analyzing animal relocation data as a continuous‐time stochastic process. 
 Methods in Ecology and Evolution 7:1124–1132.
 
