@@ -5,15 +5,14 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 25 Mar 2025
 # Date completed: 26 Mar 2025
-# Date last modified: 09 Apr 2025
-# R version: 4.4.3
+# Date last modified: 02 Jul 2026
+# R version: 4.5.2
 
 #_______________________________________________________________________
 # 1. Load in packages ----
 #_______________________________________________________________________
 
 library(tidyverse)            # data cleaning and manipulation
-library(lubridate)            # work with dates
 library(ctmm)                 # CTSP movement modeling
 library(amt)                  # work with animal movement tracks
 library(sf)                   # spatial operations
@@ -23,11 +22,19 @@ library(mefa4)                # %notin%
 # 2. Read in data ----
 #_______________________________________________________________________
 
+# models/model parameters
+model.TV1 <- readRDS("data_derived/Q1_models/tv1.rds")
+model.TV2 <- readRDS("data_derived/Q1_models/tv2.rds")
+model.TV3 <- readRDS("data_derived/Q1_models/tv3.rds")
+
+Q2.params <- readRDS("data_derived/Q2_models/Q2_params.rds")
+
 # sampled individuals
-all.indivs <- read.csv("Derived data/Sampled individuals/all_indivs.csv")
+Q1.indivs <- readRDS("data_derived/sampled_indivs/Q1_indivs.rds")
+Q2.indivs <- readRDS("data_derived/sampled_indivs/Q2_indivs.rds")
 
 # camera viewsheds
-vs <- st_read(paste0(getwd(), "/Derived data/Shapefiles/cams_vs.shp"))
+vs <- st_read(paste0(getwd(), "/data_derived/Shapefiles/cams_vs.shp"))
 
 vs$cam.id <- 1:nrow(vs)
 
@@ -56,11 +63,11 @@ sim.duration.halfhr <- 28 * 24 * 2
 sim.timestep.halfhr <- seq(1, sim.duration.sec, 3600 / 2)
 
 #_______________________________________________________________________
-# 4. Define simulation function ----
+# 4. Simulation functions ----
+#_______________________________________________________________________
+# 4a. sim_tracks_Q1 ----
 
-# the procedure for all 4 data subsets will be the same here
-
-# for each individual, we'll:
+# by individual
 
 # (1) Simulate a "fundamental" track
 # (2) Calculate "true" speeds (total distance / time)
@@ -74,7 +81,10 @@ sim.timestep.halfhr <- seq(1, sim.duration.sec, 3600 / 2)
 
 #_______________________________________________________________________
 
-sim_tracks <- function (df) {
+sim_tracks_Q1 <- function (.df, .ctmm) {
+  
+  # model
+  focal.model <- .ctmm
   
   # define list
   sim.track.list <- list()
@@ -88,189 +98,375 @@ sim_tracks <- function (df) {
   start.time <- Sys.time()
   
   # loop through all individuals
-  for (i in 1:nrow(df)) {
+  for (i in 1:nrow(.df)) {
     
     # subset indiv
-    focal.indiv <- df %>% slice(i)
+    focal.indiv <- .df |> slice(i)
     
-    # extract correct movement model
-    # replace mean model number
-    if (focal.indiv$model == "mean") {
+    # modify movement model 
+    # assign "home range centroid"
+    focal.model$mu <- as.numeric(focal.indiv[ , c("hrc.x", "hrc.y")])
+    
+    # assign angle
+    focal.model$sigma@par[3] <- focal.indiv$angle
+    
+    # remove UERE (assume that all relocations are measured without error)
+    focal.model$UERE <- c(0, 0, 0)
+    
+    # simulate month-long track
+    model.sim <- simulate(object = focal.model, 
+                          t = sim.timestep,
+                          complete = T)
+    
+    # coerce telemetry object to df, then sf
+    telem.df <- data.frame(t = model.sim$t,
+                           x = model.sim$x,
+                           y = model.sim$y,
+                           timestamp = as.POSIXct(model.sim$timestamp))
+    
+    telem.sf <- st_as_sf(telem.df,
+                         coords = c("x", "y"),
+                         crs = "epsg:32611")
+    
+    # tally camera contacts
+    # suppress warnings 
+    st_agr(vs) <- "constant"
+    st_agr(telem.sf) <- "constant"
+    
+    # we'll tally both:
+    
+    # POINTS - total minute-by-minute locations within a camera viewshed
+    cam.contacts.points <- st_intersection(vs, 
+                                           telem.sf) |>
       
-    focal.indiv$model <- 20
+      # drop the geometry
+      st_drop_geometry() |>
       
-    } 
+      # group by camera
+      group_by(cam.id) |>
       
-    load(file = paste0(getwd(),
-                       "/Derived data/Hares - Emulated models/Models/",
-                       focal.indiv$model,
-                       "/draw_",
-                       focal.indiv$draw,
-                       ".RData"))
+      # tally intersections
+      summarize(points = n())
     
-    # rename
-    focal.model <- model.to.write
-    rm(model.to.write)
-  
-  # modify movement model 
-  # assign "home range centroid"
-  focal.model$mu <- as.numeric(focal.indiv[ , c("hrc.x", "hrc.y")])
-  
-  # assign angle
-  focal.model$sigma@par[3] <- focal.indiv$angle
-  
-  # remove UERE (assume that all relocations are measured without error)
-  focal.model$UERE <- c(0, 0, 0)
-  
-  # simulate month-long track
-  model.sim <- simulate(object = focal.model, 
-                        t = sim.timestep,
-                        complete = T)
-  
-  # coerce telemetry object to df, then sf
-  telem.df <- data.frame(t = model.sim$t,
-                         x = model.sim$x,
-                         y = model.sim$y,
-                         timestamp = as.POSIXct(model.sim$timestamp))
-  
-  telem.sf <- st_as_sf(telem.df,
-                       coords = c("x", "y"),
-                       crs = "epsg:32611")
-  
-  # tally camera contacts
-  # suppress warnings 
-  st_agr(vs) <- "constant"
-  st_agr(telem.sf) <- "constant"
-  
-  # we'll tally both:
-  
-  # POINTS - total minute-by-minute locations within a camera viewshed
-  cam.contacts.points <- st_intersection(vs, 
-                                         telem.sf) %>%
-    
-    # drop the geometry
-    st_drop_geometry() %>% 
-    
-    # group by camera
-    group_by(cam.id) %>% 
-    
-    # tally intersections
-    summarize(points = n())
-  
-  # PASSES - separate passes of potentially multiple points
-  cam.contacts.passes <- st_intersection(vs, 
-                                         telem.sf) %>%
-    
-    # drop the geometry
-    st_drop_geometry() %>% 
-    
-    # group by camera
-    group_by(cam.id) %>% 
-    
-    # add a time difference column
-    mutate(time.diff = as.numeric(t - lag(t))) %>%
-    
-    # keep intersections that are not part of the same "pass"
-    filter(time.diff > 60 |
-           is.na(time.diff) == T) %>%
-    
-    # tally intersections
-    summarize(passes = n())
-  
-  # join together
-  cam.contacts <- cam.contacts.points %>% 
-    
-    left_join(cam.contacts.passes,
-              by = "cam.id") 
-  
-  # add cameras with zero passes (thus also zero points)
-  # BUT ONLY if there are cams with zero passes, should be the common case
-  if (length(which(1:9 %notin% cam.contacts$cam.id)) > 0) {
-    
-    cam.contacts.1 <- cam.contacts %>%
+    # PASSES - separate passes of potentially multiple points
+    cam.contacts.passes <- st_intersection(vs, 
+                                           telem.sf) |>
       
-      bind_rows(data.frame(cam.id = which(1:9 %notin% cam.contacts$cam.id),
-                           points = 0,
-                           passes = 0)) %>%
+      # drop the geometry
+      st_drop_geometry() |>
       
-      arrange(cam.id) %>%
+      # group by camera
+      group_by(cam.id) |>
+      
+      # add a time difference column
+      mutate(time.diff = as.numeric(t - lag(t))) |>
+      
+      # keep intersections that are not part of the same "pass"
+      filter(time.diff > 60 |
+               is.na(time.diff) == T) |>
+      
+      # tally intersections
+      summarize(passes = n())
+    
+    # join together
+    cam.contacts <- cam.contacts.points |>
+      
+      left_join(cam.contacts.passes,
+                by = "cam.id") 
+    
+    # add cameras with zero passes (thus also zero points)
+    # BUT ONLY if there are cams with zero passes, should be the common case
+    if (length(which(1:9 %notin% cam.contacts$cam.id)) > 0) {
+      
+      cam.contacts.1 <- cam.contacts |>
+        
+        bind_rows(data.frame(cam.id = which(1:9 %notin% cam.contacts$cam.id),
+                             points = 0,
+                             passes = 0)) |>
+        
+        arrange(cam.id) |>
+        
+        # and add identifiers
+        mutate(question = focal.indiv$question,
+               target = focal.indiv$target,
+               indiv = focal.indiv$indiv)
+      
+    } else {
+      
+      cam.contacts.1 <- cam.contacts |>
+        
+        arrange(cam.id) |>
+        
+        # and add identifiers
+        mutate(question = focal.indiv$question,
+               target = focal.indiv$target,
+               indiv = focal.indiv$indiv)
+      
+    }
+    
+    # sample to a "GPS track"
+    # this will be a regular 0.5-hr track, which can be subsampled
+    telem.track <- telem.df |>
+      
+      make_track(.x = x,
+                 .y = y,
+                 .t = timestamp)
+    
+    # calculate "true" speed (m/s)
+    telem.track.speed <- telem.track |> steps() 
+    
+    true.speed <- sum(telem.track.speed$sl_) / sim.duration.sec
+    
+    # resample track for telemetering
+    telem.track.1 <- telem.track |>
+      
+      track_resample(rate = minutes(30),
+                     tolerance = minutes(0)) |>
+      
+      # remove "burst"
+      dplyr::select(-burst_) |>
       
       # and add identifiers
       mutate(question = focal.indiv$question,
              target = focal.indiv$target,
              indiv = focal.indiv$indiv)
     
-  } else {
+    # speeds df
+    focal.speeds <- data.frame(question = focal.indiv$question,
+                               target = focal.indiv$target,
+                               indiv = focal.indiv$indiv,
+                               true.speed = true.speed)
     
-    cam.contacts.1 <- cam.contacts %>%
-
-      arrange(cam.id) %>%
+    # bind each into df
+    all.contacts <- rbind(all.contacts, cam.contacts.1)
+    all.speeds <- rbind(all.speeds, focal.speeds)
+    all.fixes <- rbind(all.fixes, telem.track.1)
+    
+    # print status message after every 50 individuals
+    if (i %% 50 == 0) {
       
-      # and add identifiers
-      mutate(question = focal.indiv$question,
-             target = focal.indiv$target,
-             indiv = focal.indiv$indiv)
+      elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                                start.time, 
+                                                units = "mins")), 
+                            digits = 1)
+      
+      print(paste0("Completed indiv ", 
+                   i, 
+                   " of ", 
+                   nrow(.df), 
+                   " - ", 
+                   elapsed.time, 
+                   " mins"))
+      
+    }
     
   }
   
-  # sample to a "GPS track"
-  # this will be a regular 0.5-hr track, which can be subsampled
-  telem.track <- telem.df %>%
-    
-    make_track(.x = x,
-               .y = y,
-               .t = timestamp)
+  # bind into list
+  sim.track.list[[1]] <- all.contacts
+  sim.track.list[[2]] <- all.speeds
+  sim.track.list[[3]] <- all.fixes
   
-  # calculate "true" speed (m/s)
-  telem.track.speed <- telem.track %>%
-    
-    steps() 
+  # return
+  return(sim.track.list)
   
-  true.speed <- sum(telem.track.speed$sl_) / sim.duration.sec
+}
+
+#_______________________________________________________________________
+# 4b. sim_tracks_Q2 ----
+#_______________________________________________________________________
+
+sim_tracks_Q2 <- function (.df) {
   
-  # resample track for telemetering
-  telem.track.1 <- telem.track %>%
-    
-    track_resample(rate = minutes(30),
-                   tolerance = minutes(0)) %>%
-    
-    # remove "burst"
-    dplyr::select(-burst_) %>%
-    
-    # and add identifiers
-    mutate(question = focal.indiv$question,
-           target = focal.indiv$target,
-           indiv = focal.indiv$indiv)
+  # define list
+  sim.track.list <- list()
   
-  # speeds df
-  focal.speeds <- data.frame(question = focal.indiv$question,
-                             target = focal.indiv$target,
-                             indiv = focal.indiv$indiv,
-                             true.speed = true.speed)
+  # define dfs
+  all.contacts <- data.frame()
+  all.speeds <- data.frame()
+  all.fixes <- data.frame()
   
-  # bind each into df
-  all.contacts <- rbind(all.contacts, cam.contacts.1)
-  all.speeds <- rbind(all.speeds, focal.speeds)
-  all.fixes <- rbind(all.fixes, telem.track.1)
+  # start time
+  start.time <- Sys.time()
   
-  # print status message after every 50 individuals
-  if (i %% 50 == 0) {
+  # loop through all individuals
+  for (i in 1:nrow(.df)) {
     
-    elapsed.time <- round(as.numeric(difftime(Sys.time(), 
-                                              start.time, 
-                                              units = "mins")), 
-                          digits = 1)
+    # subset indiv
+    focal.indiv <- .df |> slice(i)
     
-    print(paste0("Completed indiv ", 
-                 i, 
-                 " of ", 
-                 nrow(df), 
-                 " - ", 
-                 elapsed.time, 
-                 " mins"))
+    # define movement model 
+    focal.params <- Q2.params |> slice(i)
     
+    focal.model <- ctmm(
+      
+      tau = c(focal.params$tau.p,
+              focal.params$tau.v),
+      isotropic = FALSE,
+      range = T,
+      error = FALSE,
+      sigma = matrix(c(focal.params$sigma.major,
+                       0,
+                       0,
+                       focal.params$sigma.minor),
+                     nrow = 2),
+      mu = as.numeric(focal.indiv[ , c("hrc.x", "hrc.y")])
+      
+    )
+    
+    # assign angle
+    focal.model$sigma@par[3] <- focal.indiv$angle
+    
+    # remove UERE (assume that all relocations are measured without error)
+    focal.model$UERE <- c(0, 0, 0)
+    
+    # simulate month-long track
+    model.sim <- simulate(object = focal.model, 
+                          t = sim.timestep,
+                          complete = T)
+    
+    # coerce telemetry object to df, then sf
+    telem.df <- data.frame(t = model.sim$t,
+                           x = model.sim$x,
+                           y = model.sim$y,
+                           timestamp = as.POSIXct(model.sim$timestamp))
+    
+    telem.sf <- st_as_sf(telem.df,
+                         coords = c("x", "y"),
+                         crs = "epsg:32611")
+    
+    # tally camera contacts
+    # suppress warnings 
+    st_agr(vs) <- "constant"
+    st_agr(telem.sf) <- "constant"
+    
+    # we'll tally both:
+    
+    # POINTS - total minute-by-minute locations within a camera viewshed
+    cam.contacts.points <- st_intersection(vs, 
+                                           telem.sf) |>
+      
+      # drop the geometry
+      st_drop_geometry() |>
+      
+      # group by camera
+      group_by(cam.id) |>
+      
+      # tally intersections
+      summarize(points = n())
+    
+    # PASSES - separate passes of potentially multiple points
+    cam.contacts.passes <- st_intersection(vs, 
+                                           telem.sf) |>
+      
+      # drop the geometry
+      st_drop_geometry() |>
+      
+      # group by camera
+      group_by(cam.id) |>
+      
+      # add a time difference column
+      mutate(time.diff = as.numeric(t - lag(t))) |>
+      
+      # keep intersections that are not part of the same "pass"
+      filter(time.diff > 60 |
+               is.na(time.diff) == T) |>
+      
+      # tally intersections
+      summarize(passes = n())
+    
+    # join together
+    cam.contacts <- cam.contacts.points |>
+      
+      left_join(cam.contacts.passes,
+                by = "cam.id") 
+    
+    # add cameras with zero passes (thus also zero points)
+    # BUT ONLY if there are cams with zero passes, should be the common case
+    if (length(which(1:9 %notin% cam.contacts$cam.id)) > 0) {
+      
+      cam.contacts.1 <- cam.contacts |>
+        
+        bind_rows(data.frame(cam.id = which(1:9 %notin% cam.contacts$cam.id),
+                             points = 0,
+                             passes = 0)) |>
+        
+        arrange(cam.id) |>
+        
+        # and add identifiers
+        mutate(question = focal.indiv$question,
+               target = focal.indiv$target,
+               indiv = focal.indiv$indiv)
+      
+    } else {
+      
+      cam.contacts.1 <- cam.contacts |>
+        
+        arrange(cam.id) |>
+        
+        # and add identifiers
+        mutate(question = focal.indiv$question,
+               target = focal.indiv$target,
+               indiv = focal.indiv$indiv)
+      
     }
-  
+    
+    # sample to a "GPS track"
+    # this will be a regular 0.5-hr track, which can be subsampled
+    telem.track <- telem.df |>
+      
+      make_track(.x = x,
+                 .y = y,
+                 .t = timestamp)
+    
+    # calculate "true" speed (m/s)
+    telem.track.speed <- telem.track |> steps() 
+    
+    true.speed <- sum(telem.track.speed$sl_) / sim.duration.sec
+    
+    # resample track for telemetering
+    telem.track.1 <- telem.track |>
+      
+      track_resample(rate = minutes(30),
+                     tolerance = minutes(0)) |>
+      
+      # remove "burst"
+      dplyr::select(-burst_) |>
+      
+      # and add identifiers
+      mutate(question = focal.indiv$question,
+             target = focal.indiv$target,
+             indiv = focal.indiv$indiv)
+    
+    # speeds df
+    focal.speeds <- data.frame(question = focal.indiv$question,
+                               target = focal.indiv$target,
+                               indiv = focal.indiv$indiv,
+                               true.speed = true.speed)
+    
+    # bind each into df
+    all.contacts <- rbind(all.contacts, cam.contacts.1)
+    all.speeds <- rbind(all.speeds, focal.speeds)
+    all.fixes <- rbind(all.fixes, telem.track.1)
+    
+    # print status message after every 50 individuals
+    if (i %% 50 == 0) {
+      
+      elapsed.time <- round(as.numeric(difftime(Sys.time(), 
+                                                start.time, 
+                                                units = "mins")), 
+                            digits = 1)
+      
+      print(paste0("Completed indiv ", 
+                   i, 
+                   " of ", 
+                   nrow(.df), 
+                   " - ", 
+                   elapsed.time, 
+                   " mins"))
+      
+    }
+    
   }
   
   # bind into list
@@ -289,37 +485,82 @@ sim_tracks <- function (df) {
 # benchmark 09 Apr 2025: ~ 42 sec / 10 indivs (35 min / 500 indivs)
 
 #_______________________________________________________________________
+# 5a. Q1 ----
+#_______________________________________________________________________
 
 # subset dfs
-indivs.1T    <- all.indivs %>% filter(question == 1 & target == "T")
-indivs.1NT   <- all.indivs %>% filter(question == 1 & target == "NT")
-indivs.2T    <- all.indivs %>% filter(question == 2 & target == "T")
-indivs.2NT   <- all.indivs %>% filter(question == 2 & target == "NT")
+Q1.1T.TV1    <- Q1.indivs |> filter(target == "T" & TV == 1)
+Q1.1T.TV2    <- Q1.indivs |> filter(target == "T" & TV == 2)
+Q1.1T.TV3    <- Q1.indivs |> filter(target == "T" & TV == 3)
 
-# run function
-sim.tracks.1T   <- sim_tracks(indivs.1T)
-sim.tracks.1NT  <- sim_tracks(indivs.1NT)
-sim.tracks.2T   <- sim_tracks(indivs.2T)
-sim.tracks.2NT  <- sim_tracks(indivs.2NT)
+Q1.1NT.TV1    <- Q1.indivs |> filter(target == "NT" & TV == 1)
+Q1.1NT.TV2    <- Q1.indivs |> filter(target == "NT" & TV == 2)
+Q1.1NT.TV3    <- Q1.indivs |> filter(target == "NT" & TV == 3)
+
+# use function
+sim.tracks.1T.TV1 <- sim_tracks_Q1(Q1.1T.TV1, model.TV1) # done
+sim.tracks.1T.TV2 <- sim_tracks_Q1(Q1.1T.TV2, model.TV2) # done
+sim.tracks.1T.TV3 <- sim_tracks_Q1(Q1.1T.TV3, model.TV3) # done
+
+sim.tracks.1NT.TV1 <- sim_tracks_Q1(Q1.1NT.TV1, model.TV1) # done
+sim.tracks.1NT.TV2 <- sim_tracks_Q1(Q1.1NT.TV2, model.TV2) # done
+sim.tracks.1NT.TV3 <- sim_tracks_Q1(Q1.1NT.TV3, model.TV3) # done
+
+#_______________________________________________________________________
+# 5b. Q2 ----
+#_______________________________________________________________________
+
+Q2.T <- Q2.indivs |> filter(target == "T")
+Q2.NT <- Q2.indivs |> filter(target == "NT")
+
+sim.tracks.2T <- sim_tracks_Q2(Q2.T)    # done
+sim.tracks.2NT <- sim_tracks_Q2(Q2.NT)  # done
 
 #_______________________________________________________________________
 # 6. Write to .csvs ----
 #_______________________________________________________________________
+# 6a. Q1 ----
+#_______________________________________________________________________
 
 # contacts
-write.csv(sim.tracks.1T[[1]], "Derived data/Sampled - Camera contacts/contacts_1T.csv")
-write.csv(sim.tracks.1NT[[1]], "Derived data/Sampled - Camera contacts/contacts_1NT.csv")
-write.csv(sim.tracks.2T[[1]], "Derived data/Sampled - Camera contacts/contacts_2T.csv")
-write.csv(sim.tracks.2NT[[1]], "Derived data/Sampled - Camera contacts/contacts_2NT.csv")
-          
+saveRDS(sim.tracks.1T.TV1[[1]], "data_derived/sampled_contacts/contacts_1T_TV1.rds")
+saveRDS(sim.tracks.1T.TV2[[1]], "data_derived/sampled_contacts/contacts_1T_TV2.rds")
+saveRDS(sim.tracks.1T.TV3[[1]], "data_derived/sampled_contacts/contacts_1T_TV3.rds")
+
+saveRDS(sim.tracks.1NT.TV1[[1]], "data_derived/sampled_contacts/contacts_1NT_TV1.rds")
+saveRDS(sim.tracks.1NT.TV2[[1]], "data_derived/sampled_contacts/contacts_1NT_TV2.rds")
+saveRDS(sim.tracks.1NT.TV3[[1]], "data_derived/sampled_contacts/contacts_1NT_TV3.rds")
+
 # speeds
-write.csv(sim.tracks.1T[[2]], "Derived data/Sampled - Speeds/speeds_1T.csv")
-write.csv(sim.tracks.1NT[[2]], "Derived data/Sampled - Speeds/speeds_1NT.csv")
-write.csv(sim.tracks.2T[[2]], "Derived data/Sampled - Speeds/speeds_2T.csv")
-write.csv(sim.tracks.2NT[[2]], "Derived data/Sampled - Speeds/speeds_2NT.csv")
+saveRDS(sim.tracks.1T.TV1[[2]], "data_derived/sampled_speeds/speeds_1T_TV1.rds")
+saveRDS(sim.tracks.1T.TV2[[2]], "data_derived/sampled_speeds/speeds_1T_TV2.rds")
+saveRDS(sim.tracks.1T.TV3[[2]], "data_derived/sampled_speeds/speeds_1T_TV3.rds")
+
+saveRDS(sim.tracks.1NT.TV1[[2]], "data_derived/sampled_speeds/speeds_1NT_TV1.rds")
+saveRDS(sim.tracks.1NT.TV2[[2]], "data_derived/sampled_speeds/speeds_1NT_TV2.rds")
+saveRDS(sim.tracks.1NT.TV3[[2]], "data_derived/sampled_speeds/speeds_1NT_TV3.rds")
 
 # tracks
-write.csv(sim.tracks.1T[[3]], "Derived data/Sampled - GPS tracks/tracks_1T.csv")
-write.csv(sim.tracks.1NT[[3]], "Derived data/Sampled - GPS tracks/tracks_1NT.csv")
-write.csv(sim.tracks.2T[[3]], "Derived data/Sampled - GPS tracks/tracks_2T.csv")
-write.csv(sim.tracks.2NT[[3]], "Derived data/Sampled - GPS tracks/tracks_2NT.csv")
+saveRDS(sim.tracks.1T.TV1[[3]], "data_derived/sampled_tracks/tracks_1T_TV1.rds")
+saveRDS(sim.tracks.1T.TV2[[3]], "data_derived/sampled_tracks/tracks_1T_TV2.rds")
+saveRDS(sim.tracks.1T.TV3[[3]], "data_derived/sampled_tracks/tracks_1T_TV3.rds")
+
+saveRDS(sim.tracks.1NT.TV1[[3]], "data_derived/sampled_tracks/tracks_1NT_TV1.rds")
+saveRDS(sim.tracks.1NT.TV2[[3]], "data_derived/sampled_tracks/tracks_1NT_TV2.rds")
+saveRDS(sim.tracks.1NT.TV3[[3]], "data_derived/sampled_tracks/tracks_1NT_TV3.rds")
+
+#_______________________________________________________________________
+# 6b. Q2 ----
+#_______________________________________________________________________
+
+# contacts
+saveRDS(sim.tracks.2T[[1]], "data_derived/sampled_contacts/contacts_2T.rds")
+saveRDS(sim.tracks.2NT[[1]], "data_derived/sampled_contacts/contacts_2NT.rds")
+
+# speeds
+saveRDS(sim.tracks.2T[[2]], "data_derived/sampled_speeds/speeds_2T.rds")
+saveRDS(sim.tracks.2NT[[2]], "data_derived/sampled_speeds/speeds_2NT.rds")
+
+# tracks
+saveRDS(sim.tracks.2T[[3]], "data_derived/sampled_tracks/tracks_2T.rds")
+saveRDS(sim.tracks.2NT[[3]], "data_derived/sampled_tracks/tracks_2NT.rds")
