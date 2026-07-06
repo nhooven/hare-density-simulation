@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 28 Apr 2025
 # Date completed: 28 Apr 2025
-# Date last modified: 29 Apr 2025
+# Date last modified: 06 Jul 2026
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -29,46 +29,27 @@ library(tidyverse)            # data cleaning and manipulation
 #_______________________________________________________________________
 
 # individuals for subsetting
-indivs.1 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/contacts_1.csv"))
-indivs.2 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/contacts_2.csv"))
-indivs.3 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/contacts_3.csv"))
+indivs.1 <- readRDS(paste0(getwd(), "/data_derived/sampled_reps/contacts_1.rds"))
+indivs.2 <- readRDS(paste0(getwd(), "/data_derived/sampled_reps/contacts_2.rds"))
+indivs.3 <- readRDS(paste0(getwd(), "/data_derived/sampled_reps/contacts_3.rds"))
 
 # camera contacts (tallied points + passes for all 500 indivs)
-contacts.1T <- read.csv(paste0(getwd(), "/Derived data/Sampled - Camera contacts/contacts_1T.csv"))
-contacts.1NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - Camera contacts/contacts_1NT.csv"))
-contacts.2T <- read.csv(paste0(getwd(), "/Derived data/Sampled - Camera contacts/contacts_2T.csv"))
-contacts.2NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - Camera contacts/contacts_2NT.csv"))
+contacts.1T.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_1T_TV1.rds"))
+contacts.1T.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_1T_TV2.rds"))
+contacts.1T.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_1T_TV3.rds"))
+
+contacts.1NT.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_1NT_TV1.rds"))
+contacts.1NT.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_1NT_TV2.rds"))
+contacts.1NT.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_1NT_TV3.rds"))
+
+contacts.2T <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_2T.rds"))
+contacts.2NT <- readRDS(paste0(getwd(), "/data_derived/sampled_contacts/contacts_2NT.rds"))
 
 #_______________________________________________________________________
 # 4. Define function ----
 #_______________________________________________________________________
 
-aggregate_contacts <- function (q = 1) {
-  
-  # use correct dfs
-  if (q == 1) {
-    
-    indivs <- indivs.1
-    contacts.T <- contacts.1T
-    contacts.NT <- contacts.1NT
-    
-  } 
-  
-  if (q == 2) {
-    
-    indivs <- indivs.2
-    contacts.T <- contacts.2T
-    contacts.NT <- contacts.2NT
-    
-  }
-  
-  if (q == 3) {
-    
-    indivs <- indivs.3
-    contacts.T <- contacts.2T
-    contacts.NT <- contacts.2NT
-    
-  }
+aggregate_contacts <- function (.indivs, .contacts.T, .contacts.NT) {
   
   # loop through replicates
   all.contacts.agg.df <- data.frame()
@@ -81,14 +62,14 @@ aggregate_contacts <- function (q = 1) {
     for (j in c(32, 16, 8, 4)) {
       
      # subset indivs
-     focal.indivs.T <- indivs %>% filter(rep == i, purpose == "T", abund == j)
-     focal.indivs.NT <- indivs %>% filter(rep == i, purpose == "NT", abund == j)
+     focal.indivs.T <- .indivs %>% filter(rep == i, purpose == "T", abund == j)
+     focal.indivs.NT <- .indivs %>% filter(rep == i, purpose == "NT", abund == j)
      
      # subset contacts.T
-     focal.contacts.T <- contacts.T %>% filter(indiv %in% focal.indivs.T$indiv)
+     focal.contacts.T <- .contacts.T %>% filter(indiv %in% focal.indivs.T$indiv)
      
      # subset contacts.NT
-     focal.contacts.NT <- contacts.NT %>% filter(indiv %in% focal.indivs.NT$indiv) 
+     focal.contacts.NT <- .contacts.NT %>% filter(indiv %in% focal.indivs.NT$indiv) 
      
      # bind together
      focal.contacts <- rbind(focal.contacts.T, focal.contacts.NT)
@@ -124,45 +105,22 @@ aggregate_contacts <- function (q = 1) {
 # 5. Use function ----
 #_______________________________________________________________________
 
-agg.contacts.1 <- aggregate_contacts(q = 1)
-agg.contacts.2 <- aggregate_contacts(q = 2)
-agg.contacts.3 <- aggregate_contacts(q = 3)
+agg.contacts.1.TV1 <- aggregate_contacts(indivs.1, contacts.1T.TV1, contacts.1NT.TV1)
+agg.contacts.1.TV2 <- aggregate_contacts(indivs.1, contacts.1T.TV2, contacts.1NT.TV2)
+agg.contacts.1.TV3 <- aggregate_contacts(indivs.1, contacts.1T.TV3, contacts.1NT.TV3)
+
+agg.contacts.2 <- aggregate_contacts(indivs.2, contacts.2T, contacts.2NT)
+
+agg.contacts.3 <- aggregate_contacts(indivs.3, contacts.2T, contacts.2NT)
 
 #_______________________________________________________________________
 # 6. Plots for sanity check ----
 #_______________________________________________________________________
 
-# question 1 (points)
-ggplot(data = agg.contacts.1,
-       aes(x = as.factor(abund),
+agg.contacts.3 |>
+
+ggplot(aes(x = as.factor(abund),
            y = points)) +
-  
-  theme_bw() +
-  
-  geom_jitter(alpha = 0.05)
-
-# question 1 (passes)
-ggplot(data = agg.contacts.1,
-       aes(x = as.factor(abund),
-           y = passes)) +
-  
-  theme_bw() +
-  
-  geom_jitter(alpha = 0.05)
-
-# question 2 (points)
-ggplot(data = agg.contacts.2,
-       aes(x = as.factor(abund),
-           y = points)) +
-  
-  theme_bw() +
-  
-  geom_jitter(alpha = 0.05)
-
-# question 2 (passes)
-ggplot(data = agg.contacts.2,
-       aes(x = as.factor(abund),
-           y = passes)) +
   
   theme_bw() +
   
@@ -172,6 +130,9 @@ ggplot(data = agg.contacts.2,
 # 5. Write to files ----
 #_______________________________________________________________________
 
-write.csv(agg.contacts.1, file = paste0(getwd(), "/Derived data/Aggregated contacts/agg_contacts_1.csv"))
-write.csv(agg.contacts.2, file = paste0(getwd(), "/Derived data/Aggregated contacts/agg_contacts_2.csv"))
-write.csv(agg.contacts.3, file = paste0(getwd(), "/Derived data/Aggregated contacts/agg_contacts_3.csv"))
+saveRDS(agg.contacts.1.TV1, paste0(getwd(), "/data_derived/aggregated_contacts/agg_contacts_1_TV1.rds"))
+saveRDS(agg.contacts.1.TV2, paste0(getwd(), "/data_derived/aggregated_contacts/agg_contacts_1_TV2.rds"))
+saveRDS(agg.contacts.1.TV3, paste0(getwd(), "/data_derived/aggregated_contacts/agg_contacts_1_TV3.rds"))
+
+saveRDS(agg.contacts.2, paste0(getwd(), "/data_derived/aggregated_contacts/agg_contacts_2.rds"))
+saveRDS(agg.contacts.3, paste0(getwd(), "/data_derived/aggregated_contacts/agg_contacts_3.rds"))

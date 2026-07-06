@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 02 Apr 2025
 # Date completed: 
-# Date last modified: 28 Apr 2025
+# Date last modified: 06 Jul 2026
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -31,16 +31,13 @@ library(tidyverse)            # data cleaning and manipulation
 # 3. Read in data ----
 #_______________________________________________________________________
 
-speeds.1T <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_1T.csv"))
-speeds.1NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_1NT.csv"))
-speeds.2T.1 <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T.csv"))
-speeds.2T.2 <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T_2.csv"))
-speeds.2NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2NT.csv"))
+speeds.1T.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1T_TV1.rds"))
+speeds.1T.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1T_TV2.rds"))
+speeds.1T.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1T_TV3.rds"))
 
-# bind 2T together
-speeds.2T <- rbind(speeds.2T.1, speeds.2T.2)
-
-rm(speeds.2T.1, speeds.2T.2)
+speeds.1NT.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV1.rds"))
+speeds.1NT.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV2.rds"))
+speeds.1NT.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV3.rds"))
 
 #_______________________________________________________________________
 # 4. Parametric SEs ----
@@ -56,18 +53,23 @@ parametric_se <- function (df) {
   
   # back-calculate the SD of the sampling dist. (i.e., the SE)
   # we'll use the mean absolute difference from the mean to the 95% CIs
-  mutate(parametric.se = (((speed.mean.hi - speed.mean.est) +
-                          (speed.mean.est - speed.mean.lo)) / 2) / 1.96)
+  mutate(parametric.se.mean = (((speed.mean.hi - speed.mean.est) +
+                              (speed.mean.est - speed.mean.lo)) / 2) / 1.96,
+         parametric.se.rms = (((rms.speed.hi - rms.speed.est) +
+                              (rms.speed.est - rms.speed.lo)) / 2) / 1.96)
   
   return(df.1)
   
 }
 
 # use function
-speeds.1T <- parametric_se(speeds.1T)
-speeds.1NT <- parametric_se(speeds.1NT)
-speeds.2T <- parametric_se(speeds.2T)
-speeds.2NT <- parametric_se(speeds.2NT)
+speeds.1T.TV1.1 <- parametric_se(speeds.1T.TV1)
+speeds.1T.TV2.1 <- parametric_se(speeds.1T.TV2)
+speeds.1T.TV3.1 <- parametric_se(speeds.1T.TV3)
+
+speeds.1NT.TV1.1 <- parametric_se(speeds.1NT.TV1)
+speeds.1NT.TV2.1 <- parametric_se(speeds.1NT.TV2)
+speeds.1NT.TV3.1 <- parametric_se(speeds.1NT.TV3)
 
 #_______________________________________________________________________
 # 5. Create arrays ----
@@ -79,7 +81,7 @@ speeds.2NT <- parametric_se(speeds.2NT)
 #_______________________________________________________________________
 
 # define function
-speed_array <- function (df) {
+speed_array <- function (df, .which = "mean") {
   
   speeds.all <- array(data = NA,
                       dim = c(500, 500, 12))
@@ -101,7 +103,15 @@ speed_array <- function (df) {
       # ensure that non-velocity models get NAs here
       if (is.na(df.y$speed.mean.est) == F) {
         
-        speeds.y <- rnorm(n = 500, mean = df.y$speed.mean.est, sd = df.y$parametric.se)
+        if (.which == "mean") {
+          
+          speeds.y <- rnorm(n = 500, mean = df.y$speed.mean.est, sd = df.y$parametric.se.mean)
+          
+        } else {
+          
+          speeds.y <- rnorm(n = 500, mean = df.y$rms.speed.est, sd = df.y$parametric.se.rms)
+          
+        }
         
       } else {
         
@@ -125,10 +135,21 @@ speed_array <- function (df) {
 }
 
 # use function
-speed.array.1T <- speed_array(speeds.1T)
-speed.array.1NT <- speed_array(speeds.1NT)
-speed.array.2T <- speed_array(speeds.2T)
-speed.array.2NT <- speed_array(speeds.2NT)
+speed.array.1T.TV1.mean <- speed_array(speeds.1T.TV1.1, "mean")
+speed.array.1T.TV2.mean <- speed_array(speeds.1T.TV2.1, "mean")
+speed.array.1T.TV3.mean <- speed_array(speeds.1T.TV3.1, "mean")
+
+speed.array.1NT.TV1.mean <- speed_array(speeds.1NT.TV1.1, "mean")
+speed.array.1NT.TV2.mean <- speed_array(speeds.1NT.TV2.1, "mean")
+speed.array.1NT.TV3.mean <- speed_array(speeds.1NT.TV3.1, "mean")
+
+speed.array.1T.TV1.rms <- speed_array(speeds.1T.TV1.1, "rms")
+speed.array.1T.TV2.rms <- speed_array(speeds.1T.TV2.1, "rms")
+speed.array.1T.TV3.rms <- speed_array(speeds.1T.TV3.1, "rms")
+
+speed.array.1NT.TV1.rms <- speed_array(speeds.1NT.TV1.1, "rms")
+speed.array.1NT.TV2.rms <- speed_array(speeds.1NT.TV2.1, "rms")
+speed.array.1NT.TV3.rms <- speed_array(speeds.1NT.TV3.1, "rms")
 
 #_______________________________________________________________________
 # 5. Create pooled speed distributions ----
@@ -143,9 +164,9 @@ speed.array.2NT <- speed_array(speeds.2NT)
 # 5a. Read in lookup tables ----
 #_______________________________________________________________________
 
-collared.1 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/collared_1.csv"))
-collared.2 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/collared_2.csv"))
-collared.3 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/collared_3.csv"))
+collared.1 <- readRDS(paste0(getwd(), "/data_derived/sampled_reps/collared_1.rds"))
+collared.2 <- readRDS(paste0(getwd(), "/data_derived/sampled_reps/collared_2.rds"))
+collared.3 <- readRDS(paste0(getwd(), "/data_derived/sampled_reps/collared_3.rds"))
 
 #_______________________________________________________________________
 # 5b. Define function ----
@@ -157,28 +178,9 @@ collared.3 <- read.csv(paste0(getwd(), "/Derived data/Sampled reps/collared_3.cs
 
 #_______________________________________________________________________
 
-pooled_speeds <- function (speed.array.T,
-                           speed.array.NT,
-                           q = 1) {
-  
-  # use correct "collared" file
-  if (q == 1) {
-    
-    collared <- collared.1
-    
-  } 
-  
-  if (q == 2) {
-    
-    collared <- collared.2
-    
-  } 
-  
-  if (q == 3) {
-    
-    collared <- collared.3
-    
-  } 
+pooled_speeds <- function (.collared,
+                           .speed.array.T,
+                           .speed.array.NT) {
   
   # define blank array
   all.pooled <- array(data = NA,
@@ -188,13 +190,13 @@ pooled_speeds <- function (speed.array.T,
   for (y in 1:1000) {
     
     # subset collared individuals
-    focal.collared.T <- collared %>% filter(rep == y, source == "T")
-    focal.collared.NT <- collared %>% filter(rep == y, source == "NT")
+    focal.collared.T <- .collared %>% filter(rep == y, source == "T")
+    focal.collared.NT <- .collared %>% filter(rep == y, source == "NT")
     
     # extract correct individuals (columns) from the speed arrays
     # target
-    indivs.T <- speed.array.T[ , focal.collared.T$indiv, ]
-    indivs.NT <- speed.array.NT[ , focal.collared.NT$indiv, ]
+    indivs.T <- .speed.array.T[ , focal.collared.T$indiv, ]
+    indivs.NT <- .speed.array.NT[ , focal.collared.NT$indiv, ]
   
     # loop through scenarios
     all.speeds.z <- array(data = NA,
@@ -225,23 +227,39 @@ pooled_speeds <- function (speed.array.T,
 # 5c. Use function ----
 #_______________________________________________________________________
 
-pooled.speeds.1 <- pooled_speeds(speed.array.1T, speed.array.1NT, q = 1)
-pooled.speeds.2 <- pooled_speeds(speed.array.2T, speed.array.2NT, q = 2)
-pooled.speeds.3 <- pooled_speeds(speed.array.2T, speed.array.2NT, q = 3)
+pooled.speeds.1.TV1.mean <- pooled_speeds(collared.1, speed.array.1T.TV1.mean, speed.array.1NT.TV1.mean)
+pooled.speeds.1.TV2.mean <- pooled_speeds(collared.1, speed.array.1T.TV2.mean, speed.array.1NT.TV2.mean)
+pooled.speeds.1.TV3.mean <- pooled_speeds(collared.1, speed.array.1T.TV3.mean, speed.array.1NT.TV3.mean)
+
+pooled.speeds.1.TV1.rms <- pooled_speeds(collared.1, speed.array.1T.TV1.rms, speed.array.1NT.TV1.rms)
+pooled.speeds.1.TV2.rms <- pooled_speeds(collared.1, speed.array.1T.TV2.rms, speed.array.1NT.TV2.rms)
+pooled.speeds.1.TV3.rms <- pooled_speeds(collared.1, speed.array.1T.TV3.rms, speed.array.1NT.TV3.rms)
 
 #_______________________________________________________________________
 # 6. Convert from m/s to km/day ----
 #_______________________________________________________________________
 
 # conversion factor is 1000 / 86400 ~ 0.0115574
-pooled.speeds.1.day <- pooled.speeds.1 / (1000 / 86400)
-pooled.speeds.2.day <- pooled.speeds.2 / (1000 / 86400)
-pooled.speeds.3.day <- pooled.speeds.3 / (1000 / 86400)
+pooled.speeds.1.TV1.mean.day <- pooled.speeds.1.TV1.mean / (1000 / 86400)
+pooled.speeds.1.TV2.mean.day <- pooled.speeds.1.TV2.mean / (1000 / 86400)
+pooled.speeds.1.TV3.mean.day <- pooled.speeds.1.TV3.mean / (1000 / 86400)
+
+pooled.speeds.1.TV1.rms.day <- pooled.speeds.1.TV1.rms / (1000 / 86400)
+pooled.speeds.1.TV2.rms.day <- pooled.speeds.1.TV2.rms / (1000 / 86400)
+pooled.speeds.1.TV3.rms.day <- pooled.speeds.1.TV3.rms / (1000 / 86400)
 
 #_______________________________________________________________________
 # 7. Write to file ----
 #_______________________________________________________________________
 
-save(pooled.speeds.1.day, file = paste0(getwd(), "/Derived data/Speed distributions/speeds_1.RData"))
-save(pooled.speeds.2.day, file = paste0(getwd(), "/Derived data/Speed distributions/speeds_2.RData"))
-save(pooled.speeds.3.day, file = paste0(getwd(), "/Derived data/Speed distributions/speeds_3.RData"))
+saveRDS(pooled.speeds.1.TV1.mean.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV1_mean.rds"))
+saveRDS(pooled.speeds.1.TV2.mean.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV2_mean.rds"))
+saveRDS(pooled.speeds.1.TV3.mean.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV3_mean.rds"))
+
+saveRDS(pooled.speeds.1.TV1.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV1_rms.rds"))
+saveRDS(pooled.speeds.1.TV2.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV2_rms.rds"))
+saveRDS(pooled.speeds.1.TV3.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV3_rms.rds"))
+
+#_______________________________________________________________________
+# 8. Summaries ----
+#_______________________________________________________________________

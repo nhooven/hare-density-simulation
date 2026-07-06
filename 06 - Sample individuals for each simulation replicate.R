@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 28 Apr 2025
 # Date completed: 28 Apr 2025
-# Date last modified: 30 Apr 2025
+# Date last modified: 06 Jun 2026
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -147,8 +147,8 @@ sampled.indiv.reps.2 <- sample_indiv_reps(1000, 2)
 # than the population on average
 
 # read in "true speeds" - must be the highly variable subset
-speeds.2T <- read.csv(paste0(getwd(), "/Derived data/Sampled - Speeds/speeds_2T.csv"))
-speeds.2NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - Speeds/speeds_2NT.csv"))
+speeds.2T <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_2T.rds"))
+speeds.2NT <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_2NT.rds"))
 
 hist(speeds.2T$true.speed)
 hist(speeds.2NT$true.speed)
@@ -247,11 +247,11 @@ sampled.indiv.reps.3 <- sample_indiv_reps_q3(1000)
 # 6. Write to files ----
 #_______________________________________________________________________
 
-write.csv(sampled.indiv.reps.1[[1]], file = paste0(getwd(), "/Derived data/Sampled reps/contacts_1.csv"))
-write.csv(sampled.indiv.reps.1[[2]], file = paste0(getwd(), "/Derived data/Sampled reps/collared_1.csv"))
+saveRDS(sampled.indiv.reps.1[[1]], file = paste0(getwd(), "/data_derived/sampled_reps/contacts_1.rds"))
+saveRDS(sampled.indiv.reps.1[[2]], file = paste0(getwd(), "/data_derived/sampled_reps/collared_1.rds"))
 
-write.csv(sampled.indiv.reps.2[[1]], file = paste0(getwd(), "/Derived data/Sampled reps/contacts_2.csv"))
-write.csv(sampled.indiv.reps.2[[2]], file = paste0(getwd(), "/Derived data/Sampled reps/collared_2.csv"))
+saveRDS(sampled.indiv.reps.2[[1]], file = paste0(getwd(), "/data_derived/sampled_reps/contacts_2.rds"))
+saveRDS(sampled.indiv.reps.2[[2]], file = paste0(getwd(), "/data_derived/sampled_reps/collared_2.rds"))
 
-write.csv(sampled.indiv.reps.3[[1]], file = paste0(getwd(), "/Derived data/Sampled reps/contacts_3.csv"))
-write.csv(sampled.indiv.reps.3[[2]], file = paste0(getwd(), "/Derived data/Sampled reps/collared_3.csv"))
+saveRDS(sampled.indiv.reps.3[[1]], file = paste0(getwd(), "/data_derived/sampled_reps/contacts_3.rds"))
+saveRDS(sampled.indiv.reps.3[[2]], file = paste0(getwd(), "/data_derived/sampled_reps/collared_3.rds"))

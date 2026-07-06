@@ -5,8 +5,8 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 28 Apr 2025
 # Date completed: 29 Apr 2025
-# Date last modified: 31 May 2025
-# R version: 4.4.3
+# Date last modified: 06 Jul 2026
+# R version: 4.5.2
 
 #_______________________________________________________________________
 # 1. Load in packages ----
@@ -39,15 +39,15 @@ library(tidyverse)            # data cleaning and manipulation
 # 3. Read in data ----
 #_______________________________________________________________________
 
-# aggregated camera contacts
-contacts.1 <- read.csv("Derived data/Aggregated contacts/agg_contacts_1.csv")
-contacts.2 <- read.csv("Derived data/Aggregated contacts/agg_contacts_2.csv")
-contacts.3 <- read.csv("Derived data/Aggregated contacts/agg_contacts_3.csv")
+# which speeds and contacts
+which.ones <- "1_TV1"
+
+# aggregated contacts
+contacts <- readRDS(paste0(getwd(), "/data_derived/aggregated_contacts/agg_contacts_", which.ones, ".rds"))
 
 # speeds
-load("Derived data/Speed distributions/speeds_1.RData")
-load("Derived data/Speed distributions/speeds_2.RData")
-load("Derived data/Speed distributions/speeds_3.RData")
+pooled.speeds.mean.day <- readRDS(paste0(getwd(), "/data_derived/speed_distributions/speeds_", which.ones, "_mean.rds"))
+pooled.speeds.rms.day <- readRDS(paste0(getwd(), "/data_derived/speed_distributions/speeds_", which.ones, "_rms.rds"))
 
 #_______________________________________________________________________
 # 4. Define function ----
@@ -92,60 +92,76 @@ boot_rem <- function (contacts,
       
       speeds.j <- speeds.j[is.na(speeds.j) == FALSE]
       
-      # loop through abundances
-      all.summary.k <- data.frame()
-      
-      for (k in c(32, 16, 8, 4)) {
+      # speeds have to exist
+      if (length(speeds.j) == 0) { 
         
-        contacts.k <- contacts.i %>% filter(abund == k)
+        all.summary.j <- data.frame(rep = i,
+                                    scenario = j,
+                                    abund = c(32, 16, 8, 4),
+                                    true.D = c(32, 16, 8, 4) / 10,
+                                    mean.REM.D = NA,
+                                    cv.REM.D = NA,
+                                    l95.REM.D = NA,
+                                    u95.REM.D = NA)
         
-        # bootstrapping
-        df.boot.k <- data.frame()
+      } else {
         
-        for (l in 1:n.iter) {
+        # loop through abundances
+        all.summary.k <- data.frame()
+        
+        for (k in c(32, 16, 8, 4)) {
           
-          # sample cameras with replacement
-          samp.cams <- contacts.k[sample(1:9, size = 9, replace = T), ]
+          contacts.k <- contacts.i %>% filter(abund == k)
           
-          # sample speeds
-          samp.cams$speed <- sample(speeds.j, size = 9, replace = F)
+          # bootstrapping
+          df.boot.k <- data.frame()
           
-          # calculate mean REM
-          samp.cams <- samp.cams %>%
+          for (l in 1:n.iter) {
             
-            mutate(REM = (points / 28) *  # we'll try points first
-                         (pi / (speed * (3.5 / 1000) * (2.0 + ((57.3 * pi) / 180)))) /
-                         100)   # per hectare
+            # sample cameras with replacement
+            samp.cams <- contacts.k[sample(1:9, size = 9, replace = T), ]
+            
+            # sample speeds
+            samp.cams$speed <- sample(speeds.j, size = 9, replace = F)
+            
+            # calculate mean REM
+            samp.cams <- samp.cams %>%
+              
+              mutate(REM = (points / 28) *  # we'll try points first
+                       (pi / (speed * (3.5 / 1000) * (2.0 + ((57.3 * pi) / 180)))) /
+                       100)   # per hectare
+            
+            # iteration df
+            df.iter <- data.frame(iter = l,
+                                  true.D = k / 10,
+                                  REM.D = mean(samp.cams$REM))
+            
+            # bind in to all iterations
+            df.boot.k <- rbind(df.boot.k, df.iter)
+            
+          }
           
-          # iteration df
-          df.iter <- data.frame(iter = l,
-                                true.D = k / 10,
-                                REM.D = mean(samp.cams$REM))
+          # calculate mean, CV, and 95% CI from bootstraps
+          summary.k <- data.frame(rep = i,
+                                  scenario = j,
+                                  abund = k,
+                                  true.D = k / 10,
+                                  mean.REM.D = mean(df.boot.k$REM.D, na.rm = T),
+                                  cv.REM.D = sd(df.boot.k$REM.D, na.rm = T) / mean(df.boot.k$REM.D, na.rm = T),
+                                  l95.REM.D = quantile(df.boot.k$REM.D, probs = 0.025, na.rm = T),
+                                  u95.REM.D = quantile(df.boot.k$REM.D, probs = 0.975, na.rm = T))
           
-          # bind in to all iterations
-          df.boot.k <- rbind(df.boot.k, df.iter)
+          # bind in
+          all.summary.k <- rbind(all.summary.k, summary.k)
           
-        }
-        
-        # calculate mean, CV, and 95% CI from bootstraps
-        summary.k <- data.frame(rep = i,
-                                scenario = j,
-                                abund = k,
-                                true.D = k / 10,
-                                mean.REM.D = mean(df.boot.k$REM.D, na.rm = T),
-                                cv.REM.D = sd(df.boot.k$REM.D, na.rm = T) / mean(df.boot.k$REM.D, na.rm = T),
-                                l95.REM.D = quantile(df.boot.k$REM.D, probs = 0.025, na.rm = T),
-                                u95.REM.D = quantile(df.boot.k$REM.D, probs = 0.975, na.rm = T))
+        } # k
         
         # bind in
-        all.summary.k <- rbind(all.summary.k, summary.k)
+        all.summary.j <- rbind(all.summary.j, all.summary.k)
         
-      }
+      } # else
       
-      # bind in
-      all.summary.j <- rbind(all.summary.j, all.summary.k)
-      
-    }
+    } # j
     
     # bind in
     all.summary.i <- rbind(all.summary.i, all.summary.j)
@@ -167,7 +183,7 @@ boot_rem <- function (contacts,
       
     }
     
-  }
+  } # i
   
   # return
   return(all.summary.i)
@@ -178,14 +194,11 @@ boot_rem <- function (contacts,
 # 5. Use function ----
 #_______________________________________________________________________
 
-boot.rem.1 <- boot_rem(contacts.1, pooled.speeds.1.day, n.iter = 1000)
-boot.rem.2 <- boot_rem(contacts.2, pooled.speeds.2.day, n.iter = 1000)
-boot.rem.3 <- boot_rem(contacts.2, pooled.speeds.3.day, n.iter = 1000)
+boot.rem.mean <- boot_rem(contacts, pooled.speeds.mean.day, n.iter = 1000)
+boot.rem.rms <- boot_rem(contacts, pooled.speeds.rms.day, n.iter = 1000)
 
 #_______________________________________________________________________
 # 6. Write files ----
 #_______________________________________________________________________
 
-write.csv(boot.rem.1, paste0(getwd(), "/Derived data/REM results/rem_1.csv"))
-write.csv(boot.rem.2, paste0(getwd(), "/Derived data/REM results/rem_2.csv"))
-write.csv(boot.rem.3, paste0(getwd(), "/Derived data/REM results/rem_3.csv"))
+saveRDS(boot.rem.mean, paste0(getwd(), "/data_derived/REM_results/", which.ones, ".rds"))
