@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 02 Apr 2025
 # Date completed: 
-# Date last modified: 06 Jul 2026
+# Date last modified: 13 Jul 2026
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -263,3 +263,112 @@ saveRDS(pooled.speeds.1.TV3.rms.day, paste0(getwd(), "/data_derived/speed_distri
 #_______________________________________________________________________
 # 8. Summaries ----
 #_______________________________________________________________________
+# 8a. Table S3 - percent bias by scenario
+#_______________________________________________________________________
+
+# true speeds
+true.speeds.1T.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1T_TV1.rds"))
+true.speeds.1T.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1T_TV2.rds"))
+true.speeds.1T.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1T_TV3.rds"))
+
+true.speeds.1NT.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV1.rds"))
+true.speeds.1NT.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV2.rds"))
+true.speeds.1NT.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV3.rds"))
+
+# function
+speed_bias <- function (.trueT, .trueNT, .estT, .estNT) {
+  
+  # start with target individuals
+  all.speeds <- .trueT |>
+    
+    # drop unneeded columns
+    dplyr::select(-c(question, target)) |>
+    
+    # join in estimates
+    left_join(
+      
+      .estT |>
+        
+        # keep only mean estimates for simplicity
+        dplyr::select(indiv, scenario, speed.mean.est, sld.speed.mean.est, rms.speed.est)
+      
+    ) |>
+    
+    # drop NAs (we can't use them anyway)
+    drop_na() |>
+    
+    # bind in NT individuals
+    bind_rows(
+      
+      .trueNT |>
+        
+        # drop unneeded columns
+        dplyr::select(-c(question, target)) |>
+        
+        # join in estimates
+        left_join(
+          
+          .estNT |>
+            
+            # keep only mean estimates for simplicity
+            dplyr::select(indiv, scenario, speed.mean.est, sld.speed.mean.est, rms.speed.est)
+          
+        ) |>
+        
+        # drop NAs (we can't use them anyway)
+        drop_na()
+      
+    ) |>
+    
+    # calculate percent bias
+    mutate(
+      
+      bias.estimated = ((speed.mean.est - true.speed) / true.speed * 100),
+      bias.rms = ((rms.speed.est - true.speed) / true.speed * 100),
+      bias.sld = ((sld.speed.mean.est - true.speed) / true.speed * 100)
+      
+    ) |>
+    
+    # summarize
+    group_by(scenario) |>
+    
+    summarize(
+      
+      bias.estimated.mean = mean(bias.estimated),
+      bias.estimated.sd = sd(bias.estimated),
+      
+      bias.rms.mean = mean(bias.rms),
+      bias.rms.sd = sd(bias.rms),
+      
+      bias.sld.mean = mean(bias.sld),
+      bias.sld.sd = sd(bias.sld),
+      
+    )
+  
+  return(all.speeds)
+  
+}
+
+# use
+speed.bias.TV1 <- speed_bias(true.speeds.1T.TV1,
+                             true.speeds.1NT.TV1,
+                             speeds.1T.TV1,
+                             speeds.1NT.TV1)
+
+speed.bias.TV2 <- speed_bias(true.speeds.1T.TV2,
+                             true.speeds.1NT.TV2,
+                             speeds.1T.TV2,
+                             speeds.1NT.TV2)
+
+speed.bias.TV3 <- speed_bias(true.speeds.1T.TV3,
+                             true.speeds.1NT.TV3,
+                             speeds.1T.TV3,
+                             speeds.1NT.TV3)
+
+# write to clipboard
+write.table(speed.bias.TV1, "clipboard", sep = "\t")
+write.table(speed.bias.TV2, "clipboard", sep = "\t")
+write.table(speed.bias.TV3, "clipboard", sep = "\t")
+
+# 07-13-2026
+# we'll still need to do the Q2 individuals
