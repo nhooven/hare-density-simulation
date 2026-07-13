@@ -372,3 +372,41 @@ write.table(speed.bias.TV3, "clipboard", sep = "\t")
 
 # 07-13-2026
 # we'll still need to do the Q2 individuals
+
+#_______________________________________________________________________
+# 8b. Table S4 - Share of top-performing CTMM types
+#_______________________________________________________________________
+
+top_ctmms <- function (.estT, .estNT) {
+  
+  top.ctmms <- .estT |>
+    
+    bind_rows(.estNT) |>
+    
+    # keep relevant columns
+    dplyr::select(scenario, top.model) |>
+    
+    group_by(scenario, top.model) |>
+    
+    summarize(total = n()) |>
+    
+    # pivot wider
+    pivot_wider(names_from = top.model,
+                values_from = total)
+  
+  return(top.ctmms)
+  
+}
+
+# use
+top.TV1 <- top_ctmms(speeds.1T.TV1, speeds.1NT.TV1)
+top.TV2 <- top_ctmms(speeds.1T.TV2, speeds.1NT.TV2)
+top.TV3 <- top_ctmms(speeds.1T.TV3, speeds.1NT.TV3)
+
+# write to clipboard
+write.table(top.TV1, "clipboard", sep = "\t")
+write.table(top.TV2, "clipboard", sep = "\t")
+write.table(top.TV3, "clipboard", sep = "\t")
+
+# 07-13-2026
+# we'll still need to do the Q2 individuals
