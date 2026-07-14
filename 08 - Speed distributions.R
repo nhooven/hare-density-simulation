@@ -4,8 +4,8 @@
 # Author: Nathan D. Hooven, Graduate Research Assistant
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 02 Apr 2025
-# Date completed: 
-# Date last modified: 13 Jul 2026
+# Date completed: 14 Jul 2026
+# Date last modified: 14 Jul 2026
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -39,6 +39,9 @@ speeds.1NT.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT
 speeds.1NT.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV2.rds"))
 speeds.1NT.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV3.rds"))
 
+speeds.2T <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/2T.rds"))
+speeds.2NT <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/2NT.rds"))
+
 #_______________________________________________________________________
 # 4. Parametric SEs ----
 
@@ -70,6 +73,9 @@ speeds.1T.TV3.1 <- parametric_se(speeds.1T.TV3)
 speeds.1NT.TV1.1 <- parametric_se(speeds.1NT.TV1)
 speeds.1NT.TV2.1 <- parametric_se(speeds.1NT.TV2)
 speeds.1NT.TV3.1 <- parametric_se(speeds.1NT.TV3)
+
+speeds.2T.1 <- parametric_se(speeds.2T)
+speeds.2NT.1 <- parametric_se(speeds.2NT)
 
 #_______________________________________________________________________
 # 5. Create arrays ----
@@ -150,6 +156,12 @@ speed.array.1T.TV3.rms <- speed_array(speeds.1T.TV3.1, "rms")
 speed.array.1NT.TV1.rms <- speed_array(speeds.1NT.TV1.1, "rms")
 speed.array.1NT.TV2.rms <- speed_array(speeds.1NT.TV2.1, "rms")
 speed.array.1NT.TV3.rms <- speed_array(speeds.1NT.TV3.1, "rms")
+
+speed.array.2T.mean <- speed_array(speeds.2T.1, "mean")
+speed.array.2T.rms <- speed_array(speeds.2T.1, "rms")
+
+speed.array.2NT.mean <- speed_array(speeds.2NT.1, "mean")
+speed.array.2NT.rms <- speed_array(speeds.2NT.1, "rms")
 
 #_______________________________________________________________________
 # 5. Create pooled speed distributions ----
@@ -235,6 +247,12 @@ pooled.speeds.1.TV1.rms <- pooled_speeds(collared.1, speed.array.1T.TV1.rms, spe
 pooled.speeds.1.TV2.rms <- pooled_speeds(collared.1, speed.array.1T.TV2.rms, speed.array.1NT.TV2.rms)
 pooled.speeds.1.TV3.rms <- pooled_speeds(collared.1, speed.array.1T.TV3.rms, speed.array.1NT.TV3.rms)
 
+pooled.speeds.2.mean <- pooled_speeds(collared.2, speed.array.2T.mean, speed.array.2NT.mean)
+pooled.speeds.2.rms <- pooled_speeds(collared.2, speed.array.2T.rms, speed.array.2NT.rms)
+
+pooled.speeds.3.mean <- pooled_speeds(collared.3, speed.array.2T.mean, speed.array.2NT.mean)
+pooled.speeds.3.rms <- pooled_speeds(collared.3, speed.array.2T.rms, speed.array.2NT.rms)
+
 #_______________________________________________________________________
 # 6. Convert from m/s to km/day ----
 #_______________________________________________________________________
@@ -248,6 +266,12 @@ pooled.speeds.1.TV1.rms.day <- pooled.speeds.1.TV1.rms / (1000 / 86400)
 pooled.speeds.1.TV2.rms.day <- pooled.speeds.1.TV2.rms / (1000 / 86400)
 pooled.speeds.1.TV3.rms.day <- pooled.speeds.1.TV3.rms / (1000 / 86400)
 
+pooled.speeds.2.mean.day <- pooled.speeds.2.mean / (1000 / 86400)
+pooled.speeds.2.rms.day <- pooled.speeds.2.rms / (1000 / 86400)
+
+pooled.speeds.3.mean.day <- pooled.speeds.3.mean / (1000 / 86400)
+pooled.speeds.3.rms.day <- pooled.speeds.3.rms / (1000 / 86400)
+
 #_______________________________________________________________________
 # 7. Write to file ----
 #_______________________________________________________________________
@@ -259,6 +283,12 @@ saveRDS(pooled.speeds.1.TV3.mean.day, paste0(getwd(), "/data_derived/speed_distr
 saveRDS(pooled.speeds.1.TV1.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV1_rms.rds"))
 saveRDS(pooled.speeds.1.TV2.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV2_rms.rds"))
 saveRDS(pooled.speeds.1.TV3.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_1_TV3_rms.rds"))
+
+saveRDS(pooled.speeds.2.mean.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_2_mean.rds"))
+saveRDS(pooled.speeds.2.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_2_rms.rds"))
+
+saveRDS(pooled.speeds.3.mean.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_3_mean.rds"))
+saveRDS(pooled.speeds.3.rms.day, paste0(getwd(), "/data_derived/speed_distributions/speeds_3_rms.rds"))
 
 #_______________________________________________________________________
 # 8. Summaries ----
@@ -274,6 +304,9 @@ true.speeds.1T.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/spee
 true.speeds.1NT.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV1.rds"))
 true.speeds.1NT.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV2.rds"))
 true.speeds.1NT.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV3.rds"))
+
+true.speeds.2T <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_2T.rds"))
+true.speeds.2NT <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_2NT.rds"))
 
 # function
 speed_bias <- function (.trueT, .trueNT, .estT, .estNT) {
@@ -365,13 +398,16 @@ speed.bias.TV3 <- speed_bias(true.speeds.1T.TV3,
                              speeds.1T.TV3,
                              speeds.1NT.TV3)
 
+speed.bias.2 <- speed_bias(true.speeds.2T,
+                           true.speeds.2NT,
+                           speeds.2T,
+                           speeds.2NT)
+
 # write to clipboard
 write.table(speed.bias.TV1, "clipboard", sep = "\t")
 write.table(speed.bias.TV2, "clipboard", sep = "\t")
 write.table(speed.bias.TV3, "clipboard", sep = "\t")
-
-# 07-13-2026
-# we'll still need to do the Q2 individuals
+write.table(speed.bias.2, "clipboard", sep = "\t")
 
 #_______________________________________________________________________
 # 8b. Table S4 - Share of top-performing CTMM types
@@ -403,10 +439,10 @@ top.TV1 <- top_ctmms(speeds.1T.TV1, speeds.1NT.TV1)
 top.TV2 <- top_ctmms(speeds.1T.TV2, speeds.1NT.TV2)
 top.TV3 <- top_ctmms(speeds.1T.TV3, speeds.1NT.TV3)
 
+top.2 <- top_ctmms(speeds.2T, speeds.2NT)
+
 # write to clipboard
 write.table(top.TV1, "clipboard", sep = "\t")
 write.table(top.TV2, "clipboard", sep = "\t")
 write.table(top.TV3, "clipboard", sep = "\t")
-
-# 07-13-2026
-# we'll still need to do the Q2 individuals
+write.table(top.2, "clipboard", sep = "\t")
