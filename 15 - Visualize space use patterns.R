@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 02 Aug 2025
 # Date completed: 03 Aug 2025
-# Date last modified: 02 Aug 2025
+# Date last modified: 14 Aug 2026
 # R version: 4.4.3
 
 #_______________________________________________________________________
@@ -21,127 +21,51 @@ library(tidyterra)
 library(cowplot)
 
 #_______________________________________________________________________
-# 2. Read in data ----
-
-# error model
-load("E:/Hare project/Data analysis/GPS processing/Derived data/error_model.RData")
-
-#_______________________________________________________________________
-# 2a. Location files ---- 
+# 2. Read in models ----
 #_______________________________________________________________________
 
-# directories
-dir.pre <- "E:/Hare project/Data analysis/GPS processing/Derived data/Cleaned data 2/PRE/"
-dir.dur <- "E:/Hare project/Data analysis/GPS processing/Derived data/Cleaned data 2/DUR/"
-dir.post <- "E:/Hare project/Data analysis/GPS processing/Derived data/Cleaned data 2/POST/"
+# directory
+dir.model <- "D:/hare_project/data_analysis/General/hare-gps-processing-new/data_cleaned/"
 
-# location file list
-location.names <- data.frame("file" = c("001_1863_1.csv", "002_528_1.csv",
-                                        "006_1737_1.csv", "008_553_1.csv",
-                                        "016_1730_1.csv", "020_456_1.csv",
-                                        "004_1885_2.csv", "009_801_1.csv",
-                                        "013_1020_1.csv", "014_432_2.csv",
-                                        "017_986_2.csv", "021_1253_1.csv",
-                                        "023_432_3.csv", "026_1766_1.csv",
-                                        "034_1631_1.csv", "002_1876_1.csv",
-                                        "010_1841_1.csv", "011_1842_1.csv",
-                                        "019_1600_1.csv", "021_1897_1.csv",
-                                        "039_446_1.csv", "043_803_1.csv",
-                                        "044_1051_1.csv", "055_510_1.csv"),
-                            "Group" = c("DUR", "DUR", "DUR", "DUR",
-                                        "DUR", "DUR", "POST", "POST",
-                                        "POST", "POST", "POST", "POST",
-                                        "POST", "POST", "POST", "PRE",
-                                        "PRE", "PRE", "PRE", "PRE",
-                                        "PRE", "PRE", "PRE", "PRE"))
-# loop
-# blank list
-all.telem <- list()
+# read in
+# AKDEs
+all.akde <- readRDS(paste0(dir.model, "all_akde.rds"))
 
-for (i in 1:nrow(location.names)) {
-  
-  # which location file
-  focal.location <- location.names[i, ]
-  
-  # read.csv
-  if (focal.location$Group == "PRE") {
-    
-    focal.data <- read.csv(paste0(dir.pre,
-                                  focal.location$file))
-    
-  } else {
-    
-    if (focal.location$Group == "DUR") {
-      
-      focal.data <- read.csv(paste0(dir.dur,
-                                    focal.location$file))
-    
-    } else {
-    
-      if (focal.location$Group == "POST") {
-        
-        focal.data <- read.csv(paste0(dir.post,
-                                      focal.location$file)) 
-      
-      }
-      
-    }
-    
-  }
-  
-  # convert to Movebank format
-  hare.movebank <- data.frame("timestamp" = focal.data$timestamp,
-                              "location.lat" = focal.data$location.lat,
-                              "location.long" = focal.data$location.long,
-                              "height above mean sea level" = focal.data$height.above.mean.sea.level,
-                              "GPS satellite count" = focal.data$GPS.satellite.count,
-                              "GPS HDOP" = focal.data$GPS.HDOP)
-  
-  # convert to telemetry object
-  hare.telem <- as.telemetry(object = hare.movebank,
-                             timeformat = "auto",
-                             timezone = "America/Los_Angeles",
-                             keep = TRUE)
-  
-  # add a "class" variable for error model
-  hare.telem$class <- as.factor(ifelse(hare.telem$GPS.satellite.count > 3,
-                                       "3D",
-                                       "2D"))
-  
-  # add in error model
-  uere(hare.telem) <- best.uere.HDOP.class
-  
-  # bind into list
-  all.telem[[i]] <- hare.telem
-  
-}
-       
-#_______________________________________________________________________
-# 2b. Model files ---- 
-#_______________________________________________________________________
+# model selection results
+model.select <- readRDS(paste0(dir.model, "all_model_select.rds"))
 
-all.files <- list.files("Derived data/Hares - Fitted models")
+# shift rownames to a column
+model.select$model <- rownames(model.select) |>
+  
+  # remove digits
+  gsub('[[:digit:]]+', '', x = _)
 
-all.models <- list()
+model.select.top <- model.select |> filter(mod == 1) |>
+  
+  mutate(model = case_when(
+    
+    model %in% c("IID", "IID anisotropic") ~ "IID",
+    model %in% c("OU", "OU anisotropic") ~ "OU",
+    model %in% c("OUF", "OUF anisotropic") ~ "OUF",
+    model %in% c("OUf", "OUf anisotropic") ~ "OUf"
+    
+  )
+  
+  )
 
-for (i in 1:length(all.files)) {
-  
-  load(paste0("Derived data/Hares - Fitted models/", all.files[i]))
-  
-  # bind into list
-  all.models[[i]] <- top.model
-  
-  rm(top.model)
-  
-}
+model.select.tau.v <- model.select.top |> filter(model %in% c("OUF", "OUf"))
 
-names(all.models) <- all.files
+# indices
+indices.tau.v <- model.select.tau.v$i
+
+# subset top model lists
+models.tau.v <- top.models[indices.tau.v]
 
 #_______________________________________________________________________
 # 2c. PCT unit boundaries ---- 
 #_______________________________________________________________________
 
-pct.units <- st_read("E:/Hare project/Spatial data/Units/final_units_ground_poly/final_units_ground_poly.shp")
+pct.units <- st_read("D:/hare_project/data_spatial/Units/final_units_ground_poly/final_units_ground_poly.shp")
 
 pct.units.utm <- st_transform(pct.units, crs = "epsg:32611")
 
@@ -152,18 +76,8 @@ pct.units.utm <- st_transform(pct.units, crs = "epsg:32611")
 akde_viz <- function (index,
                       buffer = 350) {
   
-  # telem file
-  focal.telem <- all.telem[[index]]
-  
-  # model file
-  focal.model <- all.models[[index]]
-  
-  # fit AKDE
-  focal.akde <- akde(data = focal.telem,
-                     CTMM = focal.model,
-                     debias = TRUE,
-                     weights = TRUE,
-                     res = 25)
+  # AKDE
+  focal.akde <- all.akde[[index]]
   
   # export as raster and convert to rast
   focal.rast <- rast(raster(focal.akde,
@@ -215,9 +129,7 @@ akde_viz <- function (index,
     scale_fill_viridis_c(option = "plasma",
                          na.value = NA) +
     
-    ggtitle(paste0(location.names$Group[index],
-                   "_",
-                   substr(location.names$file[index], 1, 3))) +
+    ggtitle(model.select.tau.v$track_season_post[model.select.tau.v$i == index]) +
     
     theme(legend.position = "none",
           panel.grid = element_line(color = "gray"),
@@ -231,14 +143,17 @@ akde_viz <- function (index,
 }
 
 #_______________________________________________________________________
-# 4. Apply function to create 6 x 4 grid ----
+# 4. Apply function to create 7 x 7 grid ----
 #_______________________________________________________________________
 
-plot_grid(plotlist = list(akde_viz(1, 200), akde_viz(2, 250), akde_viz(3, 400), akde_viz(4), akde_viz(5, 200), akde_viz(6, 300),
-                          akde_viz(7, 250), akde_viz(8, 150), akde_viz(9, 300), akde_viz(10), akde_viz(11, 200), akde_viz(12, 250),
-                          akde_viz(13, 550), akde_viz(14), akde_viz(15), akde_viz(16, 375), akde_viz(17), akde_viz(18, 300),
-                          akde_viz(19, 200), akde_viz(20, 250), akde_viz(21), akde_viz(22), akde_viz(23, 375), akde_viz(24, 300)),
-          ncol = 6,
-          nrow = 4)
+plot_grid(plotlist = list(akde_viz(8, 250), akde_viz(12, 350), akde_viz(25, 350), akde_viz(30, 250), akde_viz(34, 400), akde_viz(36, 250), akde_viz(38, 350),
+                          akde_viz(41, 250), akde_viz(43, 200), akde_viz(46, 250), akde_viz(47, 350), akde_viz(48, 350), akde_viz(52, 450), akde_viz(54, 350),
+                          akde_viz(57, 350), akde_viz(58, 350), akde_viz(60, 350), akde_viz(63, 250), akde_viz(68, 250), akde_viz(72, 400), akde_viz(75, 200),
+                          akde_viz(79, 250), akde_viz(81, 350), akde_viz(83, 250), akde_viz(87, 250), akde_viz(94, 250), akde_viz(104, 250), akde_viz(106, 150),
+                          akde_viz(110, 350), akde_viz(113, 250), akde_viz(118, 250), akde_viz(120, 350), akde_viz(123, 250), akde_viz(124, 250), akde_viz(127, 150),
+                          akde_viz(128, 250), akde_viz(132, 150), akde_viz(141, 250), akde_viz(143, 250), akde_viz(145, 250), akde_viz(156, 350), akde_viz(160, 250),
+                          akde_viz(168, 250), akde_viz(170, 350), akde_viz(171, 450), akde_viz(172, 475), akde_viz(181, 150), akde_viz(184, 350), akde_viz(200, 150)),
+          ncol = 7,
+          nrow = 7)
 
-# 827 x 627
+# 900 x 900
