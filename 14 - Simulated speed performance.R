@@ -19,142 +19,133 @@ library(tidyverse)            # data cleaning and manipulation
 #_______________________________________________________________________
 
 # "true" speeds
-speeds.1T <- read.csv(paste0(getwd(), "/Derived data/Sampled - Speeds/speeds_1T.csv"))
-speeds.1NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - Speeds/speeds_1NT.csv"))
-speeds.2T <- read.csv(paste0(getwd(), "/Derived data/Sampled - Speeds/speeds_2T.csv"))
-speeds.2NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - Speeds/speeds_2NT.csv"))
+true.speeds.1T.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1T_TV1.rds"))
+true.speeds.1T.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1T_TV2.rds"))
+true.speeds.1T.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1T_TV3.rds"))
 
-# ctmm speed csvs
-ctmm.speeds.1T <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_1T.csv"))
-ctmm.speeds.1NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_1NT.csv"))
-ctmm.speeds.2T <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T.csv"))
-ctmm.speeds.2T.2 <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2T_2.csv"))
-ctmm.speeds.2NT <- read.csv(paste0(getwd(), "/Derived data/Sampled - CTMM speeds/ctmm_speeds_2NT.csv"))
+true.speeds.1NT.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV1.rds"))
+true.speeds.1NT.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV2.rds"))
+true.speeds.1NT.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_1NT_TV3.rds"))
+
+true.speeds.2T <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_2T.rds"))
+true.speeds.2NT <- readRDS(paste0(getwd(), "/data_derived/sampled_speeds/speeds_2NT.rds"))
+
+# simulated speeds
+speeds.1T.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1T_TV1.rds"))
+speeds.1T.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1T_TV2.rds"))
+speeds.1T.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1T_TV3.rds"))
+
+speeds.1NT.TV1 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV1.rds"))
+speeds.1NT.TV2 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV2.rds"))
+speeds.1NT.TV3 <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/1NT_TV3.rds"))
+
+speeds.2T <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/2T.rds"))
+speeds.2NT <- readRDS(paste0(getwd(), "/data_derived/sampled_ctmm_speeds/2NT.rds"))
 
 #_______________________________________________________________________
 # 3. Clean data ----
+
+# we'll need to join, add identifiers, and bind
+
 #_______________________________________________________________________
-# 3a. Add identifiers ----
-#_______________________________________________________________________
 
-# Q1
-ctmm.speeds.1T <- ctmm.speeds.1T %>%
+# function
+clean_speeds <- function (.trueT, .trueNT, .estT, .estNT) {
   
-  mutate(dist = "typical",
-         target = "T")
+  # start with target individuals
+  all.speeds <- .trueT |>
+    
+    # drop unneeded columns
+    dplyr::select(-c(question, target)) |>
+    
+    # join in estimates
+    left_join(
+      
+      .estT |>
+        
+        # keep only mean estimates for simplicity
+        dplyr::select(indiv, scenario, speed.mean.est, sld.speed.mean.est, rms.speed.est)
+      
+    ) |>
+    
+    # drop NAs (we can't use them anyway)
+    drop_na() |>
+    
+    # bind in NT individuals
+    bind_rows(
+      
+      .trueNT |>
+        
+        # drop unneeded columns
+        dplyr::select(-c(question, target)) |>
+        
+        # join in estimates
+        left_join(
+          
+          .estNT |>
+            
+            # keep only mean estimates for simplicity
+            dplyr::select(indiv, scenario, speed.mean.est, sld.speed.mean.est, rms.speed.est)
+          
+        ) |>
+        
+        # drop NAs (we can't use them anyway)
+        drop_na()
+      
+    ) |>
+    
+    mutate(
+      
+      # fix rate
+      fix.rate = case_when(scenario %in% 1:4 ~ "0.5",
+                           scenario %in% 5:8 ~ "1",
+                           scenario %in% 9:12 ~ "4"),
+      
+      # fix success
+      fix.success = factor(case_when(scenario %in% c(1, 2, 5, 6, 9, 10) ~ "100",
+                                     scenario %in% c(3, 4, 7, 8, 11, 12) ~ "60"),
+                           levels = c("100", "60")),
+      
+      # tracking duration
+      duration = factor(case_when(scenario %in% c(1, 3, 5, 7, 9, 11) ~ "4",
+                                  scenario %in% c(2, 4, 6, 8, 10, 12) ~ "2"),
+                        levels = c("4", "2"))
+      
+    )
+  
+  return(all.speeds)
+  
+}
 
-ctmm.speeds.1NT <- ctmm.speeds.1NT %>%
+# use function
+speeds.TV1 <- clean_speeds(true.speeds.1T.TV1,
+                           true.speeds.1NT.TV1,
+                           speeds.1T.TV1,
+                           speeds.1NT.TV1) |>
   
-  mutate(dist = "typical",
-         target = "NT")
+  mutate(TV = "0.5 mins")
 
-# Q2
-ctmm.speeds.2T <- ctmm.speeds.2T %>%
+speeds.TV2 <- clean_speeds(true.speeds.1T.TV2,
+                           true.speeds.1NT.TV2,
+                           speeds.1T.TV2,
+                           speeds.1NT.TV2) |>
   
-  mutate(dist = "full",
-         target = "T")
+  mutate(TV = "30 mins")
 
-ctmm.speeds.2T.2 <- ctmm.speeds.2T.2 %>%
+speeds.TV3 <- clean_speeds(true.speeds.1T.TV3,
+                           true.speeds.1NT.TV3,
+                           speeds.1T.TV3,
+                           speeds.1NT.TV3) |>
   
-  mutate(dist = "full",
-         target = "T")
-
-ctmm.speeds.2NT <- ctmm.speeds.2NT %>%
-  
-  mutate(dist = "full",
-         target = "NT")
+  mutate(TV = "120 mins")
 
 # bind together
-ctmm.speeds.2T <- rbind(ctmm.speeds.2T, ctmm.speeds.2T.2)
+speeds.1 <- rbind(speeds.TV1, speeds.TV2, speeds.TV3)
 
-#_______________________________________________________________________
-# 3b. Join in true speeds ----
-#_______________________________________________________________________
-
-# Q1 - T
-ctmm.speeds.1T <- speeds.1T %>%
-  
-  dplyr::select(indiv,
-                true.speed) %>%
-  
-  right_join(ctmm.speeds.1T)
-
-# Q1 - NT
-ctmm.speeds.1NT <- speeds.1NT %>%
-  
-  dplyr::select(indiv,
-                true.speed) %>%
-  
-  right_join(ctmm.speeds.1NT)
-
-# Q2 - T
-ctmm.speeds.2T <- speeds.2T %>%
-  
-  dplyr::select(indiv,
-                true.speed) %>%
-  
-  right_join(ctmm.speeds.2T)
-
-# Q2 - NT
-ctmm.speeds.2NT <- speeds.2NT %>%
-  
-  dplyr::select(indiv,
-                true.speed) %>%
-  
-  right_join(ctmm.speeds.2NT)
-
-#_______________________________________________________________________
-# 3c. Bind together ----
-#_______________________________________________________________________
-
-ctmm.speeds.1 <- rbind(ctmm.speeds.1T, ctmm.speeds.1NT)
-ctmm.speeds.2 <- rbind(ctmm.speeds.2T, ctmm.speeds.2NT)
-
-#_______________________________________________________________________
-# 3. Add scenario identifiers ----
-#_______________________________________________________________________
-
-ctmm.speeds.1 <- ctmm.speeds.1 %>%
-  
-  mutate(
-    
-    # fix rate
-    fix.rate = case_when(scenario %in% 1:4 ~ "0.5",
-                         scenario %in% 5:8 ~ "1",
-                         scenario %in% 9:12 ~ "4"),
-    
-    # fix success
-    fix.success = factor(case_when(scenario %in% c(1, 2, 5, 6, 9, 10) ~ "100",
-                                   scenario %in% c(3, 4, 7, 8, 11, 12) ~ "60"),
-                         levels = c("100", "60")),
-    
-    # tracking duration
-    duration = factor(case_when(scenario %in% c(1, 3, 5, 7, 9, 11) ~ "4",
-                                scenario %in% c(2, 4, 6, 8, 10, 12) ~ "2"),
-                      levels = c("4", "2"))
-    
-    )
-
-ctmm.speeds.2 <- ctmm.speeds.2 %>%
-  
-  mutate(
-    
-    # fix rate
-    fix.rate = case_when(scenario %in% 1:4 ~ "0.5",
-                         scenario %in% 5:8 ~ "1",
-                         scenario %in% 9:12 ~ "4"),
-    
-    # fix success
-    fix.success = factor(case_when(scenario %in% c(1, 2, 5, 6, 9, 10) ~ "100",
-                                   scenario %in% c(3, 4, 7, 8, 11, 12) ~ "60"),
-                         levels = c("100", "60")),
-    
-    # tracking duration
-    duration = factor(case_when(scenario %in% c(1, 3, 5, 7, 9, 11) ~ "4",
-                                scenario %in% c(2, 4, 6, 8, 10, 12) ~ "2"),
-                      levels = c("4", "2"))
-    
-  )
+speeds.2 <- clean_speeds(true.speeds.2T,
+                         true.speeds.2NT,
+                         speeds.2T,
+                         speeds.2NT)
 
 #_______________________________________________________________________
 # 4. Visualization ----
@@ -167,10 +158,116 @@ ctmm.speeds.2 <- ctmm.speeds.2 %>%
 # y panels: fix success within duration
 # colors/shapes: estimated vs SLD 
 
+# we should center speeds based on each tau v
+speeds.center.TV <- speeds.1 |> 
+  
+  group_by(TV) |>
+  
+  summarize(speed.center = mean(true.speed))
+
+#_______________________________________________________________________
+# Q1 ----
 #_______________________________________________________________________
 
+# pivot
+speeds.1.pivot <- speeds.1 |> 
+  
+  # join in centers
+  left_join(speeds.center.TV) |>
+  
+  # center
+  mutate(
+    
+    true.speed = true.speed - speed.center,
+    speed.mean.est = speed.mean.est - speed.center,
+    rms.speed.est = rms.speed.est - speed.center,
+    sld.speed.mean.est = sld.speed.mean.est - speed.center 
+    
+  ) |>
+  
+  pivot_longer(cols = c(speed.mean.est,
+                        rms.speed.est,
+                        sld.speed.mean.est)) |>
+  
+  mutate(name = factor(name,
+                       levels = c("speed.mean.est",
+                                  "rms.speed.est",
+                                  "sld.speed.mean.est"),
+                       labels = c("CVM", "RMS", "SLD"))) |>
+  
+  # TV factor
+  mutate(TV = factor(TV, levels = c("0.5 mins", "30 mins", "120 mins")))
+
 # Q1
-ggplot(data = ctmm.speeds.1) +
+ggplot(data = speeds.1.pivot) +
+  
+  theme_bw() +
+  
+  # facet
+  ggh4x::facet_nested(TV + duration + fix.success ~ fix.rate,
+                      labeller = labeller(fix.rate = as_labeller(c("0.5" = "0.5 h",
+                                                                   "1" = "1 h",
+                                                                   "4" = "4 h")),
+                                          duration = as_labeller(c("4" = "4 weeks",
+                                                                   "2" = "2 weeks")),
+                                          fix.success = as_labeller(c("100" = "100%",
+                                                                      "60" = "60%")))) +
+  
+  # 1:1 line
+  geom_abline(slope = 1,
+              intercept = 0,
+              linetype = "dashed") +
+  
+  # points
+  geom_point(aes(x = true.speed,
+                 y = value,
+                 color = name,
+                 shape = name),
+             size = 0.45) +
+  
+  # theme arguments
+  theme(panel.grid = element_blank(),
+        legend.position = "right",
+        legend.title = element_blank(),
+        panel.spacing = unit(0, "lines"),
+        strip.text.x = element_text(hjust = 0.01,
+                                    face = "bold",
+                                    size = 8),
+        strip.text.y = element_text(hjust = 0.01,
+                                    size = 8),
+        strip.background = element_rect(fill = "white"),
+        plot.margin = unit(c(0, 0, 0, 0), "pt"),
+        axis.text = element_blank()) +
+  
+  # legend guide
+  guides(color = guide_legend(override.aes = list(size = 2.5))) +
+  
+  scale_color_manual(values = c("palegreen4", "palegreen3", "palegreen2")) +
+  
+  xlab("True travel speed") +
+  ylab("Estimated travel speed")
+
+# 625 x 530
+
+#_______________________________________________________________________
+# Q1 ----
+#_______________________________________________________________________
+
+# pivot
+speeds.2.pivot <- speeds.2 |> 
+  
+  pivot_longer(cols = c(speed.mean.est,
+                        rms.speed.est,
+                        sld.speed.mean.est)) |>
+  
+  mutate(name = factor(name,
+                       levels = c("speed.mean.est",
+                                  "rms.speed.est",
+                                  "sld.speed.mean.est"),
+                       labels = c("CVM", "RMS", "SLD")))
+
+# Q1
+ggplot(data = speeds.2.pivot) +
   
   theme_bw() +
   
@@ -191,22 +288,15 @@ ggplot(data = ctmm.speeds.1) +
   
   # points
   geom_point(aes(x = true.speed,
-                 y = speed.mean.est),
-             color = "palegreen4",
-             alpha = 0.25,
-             size = 0.75) +
-  
-  # points
-  geom_point(aes(x = true.speed,
-                 y = sld.speed.mean.est),
-             color = "palegreen3",
-             alpha = 0.25,
-             size = 0.55,
-             shape = 2) +
+                 y = value,
+                 color = name,
+                 shape = name),
+             size = 0.45) +
   
   # theme arguments
   theme(panel.grid = element_blank(),
-        legend.position = "none",
+        legend.position = "right",
+        legend.title = element_blank(),
         panel.spacing = unit(0, "lines"),
         strip.text.x = element_text(hjust = 0.01,
                                     face = "bold",
@@ -214,265 +304,15 @@ ggplot(data = ctmm.speeds.1) +
         strip.text.y = element_text(hjust = 0.01,
                                     size = 8),
         strip.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 7,
-                                color = "black"),
-        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
-  
-  xlab("True travel speed (m/s)") +
-  ylab("Estimated travel speed (m/s)") -> agreement.Q1.plot
-
-agreement.Q1.plot
-
-# 600 x 600
-
-# Q2
-ggplot(data = ctmm.speeds.2) +
-  
-  theme_bw() +
-  
-  # facet
-  ggh4x::facet_nested(duration + fix.success ~ fix.rate,
-                      labeller = labeller(fix.rate = as_labeller(c("0.5" = "0.5 h",
-                                                                   "1" = "1 h",
-                                                                   "4" = "4 h")),
-                                          duration = as_labeller(c("4" = "4 weeks",
-                                                                   "2" = "2 weeks")),
-                                          fix.success = as_labeller(c("100" = "100%",
-                                                                      "60" = "60%")))) +
-  
-  # 1:1 line
-  geom_abline(slope = 1,
-              intercept = 0,
-              linetype = "dashed") +
-  
-  # points
-  geom_point(aes(x = true.speed,
-                 y = speed.mean.est),
-             color = "salmon4",
-             alpha = 0.25,
-             size = 0.75) +
-  
-  # points
-  geom_point(aes(x = true.speed,
-                 y = sld.speed.mean.est),
-             color = "salmon3",
-             alpha = 0.25,
-             size = 0.55,
-             shape = 2) +
-  
-  # theme arguments
-  theme(panel.grid = element_blank(),
-        legend.position = "none",
-        panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
-        strip.text.y = element_text(hjust = 0.01,
-                                    size = 8),
-        strip.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 7,
-                                 color = "black"),
-        plot.margin = unit(c(0, 0, 0, 0), "pt")) +
-  
-  xlab("True travel speed (m/s)") +
-  ylab("Estimated travel speed (m/s)") -> agreement.Q2.plot
-
-agreement.Q2.plot
-
-# 600 x 600
-
-#_______________________________________________________________________
-# 4b. Count of each top model ----
-
-# sensible labels
-ctmm.speeds.1$top.model <- factor(ctmm.speeds.1$top.model,
-                                  levels = c("IID anisotropic",
-                                             "OU anisotropic" ,
-                                             "OUF anisotropic",
-                                             "OUf anisotropic"),
-                                  labels = c("IID", "OU", "OUF", "OUf"))
-
-# sensible labels
-ctmm.speeds.2$top.model <- factor(ctmm.speeds.2$top.model,
-                                  levels = c("IID",
-                                             "IID anisotropic",
-                                             "OU",
-                                             "OU anisotropic" ,
-                                             "OUF",
-                                             "OUF anisotropic",
-                                             "OUf",
-                                             "OUf anisotropic",
-                                             "OUΩ anisotropic"),
-                                  labels = c("IID",
-                                             "IID",
-                                             "OU", 
-                                             "OU",
-                                             "OUF",
-                                             "OUF", 
-                                             "OUf",
-                                             "OUf",
-                                             "OUΩ"))
-
-#_______________________________________________________________________
-
-# Q1
-ggplot(data = ctmm.speeds.1) +
-  
-  theme_bw() +
-  
-  # facet
-  ggh4x::facet_nested(duration + fix.success ~ fix.rate,
-                      labeller = labeller(fix.rate = as_labeller(c("0.5" = "0.5 h",
-                                                                   "1" = "1 h",
-                                                                   "4" = "4 h")),
-                                          duration = as_labeller(c("4" = "4 weeks",
-                                                                   "2" = "2 weeks")),
-                                          fix.success = as_labeller(c("100" = "100%",
-                                                                      "60" = "60%")))) +
-  
-  # points
-  geom_bar(aes(x = top.model),
-             fill = "palegreen4",
-           color = "black",
-             stat = "count",
-             size = 0.75) +
-  
-  # theme arguments
-  theme(panel.grid = element_blank(),
-        legend.position = "none",
-        panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
-        strip.text.y = element_text(hjust = 0.01,
-                                    size = 8),
-        strip.background = element_rect(fill = "white"),
-        axis.text.y = element_text(size = 7,
-                                   color = "black"),
-        axis.text.x = element_text(size = 7,
-                                   color = "black",
-                                   angle = 35,
-                                   hjust = 1),
         plot.margin = unit(c(0, 0, 0, 0), "pt"),
-        axis.title = element_blank())
-
-# 600 x 600
-
-# Q2
-ggplot(data = ctmm.speeds.2) +
+        axis.text = element_blank()) +
   
-  theme_bw() +
+  # legend guide
+  guides(color = guide_legend(override.aes = list(size = 2.5))) +
   
-  # facet
-  ggh4x::facet_nested(duration + fix.success ~ fix.rate,
-                      labeller = labeller(fix.rate = as_labeller(c("0.5" = "0.5 h",
-                                                                   "1" = "1 h",
-                                                                   "4" = "4 h")),
-                                          duration = as_labeller(c("4" = "4 weeks",
-                                                                   "2" = "2 weeks")),
-                                          fix.success = as_labeller(c("100" = "100%",
-                                                                      "60" = "60%")))) +
+  scale_color_manual(values = c("salmon4", "salmon3", "salmon1")) +
   
-  # points
-  geom_bar(aes(x = top.model),
-           fill = "salmon4",
-           color = "black",
-           stat = "count",
-           size = 0.75) +
-  
-  # theme arguments
-  theme(panel.grid = element_blank(),
-        legend.position = "none",
-        panel.spacing = unit(0, "lines"),
-        strip.text.x = element_text(hjust = 0.01,
-                                    face = "bold",
-                                    size = 8),
-        strip.text.y = element_text(hjust = 0.01,
-                                    size = 8),
-        strip.background = element_rect(fill = "white"),
-        axis.text.y = element_text(size = 7,
-                                   color = "black"),
-        axis.text.x = element_text(size = 7,
-                                   color = "black",
-                                   angle = 35,
-                                   hjust = 1),
-        plot.margin = unit(c(0, 0, 0, 0), "pt"),
-        axis.title = element_blank())
+  xlab("True travel speed") +
+  ylab("Estimated travel speed")
 
-# 600 x 600
-
-#_______________________________________________________________________
-# 5. Summaries ----
-#_______________________________________________________________________
-# 5a. Bias from true speeds and counts (proportions) of each model type ----
-#_______________________________________________________________________
-
-# Q1 
-Q1.summary.bias <- ctmm.speeds.1 %>%
-  
-  # calculate bias
-  mutate(percent.bias.ctmm = ((speed.mean.est - true.speed) / true.speed * 100),
-         percent.bias.sld = ((sld.speed.mean.est - true.speed) / true.speed * 100)) %>%
-  
-  group_by(scenario) %>% 
-  
-  summarize(mean.percent.bias.ctmm = mean(percent.bias.ctmm, na.rm = T),
-            sd.percent.bias.ctmm = sd(percent.bias.ctmm, na.rm = T),
-            mean.percent.bias.sld = mean(percent.bias.sld, na.rm = T),
-            sd.percent.bias.sld = sd(percent.bias.sld, na.rm = T))
-
-Q1.summary.bias
-
-# Q12
-Q2.summary.bias <- ctmm.speeds.2 %>%
-  
-  # calculate bias
-  mutate(percent.bias.ctmm = ((speed.mean.est - true.speed) / true.speed * 100),
-         percent.bias.sld = ((sld.speed.mean.est - true.speed) / true.speed * 100)) %>%
-  
-  group_by(scenario) %>% 
-  
-  summarize(mean.percent.bias.ctmm = mean(percent.bias.ctmm, na.rm = T),
-            sd.percent.bias.ctmm = sd(percent.bias.ctmm, na.rm = T),
-            mean.percent.bias.sld = mean(percent.bias.sld, na.rm = T),
-            sd.percent.bias.sld = sd(percent.bias.sld, na.rm = T))
-
-Q2.summary.bias
-
-# write tables
-write.table(Q1.summary.bias, "clipboard", sep = "\t")
-write.table(Q2.summary.bias, "clipboard", sep = "\t")
-
-#_______________________________________________________________________
-# 5b. Countsof each model type ----
-#_______________________________________________________________________
-
-# Q1 
-Q1.summary.count <- ctmm.speeds.1 %>%
-  
-  group_by(scenario) %>% 
-  
-  count(top.model) %>%
-  
-  pivot_wider(names_from = top.model,
-              values_from = n)
-
-Q1.summary.count
-
-# Q2
-Q2.summary.count <- ctmm.speeds.2 %>%
-  
-  group_by(scenario) %>% 
-  
-  count(top.model) %>%
-  
-  pivot_wider(names_from = top.model,
-              values_from = n)
-
-Q2.summary.count
-
-# write tables
-write.table(Q1.summary.count, "clipboard", sep = "\t")
-write.table(Q2.summary.count, "clipboard", sep = "\t")
-
-# these are a lot nicer than the plots (plots are probably unneccessary)
+# 471 x 444
