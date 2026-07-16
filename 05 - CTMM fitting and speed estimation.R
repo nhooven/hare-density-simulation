@@ -5,7 +5,7 @@
 # Email: nathan.hooven@wsu.edu / nathan.d.hooven@gmail.com
 # Date began: 10 Apr 2025
 # Date completed: 10 Apr 2025
-# Date last modified: 02 Jul 2026
+# Date last modified: 07 Jul 2026
 # R version: 4.5.2
 
 #_______________________________________________________________________
@@ -245,7 +245,12 @@ ctmm_speeds <- function (df) {
                                        "IOU")) {
         
         # in m2/s
-        diff.ests <- summary(fitted.mods[[1]], units = F)$CI[3, ]
+        model.summary <- summary(fitted.mods[[1]], units = F)$CI
+        
+        # which row holds diffusion?
+        which.row <- which(rownames(model.summary) == "diffusion (square meters/second)")
+        
+        diff.ests <- model.summary[which.row, ]
         
         focal.i.scenario$rms.speed.lo <- sqrt(4 * diff.ests[1] / focal.scenario$rate %#% "hour")
         focal.i.scenario$rms.speed.est <- sqrt(4 * diff.ests[2] / focal.scenario$rate %#% "hour")

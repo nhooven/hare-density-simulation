@@ -111,4 +111,4 @@ top.model$sigma
 summary(top.model)
 
 # save to file
-save(top.model, file = "Derived data/Hares - Fitted models/PRE_019.RData")
+save(top.model, file = "data_derived/hares_fitted_models/PRE_019.RData")
